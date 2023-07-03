@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: go-ldap-admin
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: go-ldap-admin
+spec:
+  selector:
+    app: go-ldap-admin
+    component: mysql
+  ports:
+  - protocol: TCP
+    port: 3307
+    targetPort: 3306
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment
+  namespace: go-ldap-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-ldap-admin
+      component: mysql
+  template:
+    metadata:
+      labels:
+        app: go-ldap-admin
+        component: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: dockerproxy.com/mysql/mysql-server
+        ports:
+        - containerPort: 3306
+        env:
+        - name: TZ
+          value: "Asia/Shanghai"
+        - name: MYSQL_ROOT_PASSWORD
+          value: "123456"
+        - name: MYSQL_ROOT_HOST
+          value: "%"
+        - name: MYSQL_DATABASE
+          value: "go_ldap_admin"
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql/data
+        - name: mysql-config
+          mountPath: /etc/mysql/my.cnf
+      volumes:
+      - name: mysql-data
+        emptyDir: {}
+      - name: mysql-config
+        hostPath:
+          path: ./config/my.cnf
+          type: File
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-ldap-admin-server-deployment
+  namespace: go-ldap-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-ldap-admin
+      component: server
+  template:
+    metadata:
+      labels:
+        app: go-ldap-admin
+        component: server
+    spec:
+      containers:
+      - name: go-ldap-admin-server
+        image: dockerproxy.com/eryajf/go-ldap-admin-server
+        ports:
+        - containerPort: 8888
+        env:
+        - name: TZ
+          value: "Asia/Shanghai"
+        - name: WAIT_HOSTS
+          value: "mysql:3306,openldap:389"
+      volumes:
+      # Uncomment the following volume if you want to mount the config file
+      # - name: go-ldap-admin-server-config
+      #   hostPath:
+      #     path: ./config/config.yml
+      #     type: File
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-ldap-admin-ui-service
+  namespace: go-ldap-admin
+spec:
+  selector:
+    app: go-ldap-admin
+    component: ui
+  ports:
+  - protocol: TCP
+    port: 8090
+    targetPort: 80
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-ldap-admin-ui-deployment
+  namespace: go-ldap-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: go-ldap-admin
+      component: ui
+  template:
+    metadata:
+      labels:
+        app: go-ldap-admin
+        component: ui
+    spec:
+      containers:
+      - name: go-ldap-admin-ui
+        image: dockerproxy.com/eryajf/go-ldap-admin-ui
+        ports:
+        - containerPort: 80
+        env:
+        - name: TZ
+          value: "Asia/Shanghai"
+        volumeMounts:
+        - name: go-ldap-admin-ui-config
+          mountPath: /app/config
+      volumes:
+      - name: go-ldap-admin-ui-config
+        emptyDir: {}
