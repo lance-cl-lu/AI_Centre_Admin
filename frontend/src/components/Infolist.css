@@ -1,0 +1,28 @@
+.infolist {
+    box-sizing: border-box;
+    margin: 0;
+    width: 25%;
+    height: 100%;
+}
+ul {
+
+}
+
+ul li {
+    width: 100%;
+    padding: 10px;
+    display: inline-block;
+}
+
+ul li:hover {
+    background-color: #ccc;
+    color: black;
+}
+
+ul li ul{
+    display: none;
+}
+
+ul li ul li{
+    display: block;
+}
