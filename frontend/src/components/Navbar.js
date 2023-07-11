@@ -1,15 +1,20 @@
-import "../style.css"
+import "./Navbar.css"
 import { Link } from "react-router-dom";
+import Dropdonw from "./Dropdown";
+import { AuthProvider } from '../context/AuthContext';
 function Navbar() {
   return (
     <nav className="navigation">
-        <ul>
+        <ul className="navigation-ul">
           <li><img src="https://aic.cgu.edu.tw/var/file/44/1044/msys_1044_4886051_59674.png" alt="CUG AI Centre"/></li>
-          <div>
-            <li><Link to="/">Home</Link></li>
-            <li><Link to="/about">About</Link></li>
-            <li><Link to="/add">Add</Link></li>
-            <li><button><img src="https://global.discourse-cdn.com/business6/uploads/glitch/optimized/2X/c/ca4dff4f8a1797712edf717970e4193e09ba0f9c_2_500x500.gif" alt="userProfile"/></button></li>
+          <div className="navigation-ul-div">
+          <AuthProvider>
+            <li className="navigation-ul-li"><Link to="/">Home</Link></li>
+            <li className="navigation-ul-li"><Link to="/about">About</Link></li>
+            <li className="navigation-ul-li"><Link to="/add">Add</Link></li>
+            <li className="navigation-ul-li"><Dropdonw></Dropdonw></li>
+          </AuthProvider>
+
           </div>
       </ul>
     </nav>

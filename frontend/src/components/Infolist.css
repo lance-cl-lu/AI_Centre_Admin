@@ -2,27 +2,41 @@
     box-sizing: border-box;
     margin: 0;
     width: 25%;
-    height: 100%;
+    left: 0;
+    height: 90.3vh;
+    display: flex;
+    background-color: aqua;
+    position: relative;
 }
-ul {
 
+.info-ul {
+    position: absolute;
+    left: -90px;
 }
 
-ul li {
+.ul-li {
     width: 100%;
-    padding: 10px;
-    display: inline-block;
+    padding: 10px 10px;
+    display: inline-flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
 }
 
-ul li:hover {
+.ul-li :hover {
     background-color: #ccc;
     color: black;
 }
-
-ul li ul{
+.ul-li a {
+    text-decoration: none;
+    color: black;
+    font-size: 1em;
+    font-family: Comic Sans MS;
+}
+/*
+.ul-li  ul{
     display: none;
 }
 
-ul li ul li{
+.ul-li  li {
     display: block;
-}
+}*/

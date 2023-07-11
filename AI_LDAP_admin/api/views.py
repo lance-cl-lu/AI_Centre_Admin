@@ -3,10 +3,49 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from ldap3 import *
 import json, re
-from .models import User
+from django.contrib.auth.models import User
 
 from rest_framework.parsers import JSONParser
-from .serializers import UserSerializer
+from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from .serializers import UserSerializer, GroupSerializer
+
+
+@api_view(['GET'])
+def getRoute(requset):
+    routes = [
+        '/api/user/',
+        '/api/user/<str:pk>/',
+        '/api/userQuery/',
+        '/api/userAdd/',
+        '/api/syschronize_ldap/',
+    ]
+    return Response(routes)
+
+@api_view(['GET'])
+def get_group_corresponding_user(request):
+    # get all group and corresponding user
+    conn = connectLDAP()
+    # get all attributes
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
+    print(conn.entries)
+    group_list = []
+    for entry in conn.entries:
+        member_uids = []
+        group_dn = entry.cn.value
+        print(group_dn)
+        member_uids_entry = entry.memberUid.values
+        for member_uid in member_uids_entry:
+            member_uids.append(str(member_uid))
+
+        # Append the group cn and corresponding memberUids
+        group_list.append({
+            'group_dn': group_dn,
+            'member_uids': member_uids
+        })
+    conn.unbind()
+
+    return Response(group_list, status=200)
 
 @csrf_exempt
 def syschronize_ldap(requset):
