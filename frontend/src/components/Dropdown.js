@@ -2,53 +2,50 @@ import React, { useState, useEffect, useContext } from "react";
 import "./Dropdown.css";
 import { Link } from "react-router-dom";
 import AuthContext from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
 
 function Dropdown() {
-  const { user, logoutUser } = useContext(AuthContext);
-  const [menu, setMenu] = useState(false);
-
-  const showMenu = () => {
-    setMenu(!menu);
-  };
-
+  let { user, logoutUser } = useContext(AuthContext);
+  const [click, setClick] = useState(false);
+  const location = useLocation();
+  const handleClick = () => setClick(!click);
+  const closeMobileMenu = () => setClick(false);
   useEffect(() => {
-    if (menu) {
-      document.addEventListener("click", closeMenu);
-    }
-    return () => {
-      document.removeEventListener("click", closeMenu);
-    };
-  }, [menu]);
+    closeMobileMenu();
+  }, [location]);
 
-  const closeMenu = (e) => {
-    if (
-      !e.target.classList.contains("dropdown-content") &&
-      !e.target.classList.contains("dropdown")
-    ) {
-      setMenu(false);
-    }
-  };
 
   return (
     <div className="dropdown">
-      {user ? (
-        <div className="dropdown-content">
-          <button onClick={showMenu}>≡</button>
-        </div>
-      ) : (
-        <div className="dropdown-content">
-          <Link to="/login">Login</Link>
-        </div>
-      )}
-      {menu && (
-        <div className="dropdown-content">
-          <Link to="/user" state={{ user: user.username }}>{user.username}</Link>
-          <Link to="/logout" onClick={logoutUser}>
+      {user ? <button onClick={handleClick} className="dropbtn">●</button> :　<Link to="/login" className="dropdown-link">Login</Link>}
+      {click ? (
+      <ul>  
+        <li>
+          <Link to="/profile" className="dropdown-link">
+            Profile
+          </Link>
+        </li>
+        <li>
+          <Link to="/settings" className="dropdown-link">
+            Settings
+          </Link>
+        </li>
+        <li>
+          <Link to="/help" className="dropdown-link">
+            Help
+          </Link>
+        </li>
+        <li>
+          <Link to="/" className="dropdown-link" onClick={logoutUser}>
             Logout
           </Link>
-        </div>
+        </li>
+      </ul>
+      ) : (
+        null
       )}
     </div>
+
   );
 }
 

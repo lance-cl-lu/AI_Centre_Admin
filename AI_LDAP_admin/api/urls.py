@@ -14,4 +14,6 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path("ldap/info/", get_group_corresponding_user, name="get_group_corresponding_user"),
+    path("ldap/lab/", get_lab_info, name="get_lab_info"),
+    path("ldap/lab/add/", addlab, name="get_lab_info")
 ]

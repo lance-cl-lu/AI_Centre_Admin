@@ -18,6 +18,8 @@ import { CSSTransition, TransitionGroup } from 'react-transition-group'
 
 function App() {
   const location = useLocation();
+  // after logout, user is null
+  
   return (
     <div className="App">
       

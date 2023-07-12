@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from ldap3 import *
-import json, re
+import json, re, random 
 from django.contrib.auth.models import User
 
 from rest_framework.parsers import JSONParser
@@ -10,6 +10,14 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
+def get_gid():
+    while True:
+        uid = random.randint(10000, 65535)  # Generate a random UID within the range of user IDs
+'''        try:
+            pwd.getgrgid(uid)  # Attempt to get the user entry for the generated UID
+        except KeyError:
+            return uid
+'''
 
 @api_view(['GET'])
 def getRoute(requset):
@@ -46,6 +54,38 @@ def get_group_corresponding_user(request):
     conn.unbind()
 
     return Response(group_list, status=200)
+
+@api_view(['POST'])
+def get_lab_info(request):
+    data = json.loads(request.body.decode('utf-8'))
+    labname = data['lab']
+    conn = connectLDAP()
+    conn.search('cn={},ou=Groups,dc=example,dc=org'.format(labname), '(objectclass=posixGroup)', attributes=['*'])
+    print(conn.entries)
+    data = {}
+    for entry in conn.entries:
+        print(entry.cn.value)
+        print(entry.gidNumber.value)
+        print(entry.memberUid.values)
+        data = {
+            "cn": entry.cn.value,
+            "gidNumber": entry.gidNumber.value,
+            "memberUid": entry.memberUid.values
+        }
+    conn.unbind()
+    return Response(data, status=200)
+
+@api_view(['POST'])
+def addlab(request):
+    data = json.loads(request.body.decode('utf-8'))
+    labname = data['lab']
+    conn = connectLDAP()
+    gid = get_gid()
+    conn.add('cn={},ou=Groups,dc=example,dc=org'.format(labname), ['posixGroup', 'top'], {'gidNumber': 10001})
+    conn.unbind()
+    return Response(status=200)
+    
+
 
 @csrf_exempt
 def syschronize_ldap(requset):
