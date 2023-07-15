@@ -18,17 +18,34 @@ def get_gid():
         except KeyError:
             return uid
 '''
+# connect to LDAP server
+def connectLDAP():
+    server = Server('ldap://120.126.23.245:31979')
+    conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
+    return conn
 
 @api_view(['GET'])
-def getRoute(requset):
-    routes = [
-        '/api/user/',
-        '/api/user/<str:pk>/',
-        '/api/userQuery/',
-        '/api/userAdd/',
-        '/api/syschronize_ldap/',
-    ]
-    return Response(routes)
+def lab_list(request):
+    conn = connectLDAP()
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    group_list = []
+    for entry in conn.entries:
+        group_list.append(entry.cn.value)
+    conn.unbind()
+    return Response(group_list, status=200)
+
+@api_view(['GET'])
+def user_list(request):
+    conn = connectLDAP()
+    # objectclass is posixAccount and top 
+    conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
+    user_list = []
+    for entry in conn.entries:
+        user_list.append(entry.cn.value)
+    conn.unbind()
+    print(user_list)
+    return Response(user_list, status=200)
+
 
 @api_view(['GET'])
 def get_group_corresponding_user(request):
@@ -99,22 +116,24 @@ def addlab(request):
 def adduser(request):
     data = json.loads(request.body.decode('utf-8'))
     username = data['username']
-    firstname = data['firstname']
-    lastname = data['lastname']
+    firstname = data['first_name']
+    lastname = data['last_name']
     password = data['password']
     labname = data['lab']
+    email = data['email']
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
     conn = connectLDAP()
-    conn.add(user_dn, ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+    print(conn.add(user_dn, ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
               {'cn': username, 'givenName': username, 'sn' : username ,
-               'uid': username, 'uidNumber': '2001', 'gidNumber': '1001',
+               'uid': username, 'uidNumber': '2001', 'gidNumber': '1001', "mail": email,
                'homeDirectory': '/home/{}'.format(username), 'loginShell': '/bin/bash',
                 'userPassword': password, 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
                 'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
-                'shadowExpire': '99999'})
+                'shadowExpire': '99999'}))
+    
     if data['lab'] is not None:
-        group_dn = conn.entries[0].entry_dn
+        group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
         conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
     conn.unbind()
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
@@ -122,6 +141,18 @@ def adduser(request):
     
     return Response(status=200)
 
+@api_view(['POST'])
+def add_admin(request):
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
+    user = User.objects.get(username=username)
+    # make user to be superuser
+    user.is_superuser = True
+    user.is_staff = True
+    user.save()
+    
+    # ldap admin 
+    return Response(status=200)
 
 @csrf_exempt
 def syschronize_ldap(requset):
@@ -143,54 +174,19 @@ def syschronize_ldap(requset):
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
 
-# Create your views here.
-@csrf_exempt
-def user_list(request):
-    if request.method == 'GET':
-        users = User.objects.all()
-        serializer = UserSerializer(users, many=True)
-        return JsonResponse(serializer.data, safe=False)
-
-@csrf_exempt
-def user_detail(request, pk):
-    try:
-        user = User.objects.get(pk=pk)
-    except User.DoesNotExist:
-        return HttpResponse(status=404)
-    
-    if request.method == 'GET':
-        serializer = UserSerializer(user)
-        return JsonResponse(serializer.data)
-    elif request.method == 'PUT':
-        data = JSONParser().parse(request)
-        serializer = UserSerializer(user, data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return JsonResponse(serializer.data)
-        return JsonResponse(serializer.error, status=400)
-
-    elif request.method == 'DELETE':
-        user.delete()
-        return HttpResponse(status=204)
-
-
-# connect to LDAP server
-def connectLDAP():
-    server = Server('ldap://120.126.23.245:31979')
-    conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
-    return conn
-
-def userQuery(requset):
+@api_view(['POST'])
+def get_user_info(request):
+    data = json.loads(request.body.decode('utf-8'))
     conn = connectLDAP()
-    conn.search('dc=example,dc=org', '(objectclass=person)', attributes=['cn'])
-    print(conn.entries)
-    dn_list = []
-    for entry in conn.entries:
-        print(entry.entry_dn)
-        dn_list.append(entry.entry_dn)
-        conn.unbind()
-    # return with json
-    return JsonResponse(dn_list, safe=False)
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(data['username']), '(objectclass=posixAccount)', attributes=['*'])
+    user = User.objects.get(username=data['username'])
+    data = {
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+    }
+    return Response(data, status=200)    
 
 def userAdd(request):
     data = json.loads(request.body, encoding='utf-8')
@@ -207,3 +203,22 @@ def userAdd(request):
 
     # Add the entry to the LDAP directory
     conn.add('uid=johndoe,ou=users,dc=example,dc=org', attributes=new_entry)
+    
+def user_group_num(requset):
+    conn = connectLDAP()
+    group_list = []
+    user_list = []
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    for entry in conn.entries:
+        group_list.append(entry.cn.value)
+    conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
+    for entry in conn.entries:
+        user_list.append(entry.cn.value)
+    conn.unbind()
+    # return the number of group and user
+    data = {'lab_num': len(group_list), 'user_num': len(user_list)}
+    return JsonResponse(data, safe=False)
+
+def add_excel(request):
+    conn = connectLDAP()
+    return render(request, 'add_excel.html')

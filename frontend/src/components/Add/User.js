@@ -1,7 +1,26 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom';
 
+
 function AddUser() {
+    const [lab, setLab] = useState([]);
+
+    useEffect(() => {
+        fetch('http://127.0.0.1:8000/api/ldap/lab/list/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => setLab(data))
+        .catch((error) => {
+            console.error('Error:', error);
+        }
+        );
+    }, []);
+
+
 
     let handleSubmit = async(e) => {
         e.preventDefault();
@@ -21,10 +40,9 @@ function AddUser() {
                     "password":e.target[6].value,
                 }),
             });
-            let data = await response.json();
             if(response.status===200){
-                console.log(data);
                 alert('User added successfully');
+                window.location.reload();
             } else {
                 console.log('error');
             }
@@ -43,12 +61,13 @@ function AddUser() {
                 <label>Last Name:   </label><input type="text" placeholder="Please enter the last name" /><br/>
                 <label>Username:   </label><input type="text" placeholder="Please enter the username" /><br/>
                 <label>Email:   </label><input type="text" placeholder="Please enter the email" /><br/>
-                <label>In which labatory:   </label><select>
-                    <option value="lab1">Lab 1</option>
-                    <option value="lab2">Lab 2</option>
-                    <option value="lab3">Lab 3</option>
-                    <option value="lab4">Lab 4</option>
-                </select><br/>
+                <label>In which labatory:   </label>{lab && <select>
+                    {lab.map((lab) => (
+                        <option key={lab} value={lab}>
+                            {lab}
+                        </option>
+                    ))}
+                </select>}<br/>
                 <label>Is Lab Manager:   <input type="checkbox"/></label><br/>
                 <label>Password:   </label><input type="text" placeholder="Please enter the password" /><br/>
                 <label>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" /><br/>

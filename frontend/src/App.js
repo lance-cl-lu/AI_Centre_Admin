@@ -18,14 +18,13 @@ import { CSSTransition, TransitionGroup } from 'react-transition-group'
 
 function App() {
   const location = useLocation();
-  // after logout, user is null
   
   return (
     <div className="App">
+      <AuthProvider>
       
       <Navbar />
       <div className='Centre-Page'>
-        <AuthProvider>
 
           <Infolist/>
           <TransitionGroup className='Centre-Page-Content'>
@@ -47,8 +46,8 @@ function App() {
                 
             </CSSTransition>
           </TransitionGroup>
-        </AuthProvider>
       </div>
+    </AuthProvider>
       
     </div>
   );
