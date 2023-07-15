@@ -47,7 +47,7 @@ function Infolist() {
                 <ul>
                     {ldapinfo.map((item, index) => (
                         <li className='ul-li' key={index}>
-                            <Link to="/lab" state={{"group_dn":item.group_dn}}>
+                            <Link to="/lab" state={{"lab":item.group_dn}}>
                                 {item.group_dn}
                             </Link>
                             <ul>

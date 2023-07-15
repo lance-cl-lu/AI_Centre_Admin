@@ -17,7 +17,7 @@ function Dropdown() {
 
   return (
     <div className="dropdown">
-      {user ? <button onClick={handleClick} className="dropbtn">●</button> :　<Link to="/login" className="dropdown-link">Login</Link>}
+      {user ? <button onClick={handleClick} className="dropbtn"><span className="btnTag">●</span></button> :　<Link to="/login" className="dropdown-link">Login</Link>}
       {click ? (
       <ul>  
         <li>

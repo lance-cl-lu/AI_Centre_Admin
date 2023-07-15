@@ -36,21 +36,26 @@ def get_group_corresponding_user(request):
     conn = connectLDAP()
     # get all attributes
     conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
-    print(conn.entries)
     group_list = []
     for entry in conn.entries:
         member_uids = []
         group_dn = entry.cn.value
-        print(group_dn)
-        member_uids_entry = entry.memberUid.values
-        for member_uid in member_uids_entry:
-            member_uids.append(str(member_uid))
+        try:
+            member_uids_entry = entry.memberUid.values
+            for member_uid in member_uids_entry:
+                member_uids.append(str(member_uid))
 
-        # Append the group cn and corresponding memberUids
-        group_list.append({
-            'group_dn': group_dn,
-            'member_uids': member_uids
-        })
+            # Append the group cn and corresponding memberUids
+            group_list.append({
+                'group_dn': group_dn,
+                'member_uids': member_uids
+            })
+        except:
+            group_list.append({
+                'group_dn': group_dn,
+                'member_uids': []
+            })
+            
     conn.unbind()
 
     return Response(group_list, status=200)
@@ -61,17 +66,21 @@ def get_lab_info(request):
     labname = data['lab']
     conn = connectLDAP()
     conn.search('cn={},ou=Groups,dc=example,dc=org'.format(labname), '(objectclass=posixGroup)', attributes=['*'])
-    print(conn.entries)
     data = {}
     for entry in conn.entries:
-        print(entry.cn.value)
-        print(entry.gidNumber.value)
-        print(entry.memberUid.values)
-        data = {
-            "cn": entry.cn.value,
-            "gidNumber": entry.gidNumber.value,
-            "memberUid": entry.memberUid.values
-        }
+        try:
+            data = {
+                "cn": entry.cn.value,
+                "gidNumber": entry.gidNumber.value,
+                "memberUid": entry.memberUid.values
+            }
+        except:
+            data = {
+                "cn": entry.cn.value,
+                "gidNumber": entry.gidNumber.value,
+                "memberUid": []
+            }
+
     conn.unbind()
     return Response(data, status=200)
 
@@ -79,12 +88,39 @@ def get_lab_info(request):
 def addlab(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
+    print(labname)
+    group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     conn = connectLDAP()
-    gid = get_gid()
-    conn.add('cn={},ou=Groups,dc=example,dc=org'.format(labname), ['posixGroup', 'top'], {'gidNumber': 10001})
+    print(conn.add('cn={},ou=Groups,dc=example,dc=org'.format(labname), ['posixGroup', 'top'], {'cn': ['{}'.format(labname)], 'gidNumber': ['1001']}))
     conn.unbind()
     return Response(status=200)
+
+@api_view(['POST'])
+def adduser(request):
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
+    firstname = data['firstname']
+    lastname = data['lastname']
+    password = data['password']
+    labname = data['lab']
+    group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
+    user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
+    conn = connectLDAP()
+    conn.add(user_dn, ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+              {'cn': username, 'givenName': username, 'sn' : username ,
+               'uid': username, 'uidNumber': '2001', 'gidNumber': '1001',
+               'homeDirectory': '/home/{}'.format(username), 'loginShell': '/bin/bash',
+                'userPassword': password, 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+                'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+                'shadowExpire': '99999'})
+    if data['lab'] is not None:
+        group_dn = conn.entries[0].entry_dn
+        conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
+    conn.unbind()
+    user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
+    user.save()
     
+    return Response(status=200)
 
 
 @csrf_exempt

@@ -9,28 +9,26 @@ function Lab() {
 
     // fetch data from backend
     const [labinfo, setLabinfo] = useState([]); 
-
     useEffect(() => {
-        const fetchData = async () => {
-            const response = await fetch('http://127.0.0.1:8000/api/ldap/lab/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({'lab': state.group_dn}),
-            });
-            const data = await response.json();
+            labinfofetch();
+    }, [state]);
+
+    let labinfofetch = async(e) => {
+        let response = await fetch('http://127.0.0.1:8000/api/ldap/lab/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({'lab': state.lab}),
+        });
+        let data = await response.json();
+        if(response.status===200){
+            console.log(data);
             setLabinfo(data);
-        };
-        if(labinfo.cn!==state.group_cn) {
-            fetchData();
-            state.group_cn = labinfo.cn;
+        } else {
+            console.log('error');
         }
-    }, [labinfo, state]); // only run once
-
-    
-
-
+    }
 
     return (
         <div>

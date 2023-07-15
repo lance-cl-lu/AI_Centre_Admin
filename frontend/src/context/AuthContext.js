@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
             setAuthToken(data)
             setUser(jwt_decode(data.access))
             localStorage.setItem('authToken', JSON.stringify(data))
-            redirect = '/'
+            window.location.href = '/'
         } else {
             console.log('error')
         } 
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(null)
         setUser(null)
         localStorage.removeItem('authToken')
-        redirect = '/'
+        window.location.href = '/'
     }
 
     let contextData = {
