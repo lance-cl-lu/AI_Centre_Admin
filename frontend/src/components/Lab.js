@@ -1,19 +1,21 @@
 import React, { useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useState } from 'react';
+import useContext from 'react';
+
 
 function Lab() {
     const location = useLocation();
+
     console.log(location);
     const state = location.state;
-
     // fetch data from backend
     const [labinfo, setLabinfo] = useState([]); 
     useEffect(() => {
             labinfofetch();
     }, [state]);
 
-    let labinfofetch = async(e) => {
+    let labinfofetch = async() => {
         let response = await fetch('http://127.0.0.1:8000/api/ldap/lab/', {
             method: 'POST',
             headers: {

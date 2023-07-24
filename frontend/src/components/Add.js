@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import "./Add.css"
 
 function Add() {
+    
     return (
         <div className="AddContent">
             <div className="AddType"><Link to="/add/lab"><span>Add Labatory</span></Link></div>

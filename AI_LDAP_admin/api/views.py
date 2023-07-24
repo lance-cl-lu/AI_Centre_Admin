@@ -3,7 +3,8 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from ldap3 import *
 import json, re, random 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
+from .models import UserDetail
 
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
@@ -109,6 +110,10 @@ def addlab(request):
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     conn = connectLDAP()
     print(conn.add('cn={},ou=Groups,dc=example,dc=org'.format(labname), ['posixGroup', 'top'], {'cn': ['{}'.format(labname)], 'gidNumber': ['1001']}))
+    group = Group.objects.create(name=labname)
+    # add all permission to the group
+    group.save()
+    
     conn.unbind()
     return Response(status=200)
 
@@ -131,12 +136,16 @@ def adduser(request):
                 'userPassword': password, 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
                 'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
                 'shadowExpire': '99999'}))
-    
+    user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
+    UserDetail.create(uid=user, labname=Group.objects.get(name=labname), permission=2)
     if data['lab'] is not None:
         group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
         conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
+        user.groups.add(Group.objects.get(name=labname))
+        detail = UserDetail.objects.create(uid=User.objects.get(username=username), labname=Group.objects.get(name=labname), permission=2)
+        detail.save()
     conn.unbind()
-    user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
+    
     user.save()
     
     return Response(status=200)
@@ -145,7 +154,17 @@ def adduser(request):
 def add_admin(request):
     data = json.loads(request.body.decode('utf-8'))
     username = data['username']
+    user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
+    conn = connectLDAP()
+    conn.modify(user_dn, {'Description': [(MODIFY_ADD, ['admin'])]})
     user = User.objects.get(username=username)
+    detail = UserDetail.objects.get(uid=user)
+    detail.permission = 0
+    try:
+        detail.labname = Group.objects.get(name='root')
+        detail.save()
+    except:
+        pass
     # make user to be superuser
     user.is_superuser = True
     user.is_staff = True
@@ -188,21 +207,37 @@ def get_user_info(request):
     }
     return Response(data, status=200)    
 
-def userAdd(request):
-    data = json.loads(request.body, encoding='utf-8')
+@api_view(['POST'])
+def user_delete(request):
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
     conn = connectLDAP()
-    # add user in ldap
-    new_entry = {
-        'objectClass': ['top', 'person'],
-        'cn': 'John Doe',
-        'sn': 'Doe',
-        'givenName': 'John',
-        'mail': 'johndoe@example.com',
-        'userPassword': 'secretpassword'
-    }
+    conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
+    ## delete the user memberUID from the group
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    for entry in conn.entries:
+        try:
+            conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
+        except:
+            pass
+    User.objects.get(username=username).delete()
+    return Response(status=200)
 
-    # Add the entry to the LDAP directory
-    conn.add('uid=johndoe,ou=users,dc=example,dc=org', attributes=new_entry)
+@api_view(['POST'])
+def lab_delete(request):
+    data = json.loads(request.body.decode('utf-8'))
+    labname = data['lab']
+    user_list = User.objects.filter(groups__name=labname)
+    for user in user_list:
+        if(len(user.groups.all()) == 1):
+            user.delete()
+        else:
+            user.groups.remove(Group.objects.get(name=labname))
+    conn = connectLDAP()
+    conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
+    conn.unbind()
+    return Response(status=200)
+    
     
 def user_group_num(requset):
     conn = connectLDAP()
@@ -222,3 +257,20 @@ def user_group_num(requset):
 def add_excel(request):
     conn = connectLDAP()
     return render(request, 'add_excel.html')
+
+@api_view(['POST'])
+def add_lab_admin(request):
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
+    labname = data['lab']
+    User.objects.get(username=username).is_staff = True
+    detail = UserDetail.objects.filter(uid=User.objects.get(username=username), labname=Group.objects.get(name=labname))
+    detail.permission = 1
+    detail.save()
+    conn = connectLDAP()
+    lab = conn.search('cn={},ou=Groups,dc=example,dc=org'.format(labname), '(objectclass=posixGroup)', attributes=['cn'])
+    user = conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+    for entry in user.entries:
+        conn.modify(entry.entry_dn, {'Description': [(MODIFY_ADD, ['{}admin'.format(labname)])]})
+    conn.unbind()
+    

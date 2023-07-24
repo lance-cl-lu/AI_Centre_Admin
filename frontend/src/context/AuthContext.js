@@ -1,6 +1,5 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState } from "react";
 import jwt_decode from "jwt-decode";
-import { redirect } from "react-router-dom";
 
 const AuthContext = createContext();
 
@@ -10,6 +9,25 @@ export const AuthProvider = ({ children }) => {
 
     const [authToken, setAuthToken] = useState(() => localStorage.getItem('authToken') ? JSON.parse(localStorage.getItem('authToken')) : null)
     const [user, setUser] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken')) : null)
+
+    const [userlist, setUesrlist] = useState(null)
+    let [infolistchecker, setinfolistChecker] = useState(false)
+
+    let getUserList = async ( ) => {
+        let response = await fetch('http://127.0.0.1:8000/api/ldap/info/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+        let data = await response.json();
+        if(response.status===200){
+            setUesrlist(data);
+        } else {
+            console.log('error');
+        }
+    }
+
 
     let loginUser = async(e )=> {
         e.preventDefault()
@@ -38,10 +56,15 @@ export const AuthProvider = ({ children }) => {
         window.location.href = '/'
     }
 
+
+
     let contextData = {
         user:user,
         loginUser:loginUser,
         logoutUser:logoutUser,
+        userlist:userlist,
+        getUserList:getUserList,
+        setinfolistChecker:setinfolistChecker,
     }
 
     return (

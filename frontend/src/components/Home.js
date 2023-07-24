@@ -24,7 +24,6 @@ function Home() {
     }
     );
   }, [user]);
-  console.log(user);
   return (
     <div className="Home">
       <div className="piechart">

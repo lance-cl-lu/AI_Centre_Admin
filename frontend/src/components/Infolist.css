@@ -1,17 +1,8 @@
 .infolist {
     box-sizing: border-box;
     margin: 0;
-    width: 25%;
-    left: 0;
-    height: 90.3vh;
-    display: flex;
-    background-color: aqua;
-    position: relative;
-}
-
-.info-ul {
-    position: absolute;
-    left: -90px;
+    width: 20%;
+    display: block;
 }
 
 .ul-li {
@@ -22,21 +13,13 @@
     flex-wrap: nowrap;
 }
 
-.ul-li :hover {
-    background-color: #ccc;
-    color: black;
+.ul-li:hover {
+    transform: translate(5px, 5px);
 }
+
 .ul-li a {
     text-decoration: none;
     color: black;
     font-size: 1em;
     font-family: Comic Sans MS;
 }
-/*
-.ul-li  ul{
-    display: none;
-}
-
-.ul-li  li {
-    display: block;
-}*/
