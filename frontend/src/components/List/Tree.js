@@ -4,11 +4,10 @@ import AuthContext from '../../context/AuthContext';
 import { AuthProvider } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 function TreeView() {
-    let {userlist, getUserList, setinfolistChecker} = useContext(AuthContext);
+    let {userlist, getUserList} = useContext(AuthContext);
     useEffect(() => {
         getUserList();
-        setinfolistChecker = true;
-    }, [setinfolistChecker]);
+    }, []);
     
     return (
         <div className='tree'>

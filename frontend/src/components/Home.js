@@ -1,6 +1,10 @@
 import React, {useState, useEffect} from "react"; 
 import { useContext } from "react";
 import AuthContext from "../context/AuthContext";
+import { PieChart, PieChartProps  } from 'react-minimal-pie-chart';
+import { Card } from 'react-bootstrap';
+import './Home.css'
+import { Link } from "react-router-dom";
 
 function Home() {
   let {user} = useContext(AuthContext);
@@ -26,18 +30,49 @@ function Home() {
   }, [user]);
   return (
     <div className="Home">
-      <div className="piechart">
-        <h2>Number of Users</h2>
-        <p>{user_num}</p>
-      </div>
-      <div className="piechart">
-        <h2>Number of Labs</h2>
-        <p>{lab_num}</p>
-      </div>
-    
+          
       <h1>Home</h1>
       {user && <p>Hello {user.username}</p> }
+      <div className="piediv">
+        <h2>Users</h2>
+        <PieChart 
+          data={[
+            { title: 'Users', value: user_num, color: '#E38627' },
+          ]}
+          label={({ dataEntry }) => dataEntry.value}
+
+        />
+      </div>
+      <div className="piediv">
+        <h2>Labs</h2>
+        <PieChart 
+          data={[
+            { title: 'Labs', value: lab_num, color: '#C13C37' },
+          ]}
+          label={({ dataEntry }) => dataEntry.value}
+          labelStyle={(index) => ({
+            fill: '#fff',
+            fontSize: '15px',
+            fontFamily: 'comic sans ms',
+
+          })}
+        />
+      </div>
+
+      <Card className="text-center">
+        <Card.Header>Featured</Card.Header>
+        <Card.Body>
+          <Card.Title>Special title treatment</Card.Title>
+          <Card.Text>
+          With supporting text below as a natural lead-in to additional content.
+          </Card.Text>
+          <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
+        </Card.Body>
+        <Card.Footer className="text-muted">2 days ago</Card.Footer>
+      </Card>
+
     </div>
+
   );
 }
 export default Home;

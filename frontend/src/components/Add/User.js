@@ -36,7 +36,7 @@ function AddUser() {
                     "username":e.target[2].value,
                     "email":e.target[3].value,
                     "lab":e.target[4].value,
-                    "is_lab_manager":e.target[5].value,
+                    "is_lab_manager": e.target[5].checked,
                     "password":e.target[6].value,
                 }),
             });

@@ -6,10 +6,15 @@ import json, re, random
 from django.contrib.auth.models import User, Group
 from .models import UserDetail
 
+import base64
+from passlib.hash import ldap_md5_crypt
+
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
+
+salt = 'cguadmin'
 
 def get_gid():
     while True:
@@ -48,34 +53,106 @@ def user_list(request):
     return Response(user_list, status=200)
 
 
-@api_view(['GET'])
+@api_view(['POST'])
 def get_group_corresponding_user(request):
     # get all group and corresponding user
+    data = json.loads(request.body.decode('utf-8'))
+    user = data['user']
+    print(user)
     conn = connectLDAP()
-    # get all attributes
-    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
+    user_dn = 'cn={},ou=users,dc=example,dc=org'.format(user)
+    conn.search(user_dn, '(objectclass=posixAccount)', attributes=['Description'])
     group_list = []
+    permission_list = []
     for entry in conn.entries:
-        member_uids = []
-        group_dn = entry.cn.value
-        try:
-            member_uids_entry = entry.memberUid.values
-            for member_uid in member_uids_entry:
-                member_uids.append(str(member_uid))
+        permission_list = entry.Description.values
+    for permission in permission_list:
+        if (permission == 'admin'):
+            print('admin')
+            # get all attributes
+            conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
+            for entry in conn.entries:
+                member_uids = []
+                group_dn = entry.cn.value
+                try:
+                    member_uids_entry = entry.memberUid.values
+                    for member_uid in member_uids_entry:
+                        member_uids.append(str(member_uid))
 
-            # Append the group cn and corresponding memberUids
-            group_list.append({
-                'group_dn': group_dn,
-                'member_uids': member_uids
+                    # Append the group cn and corresponding memberUids
+                    group_list.append({
+                        'group_dn': group_dn,
+                        'member_uids': member_uids
+                    })
+                except:
+                    group_list.append({
+                        'group_dn': group_dn,
+                        'member_uids': []
+                })
+        # permission is specificed lab admin with name ex (Leeadmin)
+        elif re.match(r'.*admin', str(permission)):
+            labname = permission[:-5]
+            conn.search('cn={},ou=Groups,dc=example,dc=org'.format(labname), '(objectclass=posixGroup)', attributes=['*'])
+            for entry in conn.entries:
+                member_uids = []
+                group_dn = entry.cn.value
+                try:
+                    member_uids_entry = entry.memberUid.values
+                    for member_uid in member_uids_entry:
+                        member_uids.append(str(member_uid))
+
+                    # Append the group cn and corresponding memberUids
+                    group_list.append({
+                        'group_dn': group_dn,
+                        'member_uids': member_uids
+                    })
+                except:
+                    group_list.append({
+                        'group_dn': group_dn,
+                        'member_uids': []
+                })
+        # permission is specificed lab user with name ex (Lee)
+        else:
+            print(permission)
+            conn.search('cn={},ou=Groups,dc=example,dc=org'.format(permission), '(objectclass=posixGroup)', attributes=['*'])
+            for entry in conn.entries:
+                # get the group name and only one memberUid of this user
+                group_dn = entry.cn.value
+                try:
+                    member_uids = [user]
+                    # Append the group cn and corresponding memberUids
+                    group_list.append({
+                        'group_dn': group_dn,
+                        'member_uids': member_uids
+                    })
+                except:
+                    group_list.append({
+                        'group_dn': group_dn,
+                        'member_uids': []
+                })
+    
+    if (data['user'] == 'root'):
+        conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
+        for entry in conn.entries:
+            member_uids = []
+            group_dn = entry.cn.value
+            try:
+                member_uids_entry = entry.memberUid.values
+                for member_uid in member_uids_entry:
+                    member_uids.append(str(member_uid))
+
+                # Append the group cn and corresponding memberUids
+                group_list.append({
+                    'group_dn': group_dn,
+                    'member_uids': member_uids
+                })
+            except:
+                group_list.append({
+                    'group_dn': group_dn,
+                    'member_uids': []
             })
-        except:
-            group_list.append({
-                'group_dn': group_dn,
-                'member_uids': []
-            })
-            
+
     conn.unbind()
-
     return Response(group_list, status=200)
 
 @api_view(['POST'])
@@ -133,19 +210,22 @@ def adduser(request):
               {'cn': username, 'givenName': username, 'sn' : username ,
                'uid': username, 'uidNumber': '2001', 'gidNumber': '1001', "mail": email,
                'homeDirectory': '/home/{}'.format(username), 'loginShell': '/bin/bash',
-                'userPassword': password, 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+                'userPassword': ldap_md5_crypt.hash(password, salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
                 'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
-                'shadowExpire': '99999'}))
+                'shadowExpire': '99999', 'Description': [labname]}))
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
-    UserDetail.create(uid=user, labname=Group.objects.get(name=labname), permission=2)
     if data['lab'] is not None:
         group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
         conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
         user.groups.add(Group.objects.get(name=labname))
-        detail = UserDetail.objects.create(uid=User.objects.get(username=username), labname=Group.objects.get(name=labname), permission=2)
-        detail.save()
+        if data['is_lab_manager'] is False:
+            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=labname), permission=2)
+            conn.modify(user_dn, {'Description': [(MODIFY_ADD, [labname])]})
+        elif data['is_lab_manager'] is True:
+            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=labname), permission=1)
+            conn.modify(user_dn, {'Description': [(MODIFY_ADD, ['{}admin'.format(labname)])]})
+            conn.modify(user_dn, {'Description': [(MODIFY_DELETE, [labname])]})
     conn.unbind()
-    
     user.save()
     
     return Response(status=200)

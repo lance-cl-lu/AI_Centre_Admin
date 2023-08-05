@@ -15,6 +15,7 @@
 }
 .navigation-ul {
     list-style-type: none;
+    height: 10vh;
     margin: 0;
     padding: 0;
     display: flex;
@@ -43,8 +44,8 @@
 }
 .navigation-ul img {
     float: left;
-    width: 50%;
-    height: 80%;
+    width: 40%;
+    height: 60%;
 }
 .navigation-ul li button {
     border: none;

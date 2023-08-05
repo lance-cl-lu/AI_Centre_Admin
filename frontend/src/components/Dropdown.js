@@ -5,11 +5,13 @@ import AuthContext from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 
 function Dropdown() {
-  let { user, logoutUser } = useContext(AuthContext);
+  let { logoutUser } = useContext(AuthContext);
   const [click, setClick] = useState(false);
   const location = useLocation();
+  
   const handleClick = () => setClick(!click);
   const closeMobileMenu = () => setClick(false);
+
   useEffect(() => {
     closeMobileMenu();
   }, [location]);
@@ -17,26 +19,26 @@ function Dropdown() {
 
   return (
     <div className="dropdown">
-      {user ? <button onClick={handleClick} className="dropbtn"><span className="btnTag">●</span></button> :　<Link to="/login" className="dropdown-link">Login</Link>}
+      <button onClick={handleClick} className="btn btn-secondary dropdown-toggle dropbtn"></button>
       {click ? (
-      <ul>  
+      <ul className="dropdown-menu" aria-labelledby="dropdownMenuLink">  
         <li>
-          <Link to="/profile" className="dropdown-link">
+          <Link to="/profile" className="dropdown-item">
             Profile
           </Link>
         </li>
         <li>
-          <Link to="/settings" className="dropdown-link">
+          <Link to="/settings" className="dropdown-item">
             Settings
           </Link>
         </li>
         <li>
-          <Link to="/help" className="dropdown-link">
+          <Link to="/help" className="dropdown-item">
             Help
           </Link>
         </li>
         <li>
-          <Link to="/" className="dropdown-link" onClick={logoutUser}>
+          <Link to="/" className="dropdown-item" onClick={logoutUser}>
             Logout
           </Link>
         </li>

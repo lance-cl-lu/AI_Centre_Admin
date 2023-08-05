@@ -8,6 +8,8 @@ class UserDetail(models.Model):
     
     class Meta:
         unique_together = ('uid', 'labname','permission')
+        
     
     def __str__(self):
         return self.uid.username + '\t' + self.labname.name + '\t' + str(self.permission)
+    
