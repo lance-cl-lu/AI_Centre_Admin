@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.models import User, Group
 from .models import UserDetail
 from ldap3 import *
+import json
+
 
 
 def connectLDAP():
@@ -35,12 +37,14 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Add custom claims
         token['username'] = user.username
         # get permission from ldap user description. only labname is user, permission is 2; labnameadmin is admin, permission is 1, admin is superuser, permission is 0
+        list = []
         try:
-            conn.search('cn={},ou=users,dc=example,dc=org'.format(str(user.username)), '(objectclass=posixAccount)', attributes=['description'])
-            token['permission'] = conn.entries[0].description.value
+            conn.search('cn={},ou=users,dc=example,dc=org'.format(str(user.username)), '(objectclass=posixAccount)', attributes=['Description'])
+            for entry in conn.entries:
+                list.append(entry.Description.value)
         except:
             pass
-        # ...
+        token['permission'] = list
         return token
 
 class MyTokenObtainPairView(TokenObtainPairView):

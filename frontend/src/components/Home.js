@@ -1,15 +1,18 @@
 import React, {useState, useEffect} from "react"; 
 import { useContext } from "react";
 import AuthContext from "../context/AuthContext";
-import { PieChart, PieChartProps  } from 'react-minimal-pie-chart';
+import { PieChart } from 'react-minimal-pie-chart';
 import { Card } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
+import Toast from 'react-bootstrap/Toast';
 
 function Home() {
   let {user} = useContext(AuthContext);
   let [user_num, setUser_num] = useState(0);
   let [lab_num, setLab_num] = useState(0);
+  const [showToast, setshowToast] = useState(true);
+  const toggleShowToast = () => setshowToast(!showToast);
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/api/home/', {
@@ -30,47 +33,54 @@ function Home() {
   }, [user]);
   return (
     <div className="Home">
-          
-      <h1>Home</h1>
-      {user && <p>Hello {user.username}</p> }
-      <div className="piediv">
-        <h2>Users</h2>
-        <PieChart 
-          data={[
-            { title: 'Users', value: user_num, color: '#E38627' },
-          ]}
-          label={({ dataEntry }) => dataEntry.value}
+      <div className="jumbotron">
+        {!<Toast onClose={toggleShowToast} show={showToast} delay={3000} className="toast-left">
+          <Toast.Header>
+          <img src="holder.js/20x20?text=%20" className="rounded me-2" alt="" />
+          <strong className="me-auto">Bootstrap</strong>
+          <small>11 mins ago</small>
+          </Toast.Header>
+          <Toast.Body>Welcome to CGU AI Centre LDAP System, {user.username}</Toast.Body>
+        </Toast>}
+        <div className="pie">
+          <div className="piediv">
+            <h2>Users</h2>
+            <PieChart 
+              data={[
+                { title: 'Users', value: user_num, color: '#E38627' },
+              ]}
+              label={({ dataEntry }) => dataEntry.value}
 
-        />
+            />
+          </div>
+          <div className="piediv">
+            <h2>Labs</h2>
+            <PieChart 
+              data={[
+                { title: 'Labs', value: lab_num, color: '#C13C37' },
+              ]}
+              label={({ dataEntry }) => dataEntry.value}
+              labelStyle={(index) => ({
+                fill: '#fff',
+                fontSize: '15px',
+                fontFamily: 'comic sans ms',
+
+              })}
+            />
+          </div>
+        </div>
+        <Card className="text-center">
+          <Card.Header>Featured</Card.Header>
+          <Card.Body>
+            <Card.Title>Special title treatment</Card.Title>
+            <Card.Text>
+            With supporting text below as a natural lead-in to additional content.
+            </Card.Text>
+            <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
+          </Card.Body>
+          <Card.Footer className="text-muted">2 days ago</Card.Footer>
+        </Card>
       </div>
-      <div className="piediv">
-        <h2>Labs</h2>
-        <PieChart 
-          data={[
-            { title: 'Labs', value: lab_num, color: '#C13C37' },
-          ]}
-          label={({ dataEntry }) => dataEntry.value}
-          labelStyle={(index) => ({
-            fill: '#fff',
-            fontSize: '15px',
-            fontFamily: 'comic sans ms',
-
-          })}
-        />
-      </div>
-
-      <Card className="text-center">
-        <Card.Header>Featured</Card.Header>
-        <Card.Body>
-          <Card.Title>Special title treatment</Card.Title>
-          <Card.Text>
-          With supporting text below as a natural lead-in to additional content.
-          </Card.Text>
-          <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
-        </Card.Body>
-        <Card.Footer className="text-muted">2 days ago</Card.Footer>
-      </Card>
-
     </div>
 
   );

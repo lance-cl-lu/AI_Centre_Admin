@@ -1,8 +1,9 @@
 import Tree from 'react-animated-tree'
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect } from 'react';
 import AuthContext from '../../context/AuthContext';
 import { AuthProvider } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { Card } from 'react-bootstrap';
 function TreeView() {
     let {userlist, getUserList} = useContext(AuthContext);
     useEffect(() => {
@@ -12,7 +13,8 @@ function TreeView() {
     return (
         <div className='tree'>
             <AuthProvider>
-                <Tree content={<Link to="/">Dashbord</Link>}/>
+                <Card>
+                    <Card.Header>Tree View</Card.Header>
                     {userlist && userlist.map((user, index) => (
                         <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }}>{user.group_dn}</Link>} type="Lab" key={index}>
                             {user.member_uids.map((memberUid, index) => (
@@ -20,6 +22,7 @@ function TreeView() {
                             ))}
                         </Tree>
                     ))}
+                </Card>
             </AuthProvider>
         </div>
     );

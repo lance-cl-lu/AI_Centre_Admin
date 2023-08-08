@@ -4,12 +4,8 @@ import AuthContext from "../context/AuthContext";
 import Form from 'react-bootstrap/Form';
 import Button from 'react-bootstrap/Button';
 
-
 function Login() {
-
-    let {loginUser} = useContext(AuthContext)
-    // after login refresh the Dropdown component
-    
+    let {loginUser} = useContext(AuthContext)    
     return (
         <div className="Login">
             <form onSubmit={loginUser} className="LoginForm">

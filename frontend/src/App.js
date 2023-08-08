@@ -16,6 +16,7 @@ import Infolist from './components/Infolist';
 import { CSSTransition, TransitionGroup } from 'react-transition-group'
 import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
 import { useContext } from 'react';
+import Help from './components/Help';
 
 function App() {
   const location = useLocation();
@@ -23,7 +24,8 @@ function App() {
   console.log(user);
   return (
     <div className="App">
-      { user ? <>
+      { user ? 
+      <>
         <Navbar />
           <div className='Centre-Page'>
               <Infolist/>
@@ -31,17 +33,18 @@ function App() {
                 <CSSTransition key={location.pathname} timeout={1000} classNames={'fade'}>
 
                     <Routes>
-                    <Route exact path="/" element={<Home />} />
-                    <Route path="about/" element={<About />} />
-                    <Route path="add/" element={<Add />} />
-                    <Route path="add/lab" element={<AddLab />} />
-                    <Route path="add/user" element={<AddUser />} />
-                    <Route path="add/admin" element={<AddAdmin />} />
-                    <Route path="add/excel" element={<AddExcel />} />
-                    <Route path="login" element={<Login />} />
-                    <Route path="*" element={<Home />} />
-                    <Route path="lab" element={<Lab />} />
-                    <Route path="user" element={<User />} />
+                      <Route exact path="/" element={<Home />} />
+                      <Route path="about/" element={<About />} />
+                      <Route path="add/" element={<Add />} />
+                      <Route path="add/lab" element={<AddLab />} />
+                      <Route path="add/user" element={<AddUser />} />
+                      <Route path="add/admin" element={<AddAdmin />} />
+                      <Route path="add/excel" element={<AddExcel />} />
+                      <Route path="login" element={<Login />} />
+                      <Route path="lab" element={<Lab />} />
+                      <Route path="user" element={<User />} />
+                      <Route path="help" element={<Help />} />
+                      <Route path="*" element={<Home />} />
                     </Routes>
                     
                 </CSSTransition>

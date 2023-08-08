@@ -5,6 +5,8 @@ import './style.css';
 import App from './App';
 import {BrowserRouter} from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import {Routes, Route} from 'react-router-dom';
+import Help from './components/Help'; 
 
 
 
@@ -12,7 +14,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <BrowserRouter>
     <AuthProvider>
-    <App />
+      <App />
     </AuthProvider>
   </BrowserRouter>
 );

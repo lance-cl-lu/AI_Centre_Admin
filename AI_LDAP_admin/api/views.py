@@ -49,7 +49,6 @@ def user_list(request):
     for entry in conn.entries:
         user_list.append(entry.cn.value)
     conn.unbind()
-    print(user_list)
     return Response(user_list, status=200)
 
 
@@ -58,7 +57,6 @@ def get_group_corresponding_user(request):
     # get all group and corresponding user
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
-    print(user)
     conn = connectLDAP()
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(user)
     conn.search(user_dn, '(objectclass=posixAccount)', attributes=['Description'])
@@ -68,7 +66,6 @@ def get_group_corresponding_user(request):
         permission_list = entry.Description.values
     for permission in permission_list:
         if (permission == 'admin'):
-            print('admin')
             # get all attributes
             conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
             for entry in conn.entries:
@@ -113,7 +110,6 @@ def get_group_corresponding_user(request):
                 })
         # permission is specificed lab user with name ex (Lee)
         else:
-            print(permission)
             conn.search('cn={},ou=Groups,dc=example,dc=org'.format(permission), '(objectclass=posixGroup)', attributes=['*'])
             for entry in conn.entries:
                 # get the group name and only one memberUid of this user
@@ -183,10 +179,9 @@ def get_lab_info(request):
 def addlab(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
-    print(labname)
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     conn = connectLDAP()
-    print(conn.add('cn={},ou=Groups,dc=example,dc=org'.format(labname), ['posixGroup', 'top'], {'cn': ['{}'.format(labname)], 'gidNumber': ['1001']}))
+    conn.add('cn={},ou=Groups,dc=example,dc=org'.format(labname), ['posixGroup', 'top'], {'cn': ['{}'.format(labname)], 'gidNumber': ['1001']})
     group = Group.objects.create(name=labname)
     # add all permission to the group
     group.save()
@@ -206,13 +201,13 @@ def adduser(request):
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
     conn = connectLDAP()
-    print(conn.add(user_dn, ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
-              {'cn': username, 'givenName': username, 'sn' : username ,
-               'uid': username, 'uidNumber': '2001', 'gidNumber': '1001', "mail": email,
-               'homeDirectory': '/home/{}'.format(username), 'loginShell': '/bin/bash',
-                'userPassword': ldap_md5_crypt.hash(password, salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
-                'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
-                'shadowExpire': '99999', 'Description': [labname]}))
+    conn.add(user_dn, ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+        {'cn': username, 'givenName': username, 'sn' : username ,
+        'uid': username, 'uidNumber': '2001', 'gidNumber': '1001', "mail": email,
+        'homeDirectory': '/home/{}'.format(username), 'loginShell': '/bin/bash',
+        'userPassword': ldap_md5_crypt.hash(password, salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+        'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+        'shadowExpire': '99999', 'Description': [labname]})
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     if data['lab'] is not None:
         group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
@@ -257,16 +252,12 @@ def add_admin(request):
 def syschronize_ldap(requset):
     conn = connectLDAP()
     conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
-    print(conn.entries)
     group_list = []
     for entry in conn.entries:
-        print(entry.entry_dn)
         group_list.append(entry.entry_dn)
     conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
-    print(conn.entries)
     account_list = []
     for entry in conn.entries:
-        print(entry.entry_gidNumber)
         account_list.append(entry.entry_gidNumber)
         conn.unbind()
     # get the user with corresponding group
@@ -353,4 +344,16 @@ def add_lab_admin(request):
     for entry in user.entries:
         conn.modify(entry.entry_dn, {'Description': [(MODIFY_ADD, ['{}admin'.format(labname)])]})
     conn.unbind()
+    
+
+import xlrd
+@api_view(['POST'])
+def excel(request):
+    json_data = json.loads(request.body.decode('utf-8'))
+    # get the excel file
+    excel_file = request.FILES['file']
+    print(excel_file)
+    # read the excel file
+    wb = xlrd.open_workbook(filename=None, file_contents=excel_file.read())
+    return Response(status=200)
     

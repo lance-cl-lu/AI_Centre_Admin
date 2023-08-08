@@ -7,11 +7,9 @@ export default AuthContext;
 
 export const AuthProvider = ({ children }) => {
 
-    const [authToken, setAuthToken] = useState(() => localStorage.getItem('authToken') ? JSON.parse(localStorage.getItem('authToken')) : null)
     const [user, setUser] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken')) : null)
 
     const [userlist, setUesrlist] = useState(null)
-    let [infolistchecker, setinfolistChecker] = useState(false)
 
     let getUserList = async ( ) => {
         let response = await fetch('http://127.0.0.1:8000/api/ldap/info/', {
@@ -41,7 +39,6 @@ export const AuthProvider = ({ children }) => {
         })
         let data = await response.json()
         if(response.status===200){
-            setAuthToken(data)
             setUser(jwt_decode(data.access))
             localStorage.setItem('authToken', JSON.stringify(data))
             window.location.href = '/'
@@ -51,7 +48,6 @@ export const AuthProvider = ({ children }) => {
     }
     
     let logoutUser = () => {
-        setAuthToken(null)
         setUser(null)
         localStorage.removeItem('authToken')
         window.location.href = '/'
@@ -65,7 +61,6 @@ export const AuthProvider = ({ children }) => {
         logoutUser:logoutUser,
         userlist:userlist,
         getUserList:getUserList,
-        setinfolistChecker:setinfolistChecker,
     }
 
     return (

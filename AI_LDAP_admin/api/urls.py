@@ -24,4 +24,6 @@ urlpatterns = [
     path("ldap/user/delete/", user_delete, name="user_delete"),
     
     path("ldap/admin/add/", add_admin, name="add_admin"),
+    
+    path("ldap/excel/", excel, name="excel"),
 ]
