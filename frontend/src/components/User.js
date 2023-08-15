@@ -118,6 +118,9 @@ function User() {
                 <Button variant="danger" onClick={deleteUser}>
                     Delete
                 </Button>
+                <Button variant='info'>
+                    {user? <Link to=''>}
+                </Button>
             </Form>
 
 
