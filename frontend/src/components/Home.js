@@ -45,17 +45,20 @@ function Home() {
         <div className="pie">
           <div className="piediv">
             <h2>Users</h2>
-            <PieChart 
+            <PieChart className="PieStyle" 
               data={[
                 { title: 'Users', value: user_num, color: '#E38627' },
               ]}
               label={({ dataEntry }) => dataEntry.value}
+              labelStyle={{
+                textAlign: "center"
+              }}
 
             />
           </div>
           <div className="piediv">
             <h2>Labs</h2>
-            <PieChart 
+            <PieChart className="PieStyle" textAnchor="middle" dominantBaseline="middle"
               data={[
                 { title: 'Labs', value: lab_num, color: '#C13C37' },
               ]}
@@ -63,8 +66,7 @@ function Home() {
               labelStyle={(index) => ({
                 fill: '#fff',
                 fontSize: '15px',
-                fontFamily: 'comic sans ms',
-
+                fontFamily: 'comic sans ms'
               })}
             />
           </div>

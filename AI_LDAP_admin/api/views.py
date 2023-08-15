@@ -356,4 +356,11 @@ def excel(request):
     # read the excel file
     wb = xlrd.open_workbook(filename=None, file_contents=excel_file.read())
     return Response(status=200)
+
+@api_view(['GET'])
+def synchronize(request):
+    # use to check if ldap and django data same
+    conn = connectLDAP()
+    
+
     

@@ -44,14 +44,13 @@ function AddUser() {
                 alert('User added successfully');
                 window.location.reload();
             } else {
-                console.log('error');
+                alert('User create error');
             }
         } else {
             alert('Passwords do not match');
         }
     }
     const location = useLocation();
-    console.log(location);
 
     return (
         <div>
