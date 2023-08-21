@@ -325,9 +325,6 @@ def user_group_num(requset):
     data = {'lab_num': len(group_list), 'user_num': len(user_list)}
     return JsonResponse(data, safe=False)
 
-def add_excel(request):
-    conn = connectLDAP()
-    return render(request, 'add_excel.html')
 
 @api_view(['POST'])
 def add_lab_admin(request):
@@ -361,6 +358,45 @@ def excel(request):
 def synchronize(request):
     # use to check if ldap and django data same
     conn = connectLDAP()
-    
 
-    
+@api_view(['POST'])
+def change_password(request):
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
+    password = data['password']
+    conn = connectLDAP()
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+    try:
+        for entry in conn.entries:
+            conn.modify(entry.entry_dn, {'userPassword':[(MODIFY_REPLACE, [ldap_md5_crypt.hash(password, salt=salt)])]})
+        conn.unbind
+        user = User.objects.get(username=username)
+        user.set_password(password)
+        user.save()
+        return Response(status=200)
+    except:
+        return Response(status=500)
+
+@api_view(['POST'])
+def change_user_info(request):
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
+    firstname = data['firstname']
+    lastname = data['lastname']
+    email = data['email']
+    try:
+        conn = connectLDAP()
+        conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+        for entry in conn.entries:
+            conn.modify(entry.entry_dn, {'givenName':[(MODIFY_REPLACE, [firstname])]})
+            conn.modify(entry.entry_dn, {'sn':[(MODIFY_REPLACE, [lastname])]})
+            conn.modify(entry.entry_dn, {'mail': [(MODIFY_REPLACE, [email])]})
+        user = User.objects.get(username=username)
+        user.first_name = firstname
+        user.last_name = lastname
+        user.email = email
+        user.save()
+        return Response(status=200)
+    except:
+        return Response(status=500)
+

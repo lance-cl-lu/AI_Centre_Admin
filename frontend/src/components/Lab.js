@@ -2,12 +2,10 @@ import React, { useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useState } from 'react';
 import useContext from 'react';
-
+import { Table } from 'react-bootstrap';
 
 function Lab() {
     const location = useLocation();
-
-    console.log(location);
     const state = location.state;
     // fetch data from backend
     const [labinfo, setLabinfo] = useState([]); 
@@ -34,20 +32,16 @@ function Lab() {
 
     return (
         <div>
-            <form>
-                <h1>This is {labinfo ? labinfo.cn : null} </h1><br/>
-                <label>Lab Description</label>
-                <input type="text" name="gidNumber" value={labinfo ? labinfo.gidNumber:null} readOnly/><br/>
-                <h1>Lab Members</h1>
-                 <ul>
+            <h1>{labinfo ? labinfo.cn : null} Lab Members</h1><br/>
+            <Table  striped bordered hover>
+                <th style={{height:"8vh"}}>Username</th>
                     {labinfo && labinfo.memberUid ? labinfo.memberUid.map((memberUid, index) => (
-                        <li className='ul-li' key={index}>
+                        <tr style={{height:"8vh"}}>
                             <Link to="/user" state={{ "user": memberUid }}>{memberUid}</Link>
-                        </li>
+                        </tr>
                     )) : null}
                     <br/>
-                </ul>
-            </form>
+            </Table>
         </div>
     );
 }

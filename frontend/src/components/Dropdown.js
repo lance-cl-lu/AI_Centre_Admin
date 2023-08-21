@@ -5,7 +5,7 @@ import AuthContext from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 
 function Dropdown() {
-  let { logoutUser } = useContext(AuthContext);
+  let { logoutUser, user } = useContext(AuthContext);
   const [click, setClick] = useState(false);
   const location = useLocation();
   
@@ -13,9 +13,8 @@ function Dropdown() {
   const closeMobileMenu = () => setClick(false);
 
   useEffect(() => {
-    closeMobileMenu();
+      closeMobileMenu();
   }, [location]);
-
 
   return (
     <div className="dropdown">
@@ -23,7 +22,7 @@ function Dropdown() {
       {click ? (
       <ul className="dropdown-menu" aria-labelledby="dropdownMenuLink">  
         <li>
-          <Link to="/profile" className="dropdown-item">
+          <Link to="/user" className="dropdown-item" state={{"user": user.username}}>
             Profile
           </Link>
         </li>

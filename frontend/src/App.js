@@ -7,6 +7,7 @@ import AddLab from './components/Add/Lab';
 import AddUser from './components/Add/User';
 import AddAdmin from './components/Add/Admin';
 import Lab from './components/Lab';
+import Password from './components/password';
 import User from './components/User';
 import AddExcel from './components/Add/Excel';
 import Login from './components/Login';
@@ -34,6 +35,7 @@ function App() {
 
                     <Routes>
                       <Route exact path="/" element={<Home />} />
+                      <Route path='password' element={<Password></Password>}/>
                       <Route path="about/" element={<About />} />
                       <Route path="add/" element={<Add />} />
                       <Route path="add/lab" element={<AddLab />} />

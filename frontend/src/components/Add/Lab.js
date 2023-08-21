@@ -1,3 +1,5 @@
+import { Form } from "react-bootstrap";
+
 function AddLab() {
 
     let addLab = async(e) => {
@@ -20,10 +22,10 @@ function AddLab() {
     return (
         <div>
             <h1>Add Lab</h1>
-            <form onSubmit={addLab}>
+            <Form onSubmit={addLab}>
                 <label>Labatory Name:   </label><input type="text" placeholder="Please enter the lab name" /><br/>
                 <input type="submit" value="Submit" />
-            </form>
+            </Form>
         </div>
     )
 }
