@@ -28,4 +28,5 @@ urlpatterns = [
     path("ldap/excel/", excel, name="excel"),
     path("password/change/", change_password, name="change_password"),
     path("user/change/", change_user_info, name="change_user_info"),
+    
 ]

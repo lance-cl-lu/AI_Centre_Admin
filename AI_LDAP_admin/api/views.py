@@ -304,6 +304,7 @@ def lab_delete(request):
             user.delete()
         else:
             user.groups.remove(Group.objects.get(name=labname))
+    #Group.objects.get(name=labname)
     conn = connectLDAP()
     conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
     conn.unbind()
@@ -400,3 +401,17 @@ def change_user_info(request):
     except:
         return Response(status=500)
 
+@api_view(['POST'])
+def delete_group(request):
+    data = json.loads(request.body.decode('utf-8'))
+    try:
+        conn = connectLDAP()
+        conn.search('cn={},ou=Groups,dc=example,dc=org'.format(data), '(objectclass=posixGroup)', attributes=['*'])
+        for entry in conn.entries:
+            conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
+        group = Group.objects.get(name=data)
+        group.delete()
+        
+        return Response(status=200)
+    except:
+        return Response(status=500)
