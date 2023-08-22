@@ -12,7 +12,7 @@ function AddExcel() {
         }
         const formData = new FormData();
         formData.append("file", event.target.files[0]);
-        fetch('http://127.0.0.1:8000/ldap/excel/', {
+        fetch('http://120.126.23.245:31190/ldap/excel/', {
             method: 'POST',
             body: formData,
         })

@@ -4,7 +4,7 @@ function AddAdmin() {
     const [user, setUser] = useState([]);
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/ldap/user/list/', {
+        fetch('http://120.126.23.245:31190/api/ldap/user/list/', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -21,7 +21,7 @@ function AddAdmin() {
     let handleSubmit = async(e) => {
         if(window.confirm('Are you sure you want to add this user as an admin?')){
             e.preventDefault();
-            let response = await fetch('http://127.0.0.1:8000/api/ldap/admin/add/', {
+            let response = await fetch('http://120.126.23.245:31190/api/ldap/admin/add/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
