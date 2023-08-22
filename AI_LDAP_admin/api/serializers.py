@@ -36,6 +36,9 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         print(conn)
         # Add custom claims
         token['username'] = user.username
+        if user.username == 'root':
+            token['permission'] = 'root'
+            return token
         # get permission from ldap user description. only labname is user, permission is 2; labnameadmin is admin, permission is 1, admin is superuser, permission is 0
         list = []
         try:

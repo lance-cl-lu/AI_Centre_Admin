@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom';
-
 
 function AddUser() {
     const [lab, setLab] = useState([]);
@@ -44,14 +42,12 @@ function AddUser() {
                 alert('User added successfully');
                 window.location.reload();
             } else {
-                console.log('error');
+                alert('User create error');
             }
         } else {
             alert('Passwords do not match');
         }
     }
-    const location = useLocation();
-    console.log(location);
 
     return (
         <div>

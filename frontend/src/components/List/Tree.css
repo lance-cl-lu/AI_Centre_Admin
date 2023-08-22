@@ -1,0 +1,10 @@
+.TreeStyle {
+    text-align: left;
+    margin-left: 2vw;
+}
+
+.PieStyle {
+    display: flex;
+    text-align: center;
+    margin-left: 23px;
+}

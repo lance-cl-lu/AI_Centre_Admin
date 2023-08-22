@@ -2,9 +2,11 @@ import "./Navbar.css"
 import { Link } from "react-router-dom";
 import Dropdonw from "./Dropdown";
 import { AuthProvider } from '../context/AuthContext';
-
+import { useState } from "react";
+import jwt_decode from "jwt-decode";
 function Navbar() {
-
+  const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
+  console.log(permission)
   return (
     <nav className="navigation">
         <ul className="navigation-ul">

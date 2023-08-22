@@ -11,3 +11,7 @@
     border-style: solid;
     padding: 10px;
 }
+.buttom-button {
+    margin: 10px;
+    border-radius: 10%;
+}
