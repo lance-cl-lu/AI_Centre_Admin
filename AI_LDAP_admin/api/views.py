@@ -388,15 +388,31 @@ def change_user_info(request):
     except:
         return Response(status=500)
 
+from openpyxl import Workbook
+from openpyxl import load_workbook
+
 import xlrd
 @api_view(['POST'])
 def excel(request):
-    json_data = json.loads(request.body.decode('utf-8'))
-    # get the excel file
-    excel_file = request.FILES['file']
-    print(excel_file)
+    uploaded_file = request.FILES
     # read the excel file
-    wb = xlrd.open_workbook(filename=None, file_contents=excel_file.read())
+    workbook = load_workbook(uploaded_file)
+    worksheet = workbook.active
+    new_data = []
+    for row in worksheet.iter_rows(values_only=True):
+        print(row)
+        '''
+        Username, Group, password, email, firstname, lastname, permission = row
+        new_data.append({
+            'Username': Username, 
+            'Group': Group,
+            'password': password,
+            'email': email,
+            'firstname': firstname,
+            'lastname': lastname,
+            'permission': permission
+        })
+    print(new_data)'''
     return Response(status=200)
 
 
@@ -431,7 +447,6 @@ def export_ldap(request):
                 user_list.append([user_entry.cn.value, group, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
     
     # make data to excel
-    from openpyxl import Workbook
     workbook = Workbook()
     worksheet = workbook.active
     for row in user_list:
