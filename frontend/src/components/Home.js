@@ -15,7 +15,7 @@ function Home() {
   const toggleShowToast = () => setshowToast(!showToast);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/home/', {
+    fetch('http://120.126.23.245:31190/api/home/', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
