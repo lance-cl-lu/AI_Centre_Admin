@@ -14,7 +14,7 @@ function Lab() {
     }, [state]);
 
     let labinfofetch = async() => {
-        let response = await fetch('http://127.0.0.1:8000/api/ldap/lab/', {
+        let response = await fetch('http://120.126.23.245:31190/api/ldap/lab/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -29,10 +29,10 @@ function Lab() {
             console.log('error');
         }
     }
-
+    console.log(state.lab)
     const deleteGroup = async() => {
         if(window.confirm("It will also delete all user in Lab, are you sure to do it?")){
-            let response = await fetch("http://127.0.0.1:8000/api/ldap/lab/delete/", {
+            let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/delete/", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ function Lab() {
                     )) : null}
                 <br/>
             </Table>
-            <Button onClick={deleteGroup}>Delete group</Button>
+            <Button variant="danger" onClick={deleteGroup}>Delete group</Button>
         </div>
     );
 }
