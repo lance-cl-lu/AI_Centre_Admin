@@ -3,16 +3,15 @@ import Form from 'react-bootstrap/Form';
 
 
 function AddExcel() {
-    function handleSubmit(event) {
-        event.preventDefault();
-        console.log(event.target.files[0]);
-        if (!event.target.files[0]) {
-            console.log("You have selected the file: ", event.target.files[0]);
+    let handleSubmit= async() => {
+        console.log(document.getElementById('excel').value);
+        if (!document.getElementById('excel').value) {
+            console.log("You have selected the file: ", document.getElementById('excel'));
             return;
         }
         const formData = new FormData();
-        formData.append("file", event.target.files[0]);
-        fetch('http://120.126.23.245:31190/ldap/excel/', {
+        formData.append("file", document.getElementById('excel').value);
+        fetch('http://localhost:8000/api/ldap/excel/', {
             method: 'POST',
             body: formData,
         })
@@ -30,11 +29,11 @@ function AddExcel() {
     return (
         <div className='AddContent'>
             <Form>
-                <Form.Group controlId="formFile" className="mb-3" onSubmit={handleSubmit}>
+                <Form.Group controlId="formFile" className="mb-3">
                     <Form.Label>Import Excel File</Form.Label>
-                    <Form.Control type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"  />
+                    <Form.Control name='file' type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" id="excel"  />
                 </Form.Group>
-                <Button variant="primary" type="submit">
+                <Button variant="primary" type="button" onClick={handleSubmit}>
                     Submit
                 </Button>
             </Form>
