@@ -1,16 +1,18 @@
 .AddContent {
     display: block;
     width: 95%;
-    height: 85vh;
+    height: 60vh;
+    
 }
 .AddType {
     width: 100%;
-    padding: 1em;
-    height: 20%;
+    padding: 20px;
+    height: 20vh;
     display: flex;
     align-items: center;
     background-color: bisque;
     justify-content: center;
+    box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;
 }
 .AddType span {
     margin: 0;

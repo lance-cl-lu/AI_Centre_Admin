@@ -25,7 +25,11 @@ urlpatterns = [
     
     path("ldap/admin/add/", add_admin, name="add_admin"),
     
+    # about excel
     path("ldap/excel/", excel, name="excel"),
+    path("ldap/excel/export/", export_ldap, name="export_ldap"),
+
+    # about user page change
     path("password/change/", change_password, name="change_password"),
     path("user/change/", change_user_info, name="change_user_info"),
     
