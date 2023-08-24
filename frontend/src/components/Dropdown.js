@@ -3,6 +3,7 @@ import "./Dropdown.css";
 import { Link } from "react-router-dom";
 import AuthContext from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
+import TableRowsIcon from '@mui/icons-material/TableRows';
 
 function Dropdown() {
   let { logoutUser, user } = useContext(AuthContext);
@@ -18,17 +19,12 @@ function Dropdown() {
 
   return (
     <div className="dropdown">
-      <button onClick={handleClick} className="btn btn-secondary dropdown-toggle dropbtn"></button>
+      <button onClick={handleClick} className="btn btn-secondary dropdown-toggle dropbtn"><TableRowsIcon/></button>
       {click ? (
       <ul className="dropdown-menu" aria-labelledby="dropdownMenuLink">  
         <li>
           <Link to="/user" className="dropdown-item" state={{"user": user.username}}>
             Profile
-          </Link>
-        </li>
-        <li>
-          <Link to="/settings" className="dropdown-item">
-            Settings
           </Link>
         </li>
         <li>

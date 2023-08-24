@@ -4,7 +4,9 @@
     width: 20%;
     display: block;
 }
-
+.tree {
+    box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;
+}
 .ul-li {
     width: 100%;
     padding: 10px 10px;

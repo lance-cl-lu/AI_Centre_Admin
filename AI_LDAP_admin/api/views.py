@@ -342,18 +342,6 @@ def add_lab_admin(request):
     for entry in user.entries:
         conn.modify(entry.entry_dn, {'Description': [(MODIFY_ADD, ['{}admin'.format(labname)])]})
     conn.unbind()
-    
-
-import xlrd
-@api_view(['POST'])
-def excel(request):
-    json_data = json.loads(request.body.decode('utf-8'))
-    # get the excel file
-    excel_file = request.FILES['file']
-    print(excel_file)
-    # read the excel file
-    wb = xlrd.open_workbook(filename=None, file_contents=excel_file.read())
-    return Response(status=200)
 
 @api_view(['GET'])
 def synchronize(request):
@@ -415,3 +403,59 @@ def delete_group(request):
         return Response(status=200)
     except:
         return Response(status=500)
+
+import xlrd
+@api_view(['POST'])
+def excel(request):
+    json_data = json.loads(request.body.decode('utf-8'))
+    # get the excel file
+    excel_file = request.FILES['file']
+    print(excel_file)
+    # read the excel file
+    wb = xlrd.open_workbook(filename=None, file_contents=excel_file.read())
+    return Response(status=200)
+
+import pandas as pd
+
+@api_view(['GET'])
+def export_ldap(request):
+    conn = connectLDAP()
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
+    group_list = []
+    user_lsit = []
+    password_list = []
+    mail_list = []
+    firstname_list = []
+    lastname_lsit = []
+    for entry in conn.entries:
+        group = entry.cn.value
+        member_list = entry.memberUid.value
+        print(member_list)
+        for member_entry in member_list:
+            conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+            for user_entry in conn.entries:
+                user_lsit.append(user_entry.cn.value)
+                group_list.append(group)
+                password_list.append(user_entry.userPassword.value)
+                mail_list.append(user_entry.mail.value)
+                firstname_list.append(user_entry.givenName.value)
+                lastname_lsit.append(user_entry.sn.value)
+    
+    data = {
+        'username': user_lsit,
+        'group': group_list,
+        'email': mail_list,
+        'firstname': firstname_list,
+        'lastname': lastname_lsit,
+        'password': password_list
+    }
+
+    df = pd.DataFrame(data)
+    excel_file_path = 'data.xlsx'
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="data.xlsx"'
+    df.to_excel(response, index=False, engine='openpyxl')
+    return response
+
+
+    

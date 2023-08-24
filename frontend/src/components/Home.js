@@ -71,6 +71,7 @@ function Home() {
             />
           </div>
         </div>
+        <br/><br/>
         <Card className="text-center">
           <Card.Header>Featured</Card.Header>
           <Card.Body>
