@@ -271,10 +271,10 @@ def get_user_info(request):
     conn.search('cn={},ou=users,dc=example,dc=org'.format(data['username']), '(objectclass=posixAccount)', attributes=['*'])
     user = User.objects.get(username=data['username'])
     data = {
-        "username": user.username,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "email": user.email,
+        "username": conn.entries[0].cn.value,
+        "first_name": conn.entries[0].givenName.value,
+        "last_name": conn.entries[0].sn.value,
+        "email": conn.entries[0].mail.value,
     }
     return Response(data, status=200)    
 
@@ -309,7 +309,6 @@ def lab_delete(request):
     conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
     conn.unbind()
     return Response(status=200)
-    
     
 def user_group_num(requset):
     conn = connectLDAP()
@@ -389,21 +388,6 @@ def change_user_info(request):
     except:
         return Response(status=500)
 
-@api_view(['POST'])
-def delete_group(request):
-    data = json.loads(request.body.decode('utf-8'))
-    try:
-        conn = connectLDAP()
-        conn.search('cn={},ou=Groups,dc=example,dc=org'.format(data), '(objectclass=posixGroup)', attributes=['*'])
-        for entry in conn.entries:
-            conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
-        group = Group.objects.get(name=data)
-        group.delete()
-        
-        return Response(status=200)
-    except:
-        return Response(status=500)
-
 import xlrd
 @api_view(['POST'])
 def excel(request):
@@ -415,46 +399,49 @@ def excel(request):
     wb = xlrd.open_workbook(filename=None, file_contents=excel_file.read())
     return Response(status=200)
 
-import pandas as pd
+
+
+def get_permission(user, group):
+    conn = connectLDAP()
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(user), '(objectclass=posixAccount)', attributes=['Description'])
+    for entry in conn.entries:
+        if re.match(r'{}admin'.format(group), str(entry.Description.value)):
+            return "admin"
+    return "user"
 
 @api_view(['GET'])
 def export_ldap(request):
     conn = connectLDAP()
     conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['*'])
-    group_list = []
-    user_lsit = []
-    password_list = []
-    mail_list = []
-    firstname_list = []
-    lastname_lsit = []
+    user_list = []
+    user_list.append(["Username","Group","password","email", "firstname", "lastname", "permission"])
     for entry in conn.entries:
         group = entry.cn.value
         member_list = entry.memberUid.value
-        print(member_list)
-        for member_entry in member_list:
-            conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+        
+        # check group has muti user or not
+        if isinstance(member_list, list):
+            for member_entry in member_list:
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+                for user_entry in conn.entries:
+                    user_list.append([user_entry.cn.value, group, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
+        elif isinstance(member_list, str):
+            conn.search('cn={},ou=users,dc=example,dc=org'.format(member_list), '(objectclass=posixAccount)', attributes=['*'])
             for user_entry in conn.entries:
-                user_lsit.append(user_entry.cn.value)
-                group_list.append(group)
-                password_list.append(user_entry.userPassword.value)
-                mail_list.append(user_entry.mail.value)
-                firstname_list.append(user_entry.givenName.value)
-                lastname_lsit.append(user_entry.sn.value)
+                user_list.append([user_entry.cn.value, group, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
     
-    data = {
-        'username': user_lsit,
-        'group': group_list,
-        'email': mail_list,
-        'firstname': firstname_list,
-        'lastname': lastname_lsit,
-        'password': password_list
-    }
-
-    df = pd.DataFrame(data)
+    # make data to excel
+    from openpyxl import Workbook
+    workbook = Workbook()
+    worksheet = workbook.active
+    for row in user_list:
+        worksheet.append(row)
+    workbook.save("data.xlsx")
     excel_file_path = 'data.xlsx'
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename="data.xlsx"'
-    df.to_excel(response, index=False, engine='openpyxl')
+    response = HttpResponse(content_type="application/ms-excel")
+    response['Content-Disposition'] = 'attachment; filename=data.xlsx'
+    workbook.save(response)
+    
     return response
 
 
