@@ -1,46 +1,43 @@
 .Login {
-    width: 100%;
+    width: 100vw;
     height: 100vh;
     display: inline-flex;
     align-items: center;
     flex-direction: column;
     justify-content: center;
-    background-image: url('../background.webp');
+    background: linear-gradient(45deg, #02457A, #97CAD8);
 }
 
 .LoginForm {
-    width: 50%;
-    background-color: white;
-    height: 50%;
+    width: 40vw;
+    height: 60%;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    background-color: #E0F7FA;
+    border-radius: 20px;
+    border-width: 100vh;
+    z-index: 999;
+    box-shadow: 6px 6px 3px #4C80A5;
+}
+
+.LoginForm h2 {
+    font-family: Playfair Display;
+    font-size: 50px;
+}
+.login-img{
+    width: 25vw;
+}
+.login-btn {
+    width: 10vh;
     border-radius: 20px;
 }
 
-.LoginForm-button {
-    padding: 10px;
-    width: 80%;
-    border-radius: 10px;
-}
-
-.button:after {
-    content: "";
-    background: #90EE90;
-    display: block;
-    position: absolute;
-    padding-top: 300%;
-    padding-left: 350%;
-    margin-left: -20px!important;
-    margin-top: -120%;
-    opacity: 0;
-    transition: all 0.8s
-  }
   
-  .button:active:after {
+.login-btn :active:after {
     padding: 0;
     margin: 0;
     opacity: 1;
     transition: 0s
-  }
+}
