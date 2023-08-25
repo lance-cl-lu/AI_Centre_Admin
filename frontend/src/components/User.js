@@ -9,11 +9,14 @@ import Row from 'react-bootstrap/Row';
 function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
+    const [permissions, setPermissions] = useState({});
     useEffect(() => {
         getuserinfo();
     }, [state]);
 
     let getuserinfo = async () => {
+        document.getElementsByClassName('userPage')[0].style.opacity = 0;
+
         fetch('http://120.126.23.245:31190/api/ldap/user/', {
             method: 'POST',
             headers: {
@@ -25,12 +28,17 @@ function User() {
         })
         .then(response => response.json())
         .then(data => {
-            document.getElementsByClassName('userPage')[0].style.opacity = 0;
+
+            setTimeout(() => {
+                setUser(data);
+                setPermissions(data.permission);
+                // refresh edit button
+                document.getElementById("editandsave").className = "btn btn-primary";
+                document.getElementById("editandsave").innerHTML = "Edit";
+            }, 400);
             setTimeout(() => {
                 document.getElementsByClassName('userPage')[0].style.opacity = 1;
-            }, 800);
-            setUser(data);
-
+            }, 300);
         })
         .catch((error) => {
             console.error('Error:', error);
@@ -63,6 +71,7 @@ function User() {
             document.getElementById("inputFirstName").readOnly = false;
             document.getElementById("inputLastName").readOnly = false;
             document.getElementById("inputEmail").readOnly = false;
+            document.getElementById("inputRadio").readOnly = false;
             document.getElementById("editandsave").innerHTML = "Save";
             document.getElementById("editandsave").className = "btn btn-success";
         }
@@ -70,6 +79,7 @@ function User() {
             document.getElementById("inputFirstName").readOnly = true;
             document.getElementById("inputLastName").readOnly = true;
             document.getElementById("inputEmail").readOnly = true;
+            document.getElementById("inputRadio").readOnly = true;
             document.getElementById("editandsave").innerHTML = "Edit";
             document.getElementById("editandsave").className = "btn btn-primary";
             //saveUser();
@@ -94,57 +104,69 @@ function User() {
 
         }
     }
-    
 
     return (
         <div className='userPage'>
-            <h1>User {state && state.user}</h1><br/>
-            <Form className='form-css'>
-                <Form.Group as={Row} className="mb-3" controlId="formPlaintextUsername">
-                    <Form.Label column sm="2">
-                        Username
-                    </Form.Label>
-                    <Col sm="10">
-                        <Form.Control plaintext readOnly id="inputUsername" defaultValue={user && user.username} />
-                    </Col>
-                </Form.Group>
-                <Form.Group as={Row} className="mb-3" controlId="formPlaintextFirstName">
-                    <Form.Label column sm="2">
-                        First Name
-                    </Form.Label>
-                    <Col sm="10">
-                        <Form.Control plaintext readOnly id="inputFirstName" defaultValue={user && user.first_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
-                    </Col>
-                </Form.Group>
-                <Form.Group as={Row} className="mb-3" controlId="formPlaintextLastName">
-                    <Form.Label column sm="2">
-                        Last Name
-                    </Form.Label>
-                    <Col sm="10">
-                        <Form.Control plaintext readOnly id="inputLastName" defaultValue={user && user.last_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}} />
-                    </Col>
-                </Form.Group>
-                <Form.Group as={Row} className="mb-3" controlId="formPlaintextEmail">
-                    <Form.Label column sm="2">
-                        Email
-                    </Form.Label>
-                    <Col sm="10">
-                        <Form.Control plaintext readOnly id="inputEmail" defaultValue={user && user.email} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
-                    </Col>
-                </Form.Group>
-                <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
-                    Edit
-                </Button>
-                <Button variant="danger" onClick={deleteUser} className='buttom-button'>
-                    Delete
-                </Button>
-                <Button variant='dark' className='buttom-button'>
-                    {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
-                </Button>
-            </Form>
+                <h1>User {state && state.user}</h1><br/>
+                <Form className='form-css'>
+                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextUsername">
+                        <Form.Label column sm="2">
+                            Username
+                        </Form.Label>
+                        <Col sm="10">
+                            <Form.Control plaintext readOnly id="inputUsername" defaultValue={user && user.username} />
+                        </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextFirstName">
+                        <Form.Label column sm="2">
+                            First Name
+                        </Form.Label>
+                        <Col sm="10">
+                            <Form.Control plaintext readOnly id="inputFirstName" defaultValue={user && user.first_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
+                        </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextLastName">
+                        <Form.Label column sm="2">
+                            Last Name
+                        </Form.Label>
+                        <Col sm="10">
+                            <Form.Control plaintext readOnly id="inputLastName" defaultValue={user && user.last_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}} />
+                        </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextEmail">
+                        <Form.Label column sm="2">
+                            Email
+                        </Form.Label>
+                        <Col sm="10">
+                            <Form.Control plaintext readOnly id="inputEmail" defaultValue={user && user.email} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
+                        </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextRole">
+                        { user && permissions && Object.keys(permissions).map((key, index) => {
+                            return (
+                                <div key={index} style={{display:'flex', width:"100%", alignItems: "center"}}>
+                                    <Form.Label column sm="2">
+                                        {key}
+                                    </Form.Label>
+                                    <Col sm="1">
+                                        {/* if admin radio true */}
+                                        <Form.Check type="checkbox" name={key} id="inputRadio" checked={permissions[key] === "admin" ? true : false} readOnly/>
+                                    </Col>
+                                </div>
+                            )
+                        })}
+                    </Form.Group>
 
-
-
+                    <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
+                        Edit
+                    </Button>
+                    <Button variant="danger" onClick={deleteUser} className='buttom-button'>
+                        Delete
+                    </Button>
+                    <Button variant='dark' className='buttom-button'>
+                        {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
+                    </Button>
+                </Form>
         </div>
     )
 }

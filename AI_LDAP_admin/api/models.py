@@ -12,4 +12,9 @@ class UserDetail(models.Model):
     
     def __str__(self):
         return self.uid.username + '\t' + self.labname.name + '\t' + str(self.permission)
+class UploadExcel(models.Model):
+    excel = models.FileField(upload_to='excel')
+    upload_user = models.ForeignKey(User, on_delete=models.CASCADE)
+    def __str__(self):
+        return self.excel.name
     

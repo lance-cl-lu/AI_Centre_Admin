@@ -6,6 +6,7 @@ import { Card } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
 import Toast from 'react-bootstrap/Toast';
+import { motion } from "framer-motion";
 
 function Home() {
   let {user} = useContext(AuthContext);
@@ -42,7 +43,17 @@ function Home() {
           </Toast.Header>
           <Toast.Body>Welcome to CGU AI Centre LDAP System, {user.username}</Toast.Body>
         </Toast>}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{
+            duration: 0.8,
+            delay: 0.6,
+            ease: [0, 0.71, 0.2, 1.01]
+          }}
+        >
         <div className="pie">
+
           <div className="piediv">
             <h2>Users</h2>
             <PieChart className="PieStyle" 
@@ -71,6 +82,7 @@ function Home() {
             />
           </div>
         </div>
+        </motion.div>
         <br/><br/>
         <Card className="text-center">
           <Card.Header>Featured</Card.Header>

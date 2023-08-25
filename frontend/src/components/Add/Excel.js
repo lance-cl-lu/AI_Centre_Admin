@@ -1,43 +1,57 @@
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-
+import React from 'react';
+import jwt_decode from 'jwt-decode';
 
 function AddExcel() {
-    let handleSubmit= async() => {
-        console.log(document.getElementById('excel').value);
-        if (!document.getElementById('excel').value) {
-            console.log("You have selected the file: ", document.getElementById('excel'));
-            return;
-        }
-        const formData = new FormData();
-        formData.append("file", document.getElementById('excel').value);
-        fetch('http://localhost:8000/api/ldap/excel/', {
-            method: 'POST',
-            body: formData,
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log(data);
-            alert('Excel file uploaded successfully');
-        }
-        )
-        .catch(error => {
-            console.error('Error:', error);
-        }
-        )
+  const user = localStorage.getItem('authToken')
+    ? jwt_decode(localStorage.getItem('authToken'))['username']
+    : null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const fileInput = document.getElementById('file');
+    if (!fileInput.files[0]) {
+      alert('Please select an Excel file');
+      return;
     }
-    return (
-        <div className='AddContent'>
-            <Form>
-                <Form.Group controlId="formFile" className="mb-3">
-                    <Form.Label>Import Excel File</Form.Label>
-                    <Form.Control name='file' type="file" accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" id="excel"  />
-                </Form.Group>
-                <Button variant="primary" type="button" onClick={handleSubmit}>
-                    Submit
-                </Button>
-            </Form>
-        </div>
-    )
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('user', user);
+
+    try {
+      const response = await fetch('http://120.126.23.245:31190/api/ldap/excel/', {
+        method: 'POST',
+        headers: {
+          // No need for Content-Type when sending FormData
+          // 'Content-Type': 'application/json',
+        },
+        body: formData,
+      });
+
+      if (response.status === 200) {
+        alert('Excel added successfully');
+        window.location.reload();
+      } else {
+        alert('Excel create error');
+      }
+    } catch (error) {
+      console.error('Error adding Excel:', error);
+      alert('An error occurred while adding Excel');
+    }
+  };
+
+  return (
+    <div>
+      <h1>Add Excel</h1>
+      <form onSubmit={handleSubmit}>
+        <label>Excel: </label>
+        <input type="file" name="file" id="file" />
+        <br />
+        <input type="submit" value="Submit" />
+      </form>
+    </div>
+  );
 }
-export default AddExcel
+
+export default AddExcel;
