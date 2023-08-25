@@ -30,14 +30,29 @@ def connectLDAP():
     conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 
-@api_view(['GET'])
+@api_view(['POST'])
 def lab_list(request):
-    conn = connectLDAP()
-    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    data = json.loads(request.body.decode('utf-8'))
+    user = data['user']
     group_list = []
-    for entry in conn.entries:
-        group_list.append(entry.cn.value)
-    conn.unbind()
+    if user == 'root':
+        conn = connectLDAP()
+        conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+        for entry in conn.entries:
+            group_list.append(entry.cn.value)
+        conn.unbind()
+    else:
+        # check the user permission is one of the lab admin, return the lab name, in which the user is admin
+        conn = connectLDAP()
+        user_dn = 'cn={},ou=users,dc=example,dc=org'.format(user)
+        conn.search(user_dn, '(objectclass=posixAccount)', attributes=['Description'])
+        for entry in conn.entries:
+            permission_list = entry.Description.values
+            for permission in permission_list:
+                if re.match(r'.*admin', str(permission)):
+                    group_list.append(permission[:-5])
+        conn.unbind()
+        
     return Response(group_list, status=200)
 
 @api_view(['GET'])
@@ -248,7 +263,6 @@ def add_admin(request):
     # ldap admin 
     return Response(status=200)
 
-@csrf_exempt
 def syschronize_ldap(requset):
     conn = connectLDAP()
     conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
@@ -394,27 +408,70 @@ from openpyxl import load_workbook
 import xlrd
 @api_view(['POST'])
 def excel(request):
-    uploaded_file = request.FILES
-    # read the excel file
-    workbook = load_workbook(uploaded_file)
-    worksheet = workbook.active
-    new_data = []
-    for row in worksheet.iter_rows(values_only=True):
-        print(row)
-        '''
-        Username, Group, password, email, firstname, lastname, permission = row
-        new_data.append({
-            'Username': Username, 
-            'Group': Group,
-            'password': password,
-            'email': email,
-            'firstname': firstname,
-            'lastname': lastname,
-            'permission': permission
-        })
-    print(new_data)'''
-    return Response(status=200)
+    # get the excel file from frontend
+    excel_file = request.FILES['file']
+    print(excel_file)
+    wb = load_workbook(excel_file)
+    sheet = wb.active
+    # get the data from excel attribute["Username","Group","password","email", "firstname", "lastname", "permission"]
+    user_list = []
+    for row in sheet.iter_rows(min_row=2, max_col=7, values_only=True):
+        user_list.append(row)
+    # connect to ldap
+    conn = connectLDAP()
+    # add user to ldap
+    for user in user_list:
+        # if user is not exist and group is not exist, add new user and group
+        if not conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and not conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
+            conn.add('cn={},ou=users,dc=example,dc=org'.format(user[0]), ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+                {'cn': user[0], 'givenName': user[4], 'sn' : user[5] ,
+                'uid': user[0], 'uidNumber': '2001', 'gidNumber': '1001', "mail": user[3],
+                'homeDirectory': '/home/{}'.format(user[0]), 'loginShell': '/bin/bash',
+                'userPassword': ldap_md5_crypt.hash(user[2], salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+                'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+                'shadowExpire': '99999', 'Description': [user[1]]})
+            conn.add('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), ['posixGroup', 'top'], {'cn': ['{}'.format(user[1])], 'gidNumber': ['1001']})
+            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
+            user.groups.add(Group.objects.get(name=user[1]))
+            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
+            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
+            conn.unbind()
+            user.save()
+        # if user is not exist and group is exist, add new user and add user to group
+        elif not conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
+            conn.add('cn={},ou=users,dc=example,dc=org'.format(user[0]), ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+                {'cn': user[0], 'givenName': user[4], 'sn' : user[5] ,
+                'uid': user[0], 'uidNumber': '2001', 'gidNumber': '1001', "mail": user[3],
+                'homeDirectory': '/home/{}'.format(user[0]), 'loginShell': '/bin/bash',
+                'userPassword': ldap_md5_crypt.hash(user[2], salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+                'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+                'shadowExpire': '99999', 'Description': [user[1]]})
+            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
+            user.groups.add(Group.objects.get(name=user[1]))
+            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
+            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
+            conn.unbind()
+            user.save()
+        # if user is exist and group is not exist, add new group and add user to group
+        elif conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and not conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
+            conn.add('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), ['posixGroup', 'top'], {'cn': ['{}'.format(user[1])], 'gidNumber': ['1001']})
+            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
+            user.groups.add(Group.objects.get(name=user[1]))
+            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
+            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
+            conn.unbind()
+            user.save()
+        # if user is exist and group is exist, add user to group
+        elif conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
+            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
+            user.groups.add(Group.objects.get(name=user[1]))
+            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
+            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
+            conn.unbind()
+            user.save()
 
+    return Response(status=200)
+        
 
 
 def get_permission(user, group):
@@ -432,20 +489,24 @@ def export_ldap(request):
     user_list = []
     user_list.append(["Username","Group","password","email", "firstname", "lastname", "permission"])
     for entry in conn.entries:
-        group = entry.cn.value
-        member_list = entry.memberUid.value
-        
-        # check group has muti user or not
-        if isinstance(member_list, list):
-            for member_entry in member_list:
-                conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+        ## if group without memberUid attribute, skip
+        try:
+            group = entry.cn.value
+            member_list = entry.memberUid.value
+            
+            # check group has muti user or not
+            if isinstance(member_list, list):
+                for member_entry in member_list:
+                    conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+                    for user_entry in conn.entries:
+                        user_list.append([user_entry.cn.value, group, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
+            elif isinstance(member_list, str):
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(member_list), '(objectclass=posixAccount)', attributes=['*'])
                 for user_entry in conn.entries:
                     user_list.append([user_entry.cn.value, group, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
-        elif isinstance(member_list, str):
-            conn.search('cn={},ou=users,dc=example,dc=org'.format(member_list), '(objectclass=posixAccount)', attributes=['*'])
-            for user_entry in conn.entries:
-                user_list.append([user_entry.cn.value, group, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
-    
+        except:
+            continue
+        
     # make data to excel
     workbook = Workbook()
     worksheet = workbook.active

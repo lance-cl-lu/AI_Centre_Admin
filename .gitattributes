@@ -1,0 +1,7 @@
+*.py linguist-language=Python
+*.html linguist-language=HTML
+*.js linguist-language=JavaScript
+*.jsx linguist-language=JavaScript
+*.css linguist-language=CSS
+*.json linguist-language=JSON
+*.md linguist-language=Markdown
