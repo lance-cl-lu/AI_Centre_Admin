@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import jwt_decode from "jwt-decode";
+import './User.css'
+import { Button } from 'react-bootstrap';
 function AddUser() {
     const [lab, setLab] = useState([]);
-    const [user, setUser] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
+    const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
 
     useEffect(() => {
         fetch('http://120.126.23.245:31190/api/ldap/lab/list/', {
@@ -21,8 +23,6 @@ function AddUser() {
         }
         );
     }, []);
-
-
 
     let handleSubmit = async(e) => {
         e.preventDefault();
@@ -54,25 +54,27 @@ function AddUser() {
     }
 
     return (
-        <div>
-            <h1>Add User</h1>
-            <form onSubmit={handleSubmit}>
-                <label>First Name:   </label><input type="text" placeholder="Please enter the first name" /><br/>
-                <label>Last Name:   </label><input type="text" placeholder="Please enter the last name" /><br/>
-                <label>Username:   </label><input type="text" placeholder="Please enter the username" /><br/>
-                <label>Email:   </label><input type="text" placeholder="Please enter the email" /><br/>
-                <label>In which labatory:   </label>{lab && <select>
+        <div style={{fontFamily: "Comic Sans MS"}}>
+            <h1>Add User</h1><br></br>
+            <form onSubmit={handleSubmit} style={{display: "inline-flex", alignItems: "flex-start"}}>
+                <div className='form-div'><label className='form-label'>First Name:   </label><input type="text" placeholder="Please enter the first name" /></div><br/>
+                <div className='form-div'><label className='form-label'>Last Name:   </label><input type="text" placeholder="Please enter the last name" /></div><br/>
+                <div className='form-div'><label className='form-label'>Username:   </label><input type="text" placeholder="Please enter the username" /></div><br/>
+                <div className='form-div'><label className='form-label'>Email:   </label><input type="text" placeholder="Please enter the email" /></div><br/>
+                <div className='form-div'><label className='form-label'>In which labatory:   </label>{lab && <select>
                     {lab.map((lab) => (
                         <option key={lab} value={lab}>
                             {lab}
                         </option>
                     ))}
-                </select>}<br/>
-                <label>Is Lab Manager:   <input type="checkbox"/></label><br/>
-                <label>Password:   </label><input type="text" placeholder="Please enter the password" /><br/>
-                <label>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" /><br/>
-                <button>Submit</button>
+                </select>}</div><br/>
+                <div className='form-div'><label className='form-label'>Is Lab Manager:   <input type="checkbox"/></label></div><br/>
+                <div className='form-div'><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" /></div><br/>
+                <div className='form-div'><label className='form-label'>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" /></div><br/>
             </form>
+            <br/>
+            <Button>Submit</Button>
+
         </div>
     )
 }

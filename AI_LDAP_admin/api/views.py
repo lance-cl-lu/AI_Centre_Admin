@@ -4,7 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from ldap3 import *
 import json, re, random 
 from django.contrib.auth.models import User, Group
-from .models import UserDetail
+from .models import UserDetail, UploadExcel
 
 import base64
 from passlib.hash import ldap_md5_crypt
@@ -48,6 +48,8 @@ def lab_list(request):
         conn.search(user_dn, '(objectclass=posixAccount)', attributes=['Description'])
         for entry in conn.entries:
             permission_list = entry.Description.values
+            if entry.Description.values == 'root':
+                return Response(['root'], status=200)
             for permission in permission_list:
                 if re.match(r'.*admin', str(permission)):
                     group_list.append(permission[:-5])
@@ -166,6 +168,22 @@ def get_group_corresponding_user(request):
     conn.unbind()
     return Response(group_list, status=200)
 
+def get_all_user_permission(user):
+    conn = connectLDAP()
+    memberuid = {}
+    for i in range(len(user)):
+        conn.search('cn={},ou=users,dc=example,dc=org'.format(user[i]), '(objectclass=posixAccount)', attributes=['Description'])
+        for entry in conn.entries:
+            permission_list = entry.Description.values
+            for permission in permission_list:
+                if re.match(r'.*admin', str(permission)):
+                    memberuid[user[i]] = "admin"
+                else:
+                    memberuid[user[i]] = "user"
+    conn.unbind()
+    return memberuid
+    
+
 @api_view(['POST'])
 def get_lab_info(request):
     data = json.loads(request.body.decode('utf-8'))
@@ -178,7 +196,7 @@ def get_lab_info(request):
             data = {
                 "cn": entry.cn.value,
                 "gidNumber": entry.gidNumber.value,
-                "memberUid": entry.memberUid.values
+                "memberUid": get_all_user_permission(entry.memberUid.values)
             }
         except:
             data = {
@@ -246,7 +264,7 @@ def add_admin(request):
     username = data['username']
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
     conn = connectLDAP()
-    conn.modify(user_dn, {'Description': [(MODIFY_ADD, ['admin'])]})
+    conn.modify(user_dn, {'Description': [(MODIFY_ADD, ['root'])]})
     user = User.objects.get(username=username)
     detail = UserDetail.objects.get(uid=user)
     detail.permission = 0
@@ -278,17 +296,35 @@ def syschronize_ldap(requset):
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
 
+def get_user_all_permission(user):
+    conn = connectLDAP()
+    # get add group permission
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(user), '(objectclass=posixAccount)', attributes=['*'])
+    user_permissions = {}  # Dictionary to store user permissions
+    for entry in conn.entries:
+        if entry.Description is not None:
+            for permission in entry.Description.values:
+                if re.match(r'.*admin', str(permission)):
+                    user_permissions[permission[:-5]] = "admin"
+                else:
+                    user_permissions[permission] = "user"
+    conn.unbind()
+    return user_permissions
+
+
+
 @api_view(['POST'])
 def get_user_info(request):
     data = json.loads(request.body.decode('utf-8'))
     conn = connectLDAP()
     conn.search('cn={},ou=users,dc=example,dc=org'.format(data['username']), '(objectclass=posixAccount)', attributes=['*'])
-    user = User.objects.get(username=data['username'])
+
     data = {
         "username": conn.entries[0].cn.value,
         "first_name": conn.entries[0].givenName.value,
         "last_name": conn.entries[0].sn.value,
         "email": conn.entries[0].mail.value,
+        "permission": get_user_all_permission(conn.entries[0].cn.value),
     }
     return Response(data, status=200)    
 
@@ -402,77 +438,103 @@ def change_user_info(request):
     except:
         return Response(status=500)
 
-from openpyxl import Workbook
-from openpyxl import load_workbook
+import datetime, openpyxl
 
-import xlrd
 @api_view(['POST'])
 def excel(request):
-    # get the excel file from frontend
-    excel_file = request.FILES['file']
-    print(excel_file)
-    wb = load_workbook(excel_file)
-    sheet = wb.active
-    # get the data from excel attribute["Username","Group","password","email", "firstname", "lastname", "permission"]
-    user_list = []
-    for row in sheet.iter_rows(min_row=2, max_col=7, values_only=True):
-        user_list.append(row)
-    # connect to ldap
-    conn = connectLDAP()
-    # add user to ldap
-    for user in user_list:
-        # if user is not exist and group is not exist, add new user and group
-        if not conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and not conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
-            conn.add('cn={},ou=users,dc=example,dc=org'.format(user[0]), ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
-                {'cn': user[0], 'givenName': user[4], 'sn' : user[5] ,
-                'uid': user[0], 'uidNumber': '2001', 'gidNumber': '1001', "mail": user[3],
-                'homeDirectory': '/home/{}'.format(user[0]), 'loginShell': '/bin/bash',
-                'userPassword': ldap_md5_crypt.hash(user[2], salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
-                'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
-                'shadowExpire': '99999', 'Description': [user[1]]})
-            conn.add('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), ['posixGroup', 'top'], {'cn': ['{}'.format(user[1])], 'gidNumber': ['1001']})
-            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
-            user.groups.add(Group.objects.get(name=user[1]))
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
-            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
-            conn.unbind()
-            user.save()
-        # if user is not exist and group is exist, add new user and add user to group
-        elif not conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
-            conn.add('cn={},ou=users,dc=example,dc=org'.format(user[0]), ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
-                {'cn': user[0], 'givenName': user[4], 'sn' : user[5] ,
-                'uid': user[0], 'uidNumber': '2001', 'gidNumber': '1001', "mail": user[3],
-                'homeDirectory': '/home/{}'.format(user[0]), 'loginShell': '/bin/bash',
-                'userPassword': ldap_md5_crypt.hash(user[2], salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
-                'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
-                'shadowExpire': '99999', 'Description': [user[1]]})
-            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
-            user.groups.add(Group.objects.get(name=user[1]))
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
-            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
-            conn.unbind()
-            user.save()
-        # if user is exist and group is not exist, add new group and add user to group
-        elif conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and not conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
-            conn.add('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), ['posixGroup', 'top'], {'cn': ['{}'.format(user[1])], 'gidNumber': ['1001']})
-            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
-            user.groups.add(Group.objects.get(name=user[1]))
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
-            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
-            conn.unbind()
-            user.save()
-        # if user is exist and group is exist, add user to group
-        elif conn.search('cn={},ou=users,dc=example,dc=org'.format(user[0]), '(objectclass=posixAccount)', attributes=['*']) and conn.search('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), '(objectclass=posixGroup)', attributes=['*']):
-            user = User.objects.create_user(username=user[0], password=user[2], first_name=user[4], last_name=user[5], email=user[3])
-            user.groups.add(Group.objects.get(name=user[1]))
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=user[1]), permission=2)
-            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(user[1]), {'memberUid': [(MODIFY_ADD, [user[0]])]})
-            conn.unbind()
-            user.save()
-
-    return Response(status=200)
-        
-
+    if request.FILES.get('file'):
+        excel_file = request.FILES['file']
+        user = request.POST['user']
+        print(user)
+        conn = connectLDAP()
+        with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
+            for chunk in excel_file.chunks():
+                destination.write(chunk)
+        # read and pritn the excel file, attribute ["Username","Group","password","email", "firstname", "lastname", "permission"]
+        worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
+        for row in worksheet.iter_rows():
+            # if first row, skip
+            if row[0].value == "Username":
+                continue
+            # check the user is exist or not
+            # if user exist and in correct group, skip
+            user_corresponding_group = False
+            if conn.search('cn={},ou=users,dc=example,dc=org'.format(row[0].value), '(objectclass=posixAccount)', attributes=['*']) is True:
+                for entry in conn.entries:
+                    if conn.search('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), '(objectclass=posixGroup)', attributes=['memberUid']) is True:
+                        for entry in conn.entries:
+                            if row[0].value in entry.memberUid.values:
+                                user_corresponding_group = True
+                                break
+            if user_corresponding_group is True:
+                print("user {} is exist and in correct group".format(row[0].value))
+                continue
+            print(row[0].value)
+            if conn.search('cn={},ou=users,dc=example,dc=org'.format(row[0].value), '(objectclass=posixAccount)', attributes=['*']) is False:
+                # check the group is exist or not
+                print("user {} is not exist".format(row[0].value))
+                if conn.search('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), '(objectclass=posixGroup)', attributes=['*']) is False:
+                    # create the group
+                    print("group {} is not exist".format(row[1].value))
+                    conn.add('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), ['posixGroup', 'top'], {'cn': ['{}'.format(row[1].value)], 'gidNumber': ['{}'.format(10001)]})
+                    group = Group.objects.create(name=row[1].value)
+                    group.save()
+                    print("create group {}".format(row[1].value))
+                # create the user
+                user_description = ''
+                if row[6].value == 'admin':
+                    user_description = '{}admin'.format(row[1].value)
+                else:
+                    user_description = row[1].value
+                print(user_description)
+                # add user info into ldap
+                conn.add('cn={},ou=users,dc=example,dc=org'.format(row[0].value), ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+                    {'cn': row[0].value, 'givenName': row[0].value, 'sn' : row[0].value ,
+                    'uid': row[0].value, 'uidNumber': '2001', 'gidNumber': '1001', "mail": row[3].value,
+                    'homeDirectory': '/home/{}'.format(row[0].value), 'loginShell': '/bin/bash',
+                    'userPassword': ldap_md5_crypt.hash(row[2].value, salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+                    'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+                    'shadowExpire': '99999', 'Description': [user_description]})
+                conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), {'memberUid': [(MODIFY_ADD, [row[0].value])]})
+                print("add user {} into group {}".format(row[0].value, row[1].value))
+                # add user info into django
+                user = User.objects.create_user(username=row[0].value, password=row[2].value, first_name=row[4].value, last_name=row[5].value, email=row[3].value)
+                if row[6].value == 'admin':
+                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=1)
+                else:
+                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=2)
+                user.groups.add(Group.objects.get(name=row[1].value))
+                print("add user {} into django".format(row[0].value))
+            else:
+                # check the group is exist or not
+                print("user {} is exist".format(row[0].value))
+                if conn.search('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), '(objectclass=posixGroup)', attributes=['*']) is False:
+                    # create the group
+                    conn.add('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), ['posixGroup', 'top'], {'cn': ['{}'.format(row[1].value)], 'gidNumber': ['{}'.format(10001)]})
+                    group = Group.objects.create(name=row[1].value)
+                    group.save()
+                # add user info into ldap
+                user_description = ''
+                if row[6].value == 'admin':
+                    user_description = '{}admin'.format(row[1].value)
+                else:
+                    user_description = row[1].value
+                print(user_description)
+                conn.modify('cn={},ou=users,dc=example,dc=org'.format(row[0].value), {'Description': [(MODIFY_ADD, [user_description])]})
+                conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(row[1].value), {'memberUid': [(MODIFY_ADD, [row[0].value])]})
+                print("add user {} into group {}".format(row[0].value, row[1].value))
+                # add user info into django
+                user = User.objects.get(username=row[0].value)
+                if row[6].value == 'admin':
+                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=1)
+                else:
+                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=2)
+                user.groups.add(Group.objects.get(name=row[1].value))
+                print("add user {} into django".format(row[0].value))
+        conn.unbind()
+        return JsonResponse({'message': 'File upload success'}, status=200)
+    
+    return JsonResponse({'message': 'File upload failed'}, status=400)
 
 def get_permission(user, group):
     conn = connectLDAP()

@@ -11,16 +11,16 @@
     flex-direction: column;
     list-style: none;
     padding: 0;
-    right: -16.4px;
-    margin-top: 5.9vh;
-    border-radius: 10px;
+    right: -16px;
+    margin-top: 6.5vh;
 }
 .dropdown li{
-    height: 40px;
+    height: 50px;
     width: 100%;
     display: flex;
     padding: 8px 12px;
     background-color: #333;
+    border: none;
 }
 .dropdown li:hover {
     cursor: pointer;

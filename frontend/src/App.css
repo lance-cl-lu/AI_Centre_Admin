@@ -1,5 +1,6 @@
 .App {
   text-align: center;
+  
 }
 .Centre-Page {
   display: inline-flex;
@@ -7,6 +8,7 @@
   width: 100%;
   height: 100%;
   margin-top: 1em;
+  transition: opacity 0.5s ease-in-out;
 }
 .Centre-Page-Content {
   box-sizing: border-box;
@@ -14,23 +16,21 @@
   width: 80%;
   padding: 5px;
 }
-
-
-/* Page Transitions */
-.fade-enter{
+.fade {
+  background-color: #3498db;
+  color: white;
+}
+.fade-out {
   opacity: 0;
-  transform: translateX(100%);
-}
-.fade-enter-active{
-  opacity: 1;
-  transform: translateX(0);
-  transition: all 1000ms;
 }
 
-.fade-exit{
-  opacity: 1;
+.fade-link {
+  margin-top: 20px;
+  color: white;
+  text-decoration: none;
+  transition: color 0.3s ease-in-out;
 }
-.fade-exit-active{
-  opacity: 0;
 
+.fade-link:hover {
+  color: #f39c12;
 }
