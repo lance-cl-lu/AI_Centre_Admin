@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react'
-
+import jwt_decode from "jwt-decode";
 function AddUser() {
     const [lab, setLab] = useState([]);
+    const [user, setUser] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
 
     useEffect(() => {
         fetch('http://120.126.23.245:31190/api/ldap/lab/list/', {
-            method: 'GET',
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
+            body: JSON.stringify({
+                "user": user,
+            }),
         })
         .then(response => response.json())
         .then(data => setLab(data))
@@ -72,4 +76,5 @@ function AddUser() {
         </div>
     )
 }
+
 export default AddUser
