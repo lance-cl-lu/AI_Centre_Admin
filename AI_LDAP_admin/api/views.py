@@ -543,7 +543,6 @@ def get_permission(user, group):
         if re.match(r'{}admin'.format(group), str(entry.Description.value)):
             return "admin"
     return "user"
-
 @api_view(['GET'])
 def export_ldap(request):
     conn = connectLDAP()
@@ -570,7 +569,7 @@ def export_ldap(request):
             continue
         
     # make data to excel
-    workbook = Workbook()
+    workbook = openpyxl.Workbook()
     worksheet = workbook.active
     for row in user_list:
         worksheet.append(row)

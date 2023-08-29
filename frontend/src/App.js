@@ -22,7 +22,11 @@ function App() {
   let user = useContext(AuthContext).user;
   return (
     <div className="App">
-      { user ? 
+      <head className="App-header">
+        <title>CGU AI Center Ldap Management System</title>
+        < link rel="icon" href="https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww2.cgu.edu.tw%2Fp%2F404-1000-2060.php%3FLang%3Dzh-tw&psig=AOvVaw3uBQ2YAwmw0WOJCXnj9IVr&ust=1693366686377000&source=images&cd=vfe&opi=89978449&ved=0CBAQjRxqFwoTCLj-rND4gIEDFQAAAAAdAAAAABAZ"type="image/x-icon" />
+      </head>
+	{ user ? 
       <>
         <Navbar />
           <div className='Centre-Page'>
