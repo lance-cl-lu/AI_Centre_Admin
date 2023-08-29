@@ -56,7 +56,7 @@ function AddUser() {
     return (
         <div style={{fontFamily: "Comic Sans MS"}}>
             <h1>Add User</h1><br></br>
-            <form onSubmit={handleSubmit} style={{display: "inline-flex", alignItems: "flex-start"}}>
+            <form onSubmit={handleSubmit} style={{display: "inline-flex", flexDirection: "column", alignItems: "flex-start"}}>
                 <div className='form-div'><label className='form-label'>First Name:   </label><input type="text" placeholder="Please enter the first name" /></div><br/>
                 <div className='form-div'><label className='form-label'>Last Name:   </label><input type="text" placeholder="Please enter the last name" /></div><br/>
                 <div className='form-div'><label className='form-label'>Username:   </label><input type="text" placeholder="Please enter the username" /></div><br/>
@@ -71,9 +71,9 @@ function AddUser() {
                 <div className='form-div'><label className='form-label'>Is Lab Manager:   <input type="checkbox"/></label></div><br/>
                 <div className='form-div'><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" /></div><br/>
                 <div className='form-div'><label className='form-label'>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" /></div><br/>
-            </form>
+            	<Button type="submit">Submit</Button>
+	    </form>
             <br/>
-            <Button>Submit</Button>
 
         </div>
     )
