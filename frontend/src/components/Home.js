@@ -5,18 +5,36 @@ import { PieChart } from 'react-minimal-pie-chart';
 import { Card } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
-import Toast from 'react-bootstrap/Toast';
 import { motion } from "framer-motion";
+
+function getRandomBlueShade() {
+  const blueComponent = Math.floor(Math.random() * 256).toString(16).padStart(2, '0'); // Random blue component
+  const color = `#0000${blueComponent}`; // Fixed red and green, random blue
+  return color;
+}
+
+function getRandomOrangeShade() {
+  const redComponent = Math.floor(Math.random() * 128 + 128).toString(16).padStart(2, '0'); // Random red component in the orange range
+  const greenComponent = Math.floor(Math.random() * 128).toString(16).padStart(2, '0'); // Random green component
+  const blueComponent = Math.floor(Math.random() * 128).toString(16).padStart(2, '0'); // Random blue component
+  const color = `#${redComponent}${greenComponent}${blueComponent}`; // Random orange shade
+
+  return color;
+}
+
 
 function Home() {
   let {user} = useContext(AuthContext);
   let [user_num, setUser_num] = useState(0);
   let [lab_num, setLab_num] = useState(0);
+  let [lab_list, setLab_list] = useState([]);
+  let [user_list, setUser_list] = useState([]);
   const [showToast, setshowToast] = useState(true);
   const toggleShowToast = () => setshowToast(!showToast);
-
+  const [PieData, setPieData] = useState([]);
+  const [PieData2, setPieData2] = useState([]);
   useEffect(() => {
-    fetch('http://120.126.23.245:31190/api/home/', {
+    fetch('http://120.126.23.245:31190/api/home/', { // 'http://localhost:31190/api/ldap/home/
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -26,6 +44,16 @@ function Home() {
     .then(data => {
       setUser_num(data.user_num);
       setLab_num(data.lab_num);
+      setLab_list(data.lab_list);
+      console.log(data.lab_list)
+      setPieData(data.lab_list.map((lab, index) => {
+        return { title: lab, value: 1, color: getRandomBlueShade() }
+      }))
+      setPieData2(data.user_list.map((user, index) => {
+        return { title: user, value: 1, color: getRandomOrangeShade() }
+      }))
+
+      console.log(PieData)
     }) 
     .catch((error) => {
       console.error('Error:', error);
@@ -46,12 +74,9 @@ function Home() {
         >
         <div className="pie">
           <div className="piediv">
-            <h2 style={{marginTop: '5%'}}>Users</h2>
+            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of users: {user_num}</h2>
             <PieChart className="PieStyle"
-              data={[
-                { title: 'Users', value: user_num, color: '#E38627' },
-              ]}
-              label={({ dataEntry }) => dataEntry.value}
+              data={PieData2}
               labelStyle={{
                 textAlign: "center"
               }}
@@ -59,11 +84,9 @@ function Home() {
             />
           </div>
           <div className="piediv">
-            <h2 style={{marginTop: '5%'}}>Labs</h2>
+            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of labs: {lab_num}</h2>
             <PieChart className="PieStyle" textAnchor="middle" dominantBaseline="middle"
-              data={[
-                { title: 'Labs', value: lab_num, color: '#C13C37' },
-              ]}
+              data={PieData}
               label={({ dataEntry }) => dataEntry.value}
               labelStyle={(index) => ({
                 fill: '#fff',
@@ -76,15 +99,14 @@ function Home() {
         </motion.div>
         <br/><br/>
         <Card className="text-center">
-          <Card.Header>Featured</Card.Header>
+          <Card.Header>Kubeflow</Card.Header>
           <Card.Body>
-            <Card.Title>Special title treatment</Card.Title>
+            <Card.Title>CGU AI Center Kubeflow System</Card.Title>
             <Card.Text>
-            With supporting text below as a natural lead-in to additional content.
+            With Kubeflow you can build, deploy, and manage your machine learning workflows on Kubernetes.
             </Card.Text>
             <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
           </Card.Body>
-          <Card.Footer className="text-muted">2 days ago</Card.Footer>
         </Card>
       </div>
     </div>
