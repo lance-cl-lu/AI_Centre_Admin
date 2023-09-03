@@ -2,6 +2,14 @@
   text-align: center;
   
 }
+.Centre-Page-user {
+  display: inline-flex;
+  justify-content: center;
+  width: 100vw;
+  height: 80vh;
+  margin-top: 20px;
+  transition: opacity 0.5s ease-in-out;
+}
 .Centre-Page {
   display: inline-flex;
   justify-content: center;
@@ -14,6 +22,12 @@
   box-sizing: border-box;
   margin: 0;
   width: 80%;
+  padding: 5px;
+}
+.Centre-Page-Content-user {
+  box-sizing: border-box;
+  margin: 0;
+  width: 100%;
   padding: 5px;
 }
 .fade {

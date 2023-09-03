@@ -35,14 +35,6 @@ function Home() {
   return (
     <div className="Home">
       <div className="jumbotron">
-        {!<Toast onClose={toggleShowToast} show={showToast} delay={3000} className="toast-left">
-          <Toast.Header>
-          <img src="holder.js/20x20?text=%20" className="rounded me-2" alt="" />
-          <strong className="me-auto">Bootstrap</strong>
-          <small>11 mins ago</small>
-          </Toast.Header>
-          <Toast.Body>Welcome to CGU AI Centre LDAP System, {user.username}</Toast.Body>
-        </Toast>}
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -53,10 +45,9 @@ function Home() {
           }}
         >
         <div className="pie">
-
           <div className="piediv">
-            <h2>Users</h2>
-            <PieChart className="PieStyle" 
+            <h2 style={{marginTop: '5%'}}>Users</h2>
+            <PieChart className="PieStyle"
               data={[
                 { title: 'Users', value: user_num, color: '#E38627' },
               ]}
@@ -68,7 +59,7 @@ function Home() {
             />
           </div>
           <div className="piediv">
-            <h2>Labs</h2>
+            <h2 style={{marginTop: '5%'}}>Labs</h2>
             <PieChart className="PieStyle" textAnchor="middle" dominantBaseline="middle"
               data={[
                 { title: 'Labs', value: lab_num, color: '#C13C37' },

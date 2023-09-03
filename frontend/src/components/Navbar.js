@@ -7,6 +7,7 @@ import jwt_decode from "jwt-decode";
 function Navbar() {
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
   console.log(permission)
+  let resultMatch = /.*admin$/.test(permission);
   return (
     <nav className="navigation">
         <ul className="navigation-ul">
@@ -14,7 +15,11 @@ function Navbar() {
           <div className="navigation-ul-div">
             <li className="navigation-ul-li"><Link to="/">Home</Link></li>
             <li className="navigation-ul-li"><Link to="/about">About</Link></li>
+            { resultMatch || permission==='root' ? (
             <li className="navigation-ul-li"><Link to="/add">Add</Link></li>
+            ) : (
+              null
+            )}
           <AuthProvider>
             <li className="navigation-ul-li"><Dropdonw></Dropdonw></li>
           </AuthProvider>
