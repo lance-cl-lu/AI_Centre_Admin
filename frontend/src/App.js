@@ -17,9 +17,13 @@ import Infolist from './components/Infolist';
 import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
 import { useContext } from 'react';
 import Help from './components/Help';
-
+import { useState } from "react"
+import jwt_decode from "jwt-decode"
 function App() {
   let user = useContext(AuthContext).user;
+  const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
+  console.log(permission)
+  let resultMatch = /.*admin$/.test(permission);
   return (
     <div className="App">
       <head className="App-header">
@@ -28,6 +32,8 @@ function App() {
       </head>
 	{ user ? 
       <>
+        { resultMatch || permission==='root' ? (
+        <>
         <Navbar />
           <div className='Centre-Page'>
               <Infolist/>
@@ -49,6 +55,31 @@ function App() {
                   </Routes>
               </div>
           </div>
+        </>
+        ) : (
+        <>
+        <Navbar />
+          <div className='Centre-Page-user'>
+              <div className='Centre-Page-Content-user'>
+                  <Routes>
+                    <Route exact path="/" element={<Home />} />
+                    <Route path='password' element={<Password></Password>}/>
+                    <Route path="about/" element={<About />} />
+                    <Route path="add/" element={<Add />} />
+                    <Route path="add/lab" element={<AddLab />} />
+                    <Route path="add/user" element={<AddUser />} />
+                    <Route path="add/admin" element={<AddAdmin />} />
+                    <Route path="add/excel" element={<AddExcel />} />
+                    <Route path="login" element={<Login />} />
+                    <Route path="lab" element={<Lab />} />
+                    <Route path="user" element={<User />} />
+                    <Route path="help" element={<Help />} />
+                    <Route path="*" element={<Home />} />
+                  </Routes>
+              </div>
+          </div>
+        </>
+        )}
         </>
       :
         <Login/>

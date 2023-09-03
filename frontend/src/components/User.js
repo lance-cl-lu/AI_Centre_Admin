@@ -109,42 +109,42 @@ function User() {
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
                 <Form className='form-css'>
-                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextUsername">
+                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextUsername" style={{flexWrap: 'nowrap'}}>
                         <Form.Label column sm="2">
                             Username
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputUsername" defaultValue={user && user.username} />
+                            <Form.Control plaintext readOnly id="inputUsername" style={{flexWrap: 'nowrap'}} defaultValue={user && user.username} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextFirstName">
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}} controlId="formPlaintextFirstName">
                         <Form.Label column sm="2">
                             First Name
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputFirstName" defaultValue={user && user.first_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
+                            <Form.Control plaintext readOnly id="inputFirstName" style={{flexWrap: 'nowrap'}} defaultValue={user && user.first_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextLastName">
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}} controlId="formPlaintextLastName">
                         <Form.Label column sm="2">
                             Last Name
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputLastName" defaultValue={user && user.last_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}} />
+                            <Form.Control plaintext readOnly id="inputLastName" style={{flexWrap: 'nowrap'}} defaultValue={user && user.last_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextEmail">
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}} controlId="formPlaintextEmail">
                         <Form.Label column sm="2">
                             Email
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputEmail" defaultValue={user && user.email} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
+                            <Form.Control plaintext readOnly id="inputEmail" style={{flexWrap: 'nowrap'}} defaultValue={user && user.email} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
                         </Col>
                     </Form.Group>
                     <Form.Group as={Row} className="mb-3" controlId="formPlaintextRole">
                         { user && permissions && Object.keys(permissions).map((key, index) => {
-                            return (
-                                <div key={index} style={{display:'flex', width:"100%", alignItems: "center"}}>
+                            return(
+                                <div key={index} style={{display:'flex', width:"100%", alignItems: "center", flexWrap: 'nowrap'}}>
                                     <Form.Label column sm="2">
                                         {key}
                                     </Form.Label>
