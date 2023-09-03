@@ -372,7 +372,7 @@ def user_group_num(requset):
         user_list.append(entry.cn.value)
     conn.unbind()
     # return the number of group and user
-    data = {'lab_num': len(group_list), 'user_num': len(user_list)}
+    data = {'lab_num': len(group_list), 'lab_list': group_list, 'user_num': len(user_list), 'user_list': user_list}
     return JsonResponse(data, safe=False)
 
 
