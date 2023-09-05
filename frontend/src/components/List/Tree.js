@@ -18,9 +18,9 @@ function TreeView() {
                     <Card.Header>Tree View</Card.Header>
                     <div className="TreeStyle">
                     {userlist && userlist.map((user, index) => (
-                        <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }} className="TreeStyle">{user.group_dn}</Link>} type="Lab" key={index}>
+                        <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }} style={{textDecoration: 'none'}} className="TreeStyle">{user.group_dn}</Link>} type="Lab" key={index}>
                             {user.member_uids.map((memberUid, index) => (
-                                <Tree content={<Link to="/user" state={{ "user": memberUid }}>{memberUid}</Link>} type="User" key={index}/>
+                                <Tree content={<Link to="/user" state={{ "user": memberUid }} style={{textDecoration: 'none', color: "#FFFFFF"}}>{memberUid}</Link>} type="User" key={index}/>
                             ))}
                         </Tree>
                     ))}

@@ -131,7 +131,7 @@ function Lab() {
             </select>
             <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick}>Add</Button>
             <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export</Button>
-            <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}}>Import</Link></Button>
+            <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Import</Link></Button>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>
                 <div><th style={{height:"8vh", display: "inline-flex", width:"30%"}} >#</th>
                      <th style={{height:"8vh", display: "inline-flex", width:"30%"}} >Username</th>
