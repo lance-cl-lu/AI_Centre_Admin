@@ -77,6 +77,48 @@ function Lab() {
             }
         }
     }
+    const handleOnclick_export = async() => {
+        let response = await fetch("http://localhost:8000/api/ldap/lab/excel/export/", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },  
+            body: JSON.stringify({'lab': state.lab})
+        });
+        if(response.status===200) {
+            // get and download the response excel file
+            const filename = 'data.xlsx'
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            console.log(blob);
+
+        } else {
+            alert("something wrong");
+        }
+    }
+    const handleOnclick_import = async() => {
+        let response = await fetch("http://localhost:8000/api/ldap/lab/import/", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({'lab': state.lab})
+        });
+        if(response.status===200) {
+            alert("Import sucessfully!!")
+            window.location.href='/'
+        } else {
+            alert("error");
+        }
+    }
 
     return (
         <div>
@@ -88,6 +130,8 @@ function Lab() {
                 )) : null}
             </select>
             <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick}>Add</Button>
+            <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export</Button>
+            <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}}>Import</Link></Button>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>
                 <div><th style={{height:"8vh", display: "inline-flex", width:"30%"}} >#</th>
                      <th style={{height:"8vh", display: "inline-flex", width:"30%"}} >Username</th>

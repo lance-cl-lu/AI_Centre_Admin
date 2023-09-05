@@ -19,6 +19,7 @@ import { useContext } from 'react';
 import Help from './components/Help';
 import { useState } from "react"
 import jwt_decode from "jwt-decode"
+import LabImport from './components/Lab/Import';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -43,6 +44,7 @@ function App() {
                     <Route path='password' element={<Password></Password>}/>
                     <Route path="about/" element={<About />} />
                     <Route path="add/" element={<Add />} />
+                    <Route path='lab/import' element={<LabImport/>}/>
                     <Route path="add/lab" element={<AddLab />} />
                     <Route path="add/user" element={<AddUser />} />
                     <Route path="add/admin" element={<AddAdmin />} />
