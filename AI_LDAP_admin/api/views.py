@@ -655,12 +655,9 @@ def export_lab_user(request):
 
 @api_view(['POST'])
 def import_lab_user(request):
-    data = json.loads(request.body.decode('utf-8'))
-    group = data['lab']
+    group = request.POST['lab']
     if request.FILES.get('file'):
         excel_file = request.FILES['file']
-        user = request.POST['user']
-        print(user)
         conn = connectLDAP()
         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
             for chunk in excel_file.chunks():
@@ -689,8 +686,7 @@ def import_lab_user(request):
                 'shadowExpire': '99999', 'Description': [user_description]})
             # add user info into django
             user = User.objects.create_user(username=row[0].value, password=row[1].value, first_name=row[3].value, last_name=row[4].value, email=row[2].value)
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=group), permission=2)
-            user.groups.add(Group.objects.get(name=group))
+            conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(group), {'memberUid': [(MODIFY_ADD, [row[0].value])]})
             print("add user {} into django".format(row[0].value))
         conn.unbind()
     return JsonResponse({'message': 'File upload success'}, status=200)
