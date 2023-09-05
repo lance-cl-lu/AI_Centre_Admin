@@ -581,5 +581,37 @@ def export_ldap(request):
     
     return response
 
+@api_view(['POST'])
+def outside_user(request):
+    data = json.loads(request.body.decode('utf-8'))
+    lab = data['lab']
+    conn = connectLDAP()
+    conn.search('cn={},ou=Groups,dc=example,dc=org'.format(lab), '(objectclass=posixGroup)', attributes=['*'])
+    user_list = []
+    for entry in conn.entries:
+        try:
+            member_uids_entry = entry.memberUid.values
+            for member_uid in member_uids_entry:
+                user_list.append(member_uid)
+        except:
+            pass
+    all_user = []
+    conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
+    for entry in conn.entries:
+        all_user.append(entry.cn.value)
+    outside_user = list(set(all_user) - set(user_list))
+    return Response(outside_user, status=200)
 
-    
+@api_view(['POST'])
+def add_user_to_lab(request):
+    data = json.loads(request.body.decode('utf-8'))
+    lab = data['lab']
+    user = data['user']
+    conn = connectLDAP()
+    try:
+        conn.modify('cn={},ou=Groups,dc=example,dc=org'.format(lab), {'memberUid': [(MODIFY_ADD, [user])]})
+        conn.modify('cn={},ou=users,dc=example,dc=org'.format(user), {'Description': [(MODIFY_ADD, [lab])]})
+        conn.unbind()
+        return Response(status=200)
+    except:
+        return Response(status=500)
