@@ -27,10 +27,6 @@ function Home() {
   let {user} = useContext(AuthContext);
   let [user_num, setUser_num] = useState(0);
   let [lab_num, setLab_num] = useState(0);
-  let [lab_list, setLab_list] = useState([]);
-  let [user_list, setUser_list] = useState([]);
-  const [showToast, setshowToast] = useState(true);
-  const toggleShowToast = () => setshowToast(!showToast);
   const [PieData, setPieData] = useState([]);
   const [PieData2, setPieData2] = useState([]);
   useEffect(() => {
@@ -44,16 +40,12 @@ function Home() {
     .then(data => {
       setUser_num(data.user_num);
       setLab_num(data.lab_num);
-      setLab_list(data.lab_list);
-      console.log(data.lab_list)
       setPieData(data.lab_list.map((lab, index) => {
         return { title: lab, value: 1, color: getRandomBlueShade() }
       }))
       setPieData2(data.user_list.map((user, index) => {
         return { title: user, value: 1, color: getRandomOrangeShade() }
       }))
-
-      console.log(PieData)
     }) 
     .catch((error) => {
       console.error('Error:', error);
