@@ -245,7 +245,6 @@ def adduser(request):
     if data['lab'] is not None:
         group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
         conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
-        user.groups.add(Group.objects.get(name=labname))
         if data['is_lab_manager'] is False:
             user.userdetail_set.create(uid=user, labname=Group.objects.get(name=labname), permission=2)
             conn.modify(user_dn, {'Description': [(MODIFY_ADD, [labname])]})
@@ -615,3 +614,84 @@ def add_user_to_lab(request):
         return Response(status=200)
     except:
         return Response(status=500)
+
+@api_view(['POST'])
+def export_lab_user(request):
+    data = json.loads(request.body.decode('utf-8'))
+    lab = data['lab']
+    conn = connectLDAP()
+    conn.search('cn={},ou=Groups,dc=example,dc=org'.format(lab), '(objectclass=posixGroup)', attributes=['*'])
+    user_list = []
+    user_list.append(["Username","password","email", "firstname", "lastname", "permission"])
+    for entry in conn.entries:
+        try:
+            group = entry.cn.value
+            member_list = entry.memberUid.value
+            
+            # check group has muti user or not
+            if isinstance(member_list, list):
+                for member_entry in member_list:
+                    conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+                    for user_entry in conn.entries:
+                        user_list.append([user_entry.cn.value, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
+            elif isinstance(member_list, str):
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(member_list), '(objectclass=posixAccount)', attributes=['*'])
+                for user_entry in conn.entries:
+                    user_list.append([user_entry.cn.value, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
+        except:
+            continue
+        
+    # make data to excel
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    for row in user_list:
+        worksheet.append(row)
+    workbook.save("data.xlsx")
+    excel_file_path = 'data.xlsx'
+    response = HttpResponse(content_type="application/ms-excel")
+    response['Content-Disposition'] = 'attachment; filename=data.xlsx'
+    workbook.save(response)
+    return response
+
+@api_view(['POST'])
+def import_lab_user(request):
+    data = json.loads(request.body.decode('utf-8'))
+    group = data['lab']
+    if request.FILES.get('file'):
+    excel_file = request.FILES['file']
+    user = request.POST['user']
+    print(user)
+    conn = connectLDAP()
+    with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
+        for chunk in excel_file.chunks():
+            destination.write(chunk)
+    # read and pritn the excel file, attribute ["Username","password","email", "firstname", "lastname", "permission"]
+    worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
+    for row in worksheet.iter_rows():
+        if row[0].value == "Username":
+                continue
+        # if user exist skip
+        if conn.search('cn={},ou=users,dc=example,dc=org'.format(row[0].value), '(objectclass=posixAccount)', attributes=['*']) is True:
+            print("user {} is exist".format(row[0].value))
+            continue
+        # add user info into ldap
+        if row[5].value == 'admin':
+            user_description = '{}admin'.format(group)
+        else:
+            user_description = group
+        print(user_description)
+        conn.add('cn={},ou=users,dc=example,dc=org'.format(row[0].value), ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+            {'cn': row[0].value, 'givenName': row[0].value, 'sn' : row[0].value ,
+            'uid': row[0].value, 'uidNumber': '2001', 'gidNumber': '1001', "mail": row[2].value,
+            'homeDirectory': '/home/{}'.format(row[0].value), 'loginShell': '/bin/bash',
+            'userPassword': ldap_md5_crypt.hash(row[1].value, salt=salt), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+            'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+            'shadowExpire': '99999', 'Description': [user_description]})
+        # add user info into django
+        user = User.objects.create_user(username=row[0].value, password=row[1].value, first_name=row[3].value, last_name=row[4].value, email=row[2].value)
+        user.userdetail_set.create(uid=user, labname=Group.objects.get(name=group), permission=2)
+        user.groups.add(Group.objects.get(name=group))
+        print("add user {} into django".format(row[0].value))
+    conn.unbind()
+    return JsonResponse({'message': 'File upload success'}, status=200)
+
