@@ -78,7 +78,7 @@ function Lab() {
         }
     }
     const handleOnclick_export = async() => {
-        let response = await fetch("http://localhost:8000/api/ldap/lab/excel/export/", {
+        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/excel/export/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
@@ -105,7 +105,7 @@ function Lab() {
         }
     }
     const handleOnclick_import = async() => {
-        let response = await fetch("http://localhost:8000/api/ldap/lab/import/", {
+        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/import/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
