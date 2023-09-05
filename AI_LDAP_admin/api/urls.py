@@ -19,6 +19,7 @@ urlpatterns = [
     path("ldap/lab/delete/", lab_delete, name="lab_delete"),
     path("ldap/outside/user/", outside_user, name="outside_user"),
     path("ldap/lab/insert/", add_user_to_lab, name="add_user_to_lab"),
+    path("ldap/lab/excel/export/", export_lab_user, name="export_lab_user"),
     #user url
     path("ldap/user/", get_user_info, name="get_user_info"),
     path("ldap/user/list/", user_list, name="user_list"),

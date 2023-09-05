@@ -615,3 +615,44 @@ def add_user_to_lab(request):
         return Response(status=200)
     except:
         return Response(status=500)
+
+@api_view(['POST'])
+def export_lab_user(request):
+    data = json.loads(request.body.decode('utf-8'))
+    lab = data['lab']
+    conn = connectLDAP()
+    conn.search('cn={},ou=Groups,dc=example,dc=org'.format(lab), '(objectclass=posixGroup)', attributes=['*'])
+    user_list = []
+    user_list.append(["Username","password","email", "firstname", "lastname", "permission"])
+    for entry in conn.entries:
+        try:
+            group = entry.cn.value
+            member_list = entry.memberUid.value
+            
+            # check group has muti user or not
+            if isinstance(member_list, list):
+                for member_entry in member_list:
+                    conn.search('cn={},ou=users,dc=example,dc=org'.format(member_entry), '(objectclass=posixAccount)', attributes=['*'])
+                    for user_entry in conn.entries:
+                        user_list.append([user_entry.cn.value, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
+            elif isinstance(member_list, str):
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(member_list), '(objectclass=posixAccount)', attributes=['*'])
+                for user_entry in conn.entries:
+                    user_list.append([user_entry.cn.value, user_entry.userPassword.value, user_entry.mail.value, user_entry.givenName.value, user_entry.sn.value, get_permission(user_entry.cn.value, group)])
+        except:
+            continue
+        
+    # make data to excel
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    for row in user_list:
+        worksheet.append(row)
+    workbook.save("data.xlsx")
+    excel_file_path = 'data.xlsx'
+    response = HttpResponse(content_type="application/ms-excel")
+    response['Content-Disposition'] = 'attachment; filename=data.xlsx'
+    workbook.save(response)
+    return response
+
+        
+        
