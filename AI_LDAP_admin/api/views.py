@@ -691,3 +691,17 @@ def import_lab_user(request):
         conn.unbind()
     return JsonResponse({'message': 'File upload success'}, status=200)
 
+@api_view(['GET'])
+def db_ldap_check(request):
+    conn = connectLDAP()
+    conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
+    ldap_user = []
+    for entry in conn.entries:
+        ldap_user.append(entry.cn.value)
+    django_user = []
+    for user in User.objects.all():
+        django_user.append(user.username)
+    unsycho_user = list(set(ldap_user) - set(django_user))
+    if unsycho_user != []:
+        return Response(unsycho_user, status=200)
+    return Response(status=200)
