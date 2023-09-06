@@ -74,19 +74,19 @@ function Home() {
 
   return (
     <div className="Home">
-      { unsych_list ? (<Toast className="ToastStyle">
-        <Toast.Header>
-          <strong className="mr-auto" style={{color: 'red'}}>Administer Warning there are some user are not synchronous!!!</strong>
-        </Toast.Header>
-        <Toast.Body>
-          {unsych_list.map((user, index) => (
-            <div key={index}>
-              <p style={{color: 'red'}}>{user}</p>
-            </div>
-          ))}
-        </Toast.Body>
-      </Toast>) : null}
       <div className="jumbotron">
+        { unsych_list ? (<Toast className="ToastStyle">
+          <Toast.Header>
+            <strong className="mr-auto" style={{color: 'red'}}>Administer Warning there are some user are not synchronous!!!</strong>
+          </Toast.Header>
+          <Toast.Body>
+            {unsych_list.map((user, index) => (
+              <div key={index}>
+                <p style={{color: 'red'}}>{user}</p>
+              </div>
+            ))}
+          </Toast.Body>
+        </Toast>) : null}
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
