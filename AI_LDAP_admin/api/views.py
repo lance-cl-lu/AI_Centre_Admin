@@ -178,7 +178,7 @@ def get_all_user_permission(user, labname):
             for permission in permission_list:
                 if re.match(r'.{}admin'.format(labname), str(permission)):
                     memberuid[user[i]] = "admin"
-                    continue
+                    break
                 else:
                     memberuid[user[i]] = "user"
     conn.unbind()
