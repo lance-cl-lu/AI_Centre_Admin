@@ -168,7 +168,7 @@ def get_group_corresponding_user(request):
     conn.unbind()
     return Response(group_list, status=200)
 
-def get_all_user_permission(user):
+def get_all_user_permission(user, labname):
     conn = connectLDAP()
     memberuid = {}
     for i in range(len(user)):
@@ -176,8 +176,9 @@ def get_all_user_permission(user):
         for entry in conn.entries:
             permission_list = entry.Description.values
             for permission in permission_list:
-                if re.match(r'.*admin', str(permission)):
+                if re.match(r'.{}admin'.format(labname), str(permission)):
                     memberuid[user[i]] = "admin"
+                    continue
                 else:
                     memberuid[user[i]] = "user"
     conn.unbind()
@@ -196,7 +197,7 @@ def get_lab_info(request):
             data = {
                 "cn": entry.cn.value,
                 "gidNumber": entry.gidNumber.value,
-                "memberUid": get_all_user_permission(entry.memberUid.values)
+                "memberUid": get_all_user_permission(entry.memberUid.values, labname)
             }
         except:
             data = {
