@@ -347,17 +347,27 @@ def user_delete(request):
 def lab_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
-    user_list = User.objects.filter(groups__name=labname)
-    for user in user_list:
-        if(len(user.groups.all()) == 1):
-            user.delete()
-        else:
-            user.groups.remove(Group.objects.get(name=labname))
-    #Group.objects.get(name=labname)
     conn = connectLDAP()
-    conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
-    conn.unbind()
+    # delet the user if user is only in this group
+    try:
+        conn.search('cn={},ou=Groups,dc=example,dc=org'.format(labname), '(objectclass=posixGroup)', attributes=['memberUid'])
+        for entry in conn.entries:
+            member_uids = entry.memberUid.values
+            # if description only one, delete the user
+            conn.search('cn={},ou=users,dc=example,dc=org'.format(member_uids[0]), '(objectclass=posixAccount)', attributes=['Description'])
+            for entry in conn.entries:
+                if len(entry.Description.values) == 1:
+                    conn.delete('cn={},ou=users,dc=example,dc=org'.format(member_uids[0]))
+                    User.objects.get(username=member_uids[0]).delete()
+                else: # remove the group name from description
+                    conn.modify('cn={},ou=users,dc=example,dc=org'.format(member_uids[0]), {'Description': [(MODIFY_DELETE, [labname])]})
+                    conn.modify('cn={},ou=users,dc=example,dc=org'.format(member_uids[0]), {'Description': [(MODIFY_DELETE, ['{}admin'.format(labname)])]})
+        # delete the group
+        conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
+    except:
+        return Response(status=500)
     return Response(status=200)
+
     
 def user_group_num(requset):
     conn = connectLDAP()
