@@ -2,11 +2,11 @@ import React, {useState, useEffect} from "react";
 import { useContext } from "react";
 import AuthContext from "../context/AuthContext";
 import { PieChart } from 'react-minimal-pie-chart';
-import { Card } from 'react-bootstrap';
+import { Card, Toast } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-
+import jwt_decode from "jwt-decode";
 function getRandomBlueShade() {
   const blueComponent = Math.floor(Math.random() * 256).toString(16).padStart(2, '0'); // Random blue component
   const color = `#0000${blueComponent}`; // Fixed red and green, random blue
@@ -52,8 +52,40 @@ function Home() {
     }
     );
   }, [user]);
+  const permission = jwt_decode(localStorage.getItem('authToken'))['permission']
+  const [ unsych_list, setUnsych_list ] = useState([]);
+  useEffect(() => {
+    fetch('http://localhost:8000/api/check/syschronize/', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => response.json())
+    .then(data => {
+      setUnsych_list(data);
+    })
+    .catch((error) => {
+      console.error('Error:', error);
+    }
+    );
+  }, []);
+
+
   return (
     <div className="Home">
+      { unsych_list ? (<Toast className="ToastStyle">
+        <Toast.Header>
+          <strong className="mr-auto" style={{color: 'red'}}>Administer Warning there are some user are not synchronous!!!</strong>
+        </Toast.Header>
+        <Toast.Body>
+          {unsych_list.map((user, index) => (
+            <div key={index}>
+              <p style={{color: 'red'}}>{user}</p>
+            </div>
+          ))}
+        </Toast.Body>
+      </Toast>) : null}
       <div className="jumbotron">
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}

@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import (
 )
 
 urlpatterns = [
+    path("check/syschronize/", db_ldap_check, name="db_ldap_check"),
     path("home/", user_group_num, name="user_group_num"),
     path("syschronize_ldap/", syschronize_ldap, name="syschronize_ldap"),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
