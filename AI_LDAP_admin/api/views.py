@@ -174,12 +174,15 @@ def get_all_user_permission(user, labname):
         conn.search('cn={},ou=users,dc=example,dc=org'.format(user[i]), '(objectclass=posixAccount)', attributes=['Description'])
         for entry in conn.entries:
             permission_list = entry.Description.values
+            if entry.Description.values == 'root':
+                memberuid[user[i]] = 'root'
+                return memberuid
             for permission in permission_list:
-                if re.match(r'.{}admin'.format(labname), str(permission)):
-                    memberuid[user[i]] = "admin"
-                    break
+                if (str(permission) == '{}admin'.format(labname)):
+                    memberuid[user[i]] = 'admin'
+                    return memberuid
                 else:
-                    memberuid[user[i]] = "user"
+                    memberuid[user[i]] = 'user'
     conn.unbind()
     return memberuid
     
