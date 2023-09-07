@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import AuthContext from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import TableRowsIcon from '@mui/icons-material/TableRows';
-import jwtDecode from "jwt-decode";
+import jwt_decode from "jwt-decode";
 function Dropdown() {
   let { logoutUser, user } = useContext(AuthContext);
   const [click, setClick] = useState(false);
