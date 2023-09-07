@@ -28,7 +28,7 @@ function Dropdown() {
           </Link>
         </li>
         <li>
-          <Link to="/help" className="dropdown-item">
+          <Link to="https://hackmd.io/@lms025187/H1SCqhIR3" className="dropdown-item">
             Help
           </Link>
         </li>
