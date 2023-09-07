@@ -46,7 +46,7 @@ function AddExcel() {
       <h1>Add Excel</h1>
       <form onSubmit={handleSubmit}>
         <label>Excel: </label>
-        <input type="file" name="file" id="file" />
+        <input type="file" name="file" id="file" accept=".xlsx" />
         <br />
         <input type="submit" value="Submit" />
       </form>

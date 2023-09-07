@@ -46,10 +46,10 @@ function LabImport() {
         <div>
           <h1>Add Excel</h1>
           <form onSubmit={handleSubmit}>
-            <label>Excel: </label>
-            <input type="file" name="file" id="file" />
+            <label>Excel:{    }</label>
+            <input type="file" name="file" id="file" accept=".xlsx" />
             <br />
-            <input type="submit" value="Submit" />
+            <input type="submit" value="Submit" className="btn btn-primary" />
           </form>
         </div>
       );
