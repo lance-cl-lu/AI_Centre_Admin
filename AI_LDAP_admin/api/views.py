@@ -4,7 +4,6 @@ from django.views.decorators.csrf import csrf_exempt
 from ldap3 import *
 import json, re, random 
 from django.contrib.auth.models import User, Group
-from .models import UserDetail, UploadExcel
 
 import base64
 from passlib.hash import ldap_md5_crypt
@@ -247,10 +246,8 @@ def adduser(request):
         group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
         conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
         if data['is_lab_manager'] is False:
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=labname), permission=2)
             conn.modify(user_dn, {'Description': [(MODIFY_ADD, [labname])]})
         elif data['is_lab_manager'] is True:
-            user.userdetail_set.create(uid=user, labname=Group.objects.get(name=labname), permission=1)
             conn.modify(user_dn, {'Description': [(MODIFY_ADD, ['{}admin'.format(labname)])]})
             conn.modify(user_dn, {'Description': [(MODIFY_DELETE, [labname])]})
     conn.unbind()
@@ -266,13 +263,6 @@ def add_admin(request):
     conn = connectLDAP()
     conn.modify(user_dn, {'Description': [(MODIFY_ADD, ['root'])]})
     user = User.objects.get(username=username)
-    detail = UserDetail.objects.get(uid=user)
-    detail.permission = 0
-    try:
-        detail.labname = Group.objects.get(name='root')
-        detail.save()
-    except:
-        pass
     # make user to be superuser
     user.is_superuser = True
     user.is_staff = True
@@ -392,9 +382,6 @@ def add_lab_admin(request):
     username = data['username']
     labname = data['lab']
     User.objects.get(username=username).is_staff = True
-    detail = UserDetail.objects.filter(uid=User.objects.get(username=username), labname=Group.objects.get(name=labname))
-    detail.permission = 1
-    detail.save()
     conn = connectLDAP()
     lab = conn.search('cn={},ou=Groups,dc=example,dc=org'.format(labname), '(objectclass=posixGroup)', attributes=['cn'])
     user = conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
@@ -509,10 +496,6 @@ def excel(request):
                 print("add user {} into group {}".format(row[0].value, row[1].value))
                 # add user info into django
                 user = User.objects.create_user(username=row[0].value, password=row[2].value, first_name=row[4].value, last_name=row[5].value, email=row[3].value)
-                if row[6].value == 'admin':
-                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=1)
-                else:
-                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=2)
                 user.groups.add(Group.objects.get(name=row[1].value))
                 print("add user {} into django".format(row[0].value))
             else:
@@ -535,11 +518,6 @@ def excel(request):
                 print("add user {} into group {}".format(row[0].value, row[1].value))
                 # add user info into django
                 user = User.objects.get(username=row[0].value)
-                if row[6].value == 'admin':
-                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=1)
-                else:
-                    user.userdetail_set.create(uid=user, labname=Group.objects.get(name=row[1].value), permission=2)
-                user.groups.add(Group.objects.get(name=row[1].value))
                 print("add user {} into django".format(row[0].value))
         conn.unbind()
         return JsonResponse({'message': 'File upload success'}, status=200)

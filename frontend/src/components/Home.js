@@ -55,7 +55,7 @@ function Home() {
   const permission = jwt_decode(localStorage.getItem('authToken'))['permission']
   const [ unsych_list, setUnsych_list ] = useState([]);
   useEffect(() => {
-    fetch('http://localhost:8000/api/check/syschronize/', {
+    fetch('http://120.126.23.245:31190/api/check/syschronize/', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -66,7 +66,7 @@ function Home() {
       setUnsych_list(data);
     })
     .catch((error) => {
-      console.error('Error:', error);
+      console.error('Error: User Exist');
     }
     );
   }, []);
@@ -75,19 +75,7 @@ function Home() {
   return (
     <div className="Home">
       <div className="jumbotron">
-        { unsych_list ? (<Toast className="ToastStyle">
-          <Toast.Header>
-            <strong className="mr-auto" style={{color: 'red'}}>Administer Warning there are some user are not synchronous!!!</strong>
-          </Toast.Header>
-          <Toast.Body>
-            {unsych_list.map((user, index) => (
-              <div key={index}>
-                <p style={{color: 'red'}}>{user}</p>
-              </div>
-            ))}
-          </Toast.Body>
-        </Toast>) : null}
-        <motion.div
+      <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
@@ -97,6 +85,21 @@ function Home() {
           }}
         >
         <div className="pie">
+        { unsych_list ? (        
+        
+          <Card className="piediv">
+          <Card.Header style={{color: 'red'}}>
+            <strong className="mr-auto">Warning these user are not synchronous!!!</strong>
+          </Card.Header>
+          <Card.Body style={{marginTop: "10px"}}>
+            {unsych_list.map((user, index) => (
+              <div key={index}>
+                <p style={{color: 'red'}}>{user}</p>
+              </div>
+            ))}
+          </Card.Body>
+        </Card>
+        ) : null}
           <div className="piediv">
             <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of users: {user_num}</h2>
             <PieChart className="PieStyle"
@@ -121,6 +124,7 @@ function Home() {
           </div>
         </div>
         </motion.div>
+
         <br/><br/>
         <Card className="text-center">
           <Card.Header>Kubeflow</Card.Header>
