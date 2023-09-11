@@ -11,7 +11,7 @@ function Insert() {
     const [selectedOption, setSelectedOption] = useState('');
     useEffect(() => {
         let getuserinfo = async () => {
-            let response = await fetch('http://localhost:8000/api/ldap/outside/user/', {
+            let response = await fetch('http://120.126.23.245:31190/api/ldap/outside/user/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -45,7 +45,7 @@ function Insert() {
         let username = document.getElementById("adduserlab").value;
         console.log(document.getElementById("admin").checked);
         console.log(username);
-        let response = await fetch("http://localhost:8000/api/ldap/lab/insert/", {
+        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/insert/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',

@@ -17,7 +17,7 @@ function Password() {
                 password.value = ""
                 comfirm.value = ""
             } else {
-                let response = await fetch("http://localhost:8000/api/password/change/", {
+                let response = await fetch("http://120.126.23.245:31190/api/password/change/", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

@@ -606,3 +606,52 @@ def synchronize_db_ldap():
             conn.description = detail_obj.labname.name
     conn.unbind()
     return True
+@api_view(['POST'])
+def multiple_user_delete(request):
+    data = json.loads(request.body.decode('utf-8'))
+    users = data['users']
+    conn = connectLDAP()
+    for user in users:
+        User.objects.get(username=user).delete()
+        conn.delete('cn={},ou=users,dc=example,dc=org'.format(user))
+        # remove from group entry
+        conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+        for entry in conn.entries:
+            try:
+                conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [user])]})
+            except:
+                pass
+    return Response(status=200)
+
+@api_view(['POST'])
+def remove_multiple_user_from_lab(request):
+    data = json.loads(request.body.decode('utf-8'))
+    group = data['group']
+    users = data['users']
+    conn = connectLDAP()
+    for user in users:
+        User.objects.get(username=user).groups.remove(Group.objects.get(name=group))
+        UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group)).delete()
+        conn.search('dc={},ou=Groups,dc=example,dc=org'.format(group), '(objectclass=posixGroup)', attributes=['*'])
+        for entry in conn.entries:
+            try:
+                conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [user])]})
+            except:
+                pass
+        # remove user description about group
+        conn.search('dc={},ou=users,dc=example,dc=org'.format(user), '(objectclass=posixAccount)', attributes=['Description'])
+        for entry in conn.entries:
+            conn.modify(entry.entry_dn, {'Description': [(MODIFY_DELETE, [group])]})
+    return Response(status=200)
+
+@api_view(['GET'])
+def remove_all_entr(request):
+    conn = connectLDAP()
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    for entry in conn.entries:
+        conn.delete(entry.entry_dn)
+    conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
+    for entry in conn.entries:
+        conn.delete(entry.entry_dn)
+    conn.unbind()
+    return Response(status=200)

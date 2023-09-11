@@ -12,7 +12,7 @@ export const AuthProvider = ({ children }) => {
     const [userlist, setUesrlist] = useState(null)
 
     let getUserList = async ( ) => {
-        let response = await fetch('http://localhost:8000/api/ldap/info/', {
+        let response = await fetch('http://120.126.23.245:31190/api/ldap/info/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
 
     let loginUser = async(e )=> {
         e.preventDefault()
-        let response = await fetch('http://localhost:8000/api/token/', {
+        let response = await fetch('http://120.126.23.245:31190/api/token/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

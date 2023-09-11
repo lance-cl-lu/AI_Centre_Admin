@@ -24,7 +24,7 @@ function Add() {
             null }
             { permission==='root' ? <>
                 <Card className="AddType"><Card.Body><Link to="/add/excel" className="LinkStyle"><span>Import from excel    <TocIcon fontSize="large"/></span></Link></Card.Body></Card>
-                <Card className="AddType"><Card.Body><Link to="http://localhost:8000/api/ldap/excel/export/" className="LinkStyle"><span>Export excel    <DownloadingIcon fontSize="large"/></span></Link></Card.Body></Card></> :
+                <Card className="AddType"><Card.Body><Link to="http://120.126.23.245:31190/api/ldap/excel/export/" className="LinkStyle"><span>Export excel    <DownloadingIcon fontSize="large"/></span></Link></Card.Body></Card></> :
             null }
         </div>
     )

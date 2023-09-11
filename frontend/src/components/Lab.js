@@ -17,7 +17,7 @@ function Lab() {
 
 
     let labinfofetch = async() => {
-        let response = await fetch('http://localhost:8000/api/ldap/lab/', {
+        let response = await fetch('http://120.126.23.245:31190/api/ldap/lab/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -35,7 +35,7 @@ function Lab() {
     }
     const deleteGroup = async() => {
         if(window.confirm("It will also delete all user in Lab, are you sure to do it?")){
-            let response = await fetch("http://localhost:8000/api/ldap/lab/delete/", {
+            let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/delete/", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -52,7 +52,7 @@ function Lab() {
         if(window.confirm("Are you sure to add this user?")){
             let username = document.getElementById("adduserlab").value;
             console.log(username);
-            let response = await fetch("http://localhost:8000/api/ldap/lab/insert/", {
+            let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/insert/", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ function Lab() {
         }
     }
     const handleOnclick_export = async() => {
-        let response = await fetch("http://localhost:8000/api/ldap/lab/excel/export/", {
+        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/excel/export/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
@@ -95,7 +95,7 @@ function Lab() {
         }
     }
     const handleOnclick_import = async() => {
-        let response = await fetch("http://localhost:8000/api/ldap/lab/import/", {
+        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/import/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
@@ -157,23 +157,88 @@ function Lab() {
         }
     }
     const handleOnclick_mutiple_delete = async() => {
-    }
-    const handleOnclick_mutiple_remove = async() => {
-
-    }
-    useEffect(() => {
-        if(CheckAll) {
-            let checkboxs = document.getElementsByName("checkbox");
-            for(let i = 0; i < checkboxs.length; i++) {
-                checkboxs[i].checked = true;
+        if(window.confirm("Are you sure to delete these users?")){
+            let checkboxes = document.getElementsByName('checkbox');
+            let usernames = [];
+            for(let i=0; i<checkboxes.length; i++) {
+                if(checkboxes[i].checked) {
+                    usernames.push(checkboxes[i].parentNode.parentNode.childNodes[1].childNodes[0].innerHTML);
+                }
             }
-        } else {
-            let checkboxs = document.getElementsByName("checkbox");
-            for(let i = 0; i < checkboxs.length; i++) {
-                checkboxs[i].checked = false;
+            if(usernames.length===0) {
+                alert("Please select at least one user");
+                return;
+            }
+            console.log(usernames);
+            let response = await fetch("http://120.126.23.245:31190/api/ldap/user/mutiple/delete/", {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                // if checkbox is checked, then add the username to the body
+                body: JSON.stringify({"users": usernames})
+            });
+            if(response.status===200) {
+                alert("Delete sucessfully!!")
+                window.location.href='/'
+            } else {
+                // alert the respone error message
+                let data = await response.json();
+                alert(data.message);
             }
         }
-    }, [CheckAll])
+    }
+    const handleOnclick_mutiple_remove = async() => {
+        if(window.confirm("Are you want to remove these user from this group??")) {
+            let checkboxes = document.getElementsByName('checkbox');
+            let usernames = [];
+            for(let i=0; i<checkboxes.length; i++) {
+                if(checkboxes[i].checked) {
+                    usernames.push(checkboxes[i].parentNode.parentNode.childNodes[1].childNodes[0].innerHTML);
+                }
+            }
+            if(usernames.length===0) {
+                alert("Please select at least one user");
+                return;
+            }
+            console.log(usernames);
+            let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/mutiple/remove/", {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                // if checkbox is checked, then add the username to the body
+                body: JSON.stringify({"group": state.lab, "users": usernames})
+            });
+            if(response.status===200) {
+                alert("Remove sucessfully!!")
+                window.location.href='/'
+            } else {
+                let respone = await response.json();
+                alert(respone.message);
+            }
+
+        }
+
+    }
+    // if 
+    const handleCheckAllChange = (event) => {
+        if(event.target.checked) {
+            console.log("check all");
+            setCheckAll(true);
+            let checkboxes = document.getElementsByName('checkbox');
+            for(let i=0; i<checkboxes.length; i++) {
+                checkboxes[i].checked = true;
+            }
+        } else {
+            setCheckAll(false);
+            let checkboxes = document.getElementsByName('checkbox');
+            for(let i=0; i<checkboxes.length; i++) {
+                checkboxes[i].checked = false;
+            }
+        }
+    }
+
 
 
     return (
@@ -198,7 +263,7 @@ function Lab() {
             <br/>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>
                 <div style={{ justifyContent: "center"}}>
-                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} ><input type="checkbox" style={{width:"20px", height:"12px"}} id="checkAll" onChange={() => setCheckAll(!CheckAll)} /></th>
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} ><input type="checkbox" style={{width:"20px", height:"12px"}} id="checkAll" onChange={handleCheckAllChange} /></th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} >Username</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>permission</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>移出</th>
@@ -208,13 +273,13 @@ function Lab() {
                 </div>
                     { labinfo && labinfo.memberUid ? Object.keys(labinfo.memberUid).map((memberUid, index) => (
                         <tr>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><Checkbox name="checkbox" style={{width:"20px", height:"12px"}} value={memberUid} /></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><input type="checkbox" style={{width:"20px", height:"12px"}} name="checkbox" /></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><Link to="/user" state={{ "user": memberUid }} style={{textDecoration:"none"}}>{memberUid}</Link></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>{labinfo.memberUid[memberUid] === 'admin' ? <span style={{color: "#A020F0"}}>{labinfo.memberUid[memberUid]}</span>: <span>{labinfo.memberUid[memberUid]}</span>}</td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button style={{ backgroundColor: "Gold", color: "#242424"}} onClick={
                                 async() => {
                                     if(window.confirm("Are you sure to remove this user from this lab?")){
-                                        let response = await fetch("http://localhost:8000/api/ldap/lab/remove/", {
+                                        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/remove/", {
                                             method: "POST",
                                             headers: {
                                                 'Content-Type': 'application/json',
@@ -234,7 +299,7 @@ function Lab() {
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="danger" onClick={  
                                 async() => {
                                     if(window.confirm("Are you sure to delete this user?")){
-                                        let response = await fetch("http://localhost:8000/api/ldap/user/delete/", {
+                                        let response = await fetch("http://120.126.23.245:31190/api/ldap/user/delete/", {
                                             method: "POST",
                                             headers: {
                                                 'Content-Type': 'application/json',
