@@ -149,6 +149,7 @@ def adduser(request):
     labname = data['lab']
     email = data['email']
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
+    user.groups.add(Group.objects.get(name=labname))
     password = user.password
     """
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
