@@ -19,7 +19,7 @@ function Dropdown() {
   const permission = jwt_decode(localStorage.getItem('authToken'))['permission']
 
   return (
-    <div className="dropdown">
+    <div className="dropdown" style={{fontFamily: "Segoe UI"}}>
       <button onClick={handleClick} className="btn btn-secondary dropdown-toggle dropbtn"><TableRowsIcon/></button>
       {click ? (
       <ul className="dropdown-menu" aria-labelledby="dropdownMenuLink">  

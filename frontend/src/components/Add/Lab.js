@@ -3,7 +3,7 @@ import { Button, Form } from "react-bootstrap";
 function AddLab() {
 
     let addLab = async(e) => {
-        let response = await fetch('http://120.126.23.245:31190/api/ldap/lab/add/', {    
+        let response = await fetch('http://localhost:8000/api/ldap/lab/add/', {    
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -15,7 +15,7 @@ function AddLab() {
             console.log(data);
             alert('Lab added successfully');
         } else {
-            console.log('error');
+            alert(response.data);
         }
     }
 
