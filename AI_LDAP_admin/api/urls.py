@@ -22,11 +22,14 @@ urlpatterns = [
     path("ldap/lab/insert/", add_user_to_lab, name="add_user_to_lab"),
     path("ldap/lab/excel/export/", export_lab_user, name="export_lab_user"),
     path("ldap/lab/excel/import/", import_lab_user, name="import_lab_user"),
-    #user url
+    path("ldap/lab/remove/", remove_user_from_lab, name="remove_user_from_lab"),
+    path("ldap/lab/mutiple/remove/", remove_multiple_user_from_lab, name="remove_multiple_user_from_lab"),
+         #user url
     path("ldap/user/", get_user_info, name="get_user_info"),
     path("ldap/user/list/", user_list, name="user_list"),
     path("ldap/user/add/", adduser, name="get_lab_info"),
     path("ldap/user/delete/", user_delete, name="user_delete"),
+    path("ldap/user/mutiple/delete/", multiple_user_delete, name="multiple_lab_delete"),
     
     path("ldap/admin/add/", add_admin, name="add_admin"),
     
@@ -38,4 +41,6 @@ urlpatterns = [
     path("password/change/", change_password, name="change_password"),
     path("user/change/", change_user_info, name="change_user_info"),
     
+    # danger for deploy
+    # path("ldap/danger/", remove_all_entr, name="danger"),
 ]

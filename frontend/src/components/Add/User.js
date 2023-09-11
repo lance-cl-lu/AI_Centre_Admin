@@ -2,19 +2,17 @@ import React, { useEffect, useState } from 'react'
 import jwt_decode from "jwt-decode";
 import './User.css'
 import { Button } from 'react-bootstrap';
+import { useLocation } from 'react-router-dom';
 function AddUser() {
     const [lab, setLab] = useState([]);
     const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
-
+    const state = useLocation().state; 
     useEffect(() => {
         fetch('http://120.126.23.245:31190/api/ldap/lab/list/', {
-            method: 'POST',
+            method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                "user": user,
-            }),
         })
         .then(response => response.json())
         .then(data => setLab(data))
@@ -54,23 +52,23 @@ function AddUser() {
     }
 
     return (
-        <div style={{fontFamily: "Comic Sans MS"}}>
+        <div style={{fontFamily: "Comic Sans MS", display: "flex", flexDirection: "column", alignItems: "center"}}>
             <h1>Add User</h1><br></br>
-            <form onSubmit={handleSubmit} style={{display: "inline-flex", flexDirection: "column", alignItems: "flex-start"}}>
-                <div className='form-div'><label className='form-label'>First Name:   </label><input type="text" placeholder="Please enter the first name" /></div><br/>
-                <div className='form-div'><label className='form-label'>Last Name:   </label><input type="text" placeholder="Please enter the last name" /></div><br/>
-                <div className='form-div'><label className='form-label'>Username:   </label><input type="text" placeholder="Please enter the username" /></div><br/>
-                <div className='form-div'><label className='form-label'>Email:   </label><input type="text" placeholder="Please enter the email" /></div><br/>
-                <div className='form-div'><label className='form-label'>In which labatory:   </label>{lab && <select>
+            <form onSubmit={handleSubmit} className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", width: "75%"}}>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>First Name:   </label><input type="text" placeholder="Please enter the first name" style={{width: "70%"}} /></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Last Name:   </label><input type="text" placeholder="Please enter the last name" style={{width: "71%"}} /></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Username:   </label><input type="text" placeholder="Please enter the username" style={{width: "72%"}} /></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Email: </label><input type="text" placeholder="Please enter the email" style={{width: "76%"}} /></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>In which labatory:   </label>{lab && <select>
                     {lab.map((lab) => (
                         <option key={lab} value={lab}>
                             {lab}
                         </option>
                     ))}
                 </select>}</div><br/>
-                <div className='form-div'><label className='form-label'>Is Lab Manager:   <input type="checkbox"/></label></div><br/>
-                <div className='form-div'><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" /></div><br/>
-                <div className='form-div'><label className='form-label'>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" /></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Is Lab Manager:   <input type="checkbox"/></label></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" style={{width: "73%"}} /></div><br/>
+                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" style={{width: "66%"}} /></div><br/>
             	<Button type="submit">Submit</Button>
 	    </form>
             <br/>

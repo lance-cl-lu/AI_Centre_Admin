@@ -27,13 +27,13 @@ class GroupSerializer(serializers.ModelSerializer):
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-
+from .models import UserDetail
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        conn = connectLDAP()
-        print(conn)
+        #conn = connectLDAP()
+        #print(conn)
         # Add custom claims
         token['username'] = user.username
         if user.username == 'root':
@@ -41,13 +41,20 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             return token
         # get permission from ldap user description. only labname is user, permission is 2; labnameadmin is admin, permission is 1, admin is superuser, permission is 0
         list = []
-        try:
-            conn.search('cn={},ou=users,dc=example,dc=org'.format(str(user.username)), '(objectclass=posixAccount)', attributes=['Description'])
-            for entry in conn.entries:
-                list.append(entry.Description.value)
-        except:
-            pass
-        token['permission'] = list
+            # get user permission from database
+        user = User.objects.get(username=user.username)
+        # will get more than one userdetail, so use get
+        detail = UserDetail.objects.filter(uid=user.id)
+        for item in detail:
+            print(item.permission)
+            if item.permission == 0:
+                token['permission'] = "root"
+                return token
+            elif item.permission == 1:
+                token['permission'] = "admin"
+                
+            elif item.permission == 2:
+                token['permission'] = "user"
         return token
 
 class MyTokenObtainPairView(TokenObtainPairView):

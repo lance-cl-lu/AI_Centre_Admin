@@ -85,21 +85,6 @@ function Home() {
           }}
         >
         <div className="pie">
-        { unsych_list ? (        
-        
-          <Card className="piediv">
-          <Card.Header style={{color: 'red'}}>
-            <strong className="mr-auto">Warning these user are not synchronous!!!</strong>
-          </Card.Header>
-          <Card.Body style={{marginTop: "10px"}}>
-            {unsych_list.map((user, index) => (
-              <div key={index}>
-                <p style={{color: 'red'}}>{user}</p>
-              </div>
-            ))}
-          </Card.Body>
-        </Card>
-        ) : null}
           <div className="piediv">
             <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of users: {user_num}</h2>
             <PieChart className="PieStyle"

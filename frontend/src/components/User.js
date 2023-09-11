@@ -2,10 +2,10 @@ import React, { useState, useEffect} from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
 import Button from 'react-bootstrap/Button';
-import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
 import Row from 'react-bootstrap/Row';
-
+import Col from 'react-bootstrap/Col';
+import ListGroup from 'react-bootstrap/ListGroup';
 function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
@@ -13,7 +13,7 @@ function User() {
     useEffect(() => {
         getuserinfo();
     }, [state]);
-
+    console.log(state)
     let getuserinfo = async () => {
         document.getElementsByClassName('userPage')[0].style.opacity = 0;
 
@@ -32,7 +32,6 @@ function User() {
             setTimeout(() => {
                 setUser(data);
                 setPermissions(data.permission);
-                // refresh edit button
                 document.getElementById("editandsave").className = "btn btn-primary";
                 document.getElementById("editandsave").innerHTML = "Edit";
             }, 400);
@@ -71,7 +70,7 @@ function User() {
             document.getElementById("inputFirstName").readOnly = false;
             document.getElementById("inputLastName").readOnly = false;
             document.getElementById("inputEmail").readOnly = false;
-            document.getElementById("inputRadio").readOnly = false;
+            document.getElementById("inputRadio").disabled = false;
             document.getElementById("editandsave").innerHTML = "Save";
             document.getElementById("editandsave").className = "btn btn-success";
         }
@@ -79,7 +78,7 @@ function User() {
             document.getElementById("inputFirstName").readOnly = true;
             document.getElementById("inputLastName").readOnly = true;
             document.getElementById("inputEmail").readOnly = true;
-            document.getElementById("inputRadio").readOnly = true;
+            document.getElementById("inputRadio").disabled = true;
             document.getElementById("editandsave").innerHTML = "Edit";
             document.getElementById("editandsave").className = "btn btn-primary";
             //saveUser();
@@ -108,55 +107,56 @@ function User() {
     return (
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
-                <Form className='form-css'>
-                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextUsername" style={{flexWrap: 'nowrap'}}>
+                <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", display:"flex", flexWrap:"wrap"}}>
+                    <Form.Group as={Col} style={{width:"51%"}}>
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
                         <Form.Label column sm="2">
                             Username
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputUsername" style={{flexWrap: 'nowrap'}} defaultValue={user && user.username} />
+                            <Form.Control plaintext readOnly id="inputUsername" style={{width:"20%"}} defaultValue={user && user.username} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}} controlId="formPlaintextFirstName">
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
                         <Form.Label column sm="2">
                             First Name
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputFirstName" style={{flexWrap: 'nowrap'}} defaultValue={user && user.first_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
+                            <Form.Control plaintext readOnly id="inputFirstName" style={{width:"20%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.first_name} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}} controlId="formPlaintextLastName">
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
                         <Form.Label column sm="2">
                             Last Name
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputLastName" style={{flexWrap: 'nowrap'}} defaultValue={user && user.last_name} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}} />
+                            <Form.Control plaintext readOnly id="inputLastName" style={{width:"20%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.last_name} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}} controlId="formPlaintextEmail">
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
                         <Form.Label column sm="2">
                             Email
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputEmail" style={{flexWrap: 'nowrap'}} defaultValue={user && user.email} style={{border:"ridge 1px", width:"20%", borderRadius:"10px"}}/>
+                            <Form.Control plaintext readOnly id="inputEmail" style={{width:"20%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.email} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" controlId="formPlaintextRole">
-                        { user && permissions && Object.keys(permissions).map((key, index) => {
-                            return(
-                                <div key={index} style={{display:'flex', width:"100%", alignItems: "center", flexWrap: 'nowrap'}}>
-                                    <Form.Label column sm="2">
-                                        {key}
-                                    </Form.Label>
-                                    <Col sm="1">
-                                        {/* if admin radio true */}
-                                        <Form.Check type="checkbox" name={key} id="inputRadio" checked={permissions[key] === "admin" ? true : false} readOnly/>
-                                    </Col>
-                                </div>
-                            )
-                        })}
                     </Form.Group>
+                    <Form.Group as={Col} style={{width:"50%"}}>
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', alignItems:"start"}}>
+                        <Form.Label column sm="2" style={{width:"40%"}}>
+                            Current Group:
+                        </Form.Label>
+                        <ListGroup>
+                            {permissions && Object.keys(permissions).map((permission, index) => (
+                                <ListGroup.Item key={index} style={ {border:"ridge 0px", width:"20%", borderRadius:"10px", listStyleType:"disc", marginLeft:"10px", marginTop:"10px"}}>{permissions[index]}</ListGroup.Item>
+                            ))}
+                        </ListGroup>
 
+
+                    </Form.Group>
+                    </Form.Group>
+                </Form>
                     <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
                         Edit
                     </Button>
@@ -166,7 +166,6 @@ function User() {
                     <Button variant='dark' className='buttom-button'>
                         {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
                     </Button>
-                </Form>
         </div>
     )
 }

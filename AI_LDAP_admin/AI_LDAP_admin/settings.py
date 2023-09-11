@@ -27,6 +27,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+PASSWORD_HASHERS = [
+    'api.models.PasslibLDAPMD5PasswordHasher',
+]
 
 # Application definition
 

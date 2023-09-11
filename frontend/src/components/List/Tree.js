@@ -15,12 +15,12 @@ function TreeView() {
         <div className='tree'>
             <AuthProvider>
                 <Card>
-                    <Card.Header>Tree View</Card.Header>
-                    <div className="TreeStyle">
+                    <Card.Header>Group List</Card.Header>
+                    <div className="TreeStyle" style={{fontFamily: "Segoe UI"}}>
                     {userlist && userlist.map((user, index) => (
-                        <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }} style={{textDecoration: 'none', color: "blue"}} className="TreeStyle">{user.group_dn}</Link>} type="Lab" key={index}>
+                        <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }} style={{textDecoration: 'none', color: "#242424"}} className="TreeStyle">{user.group_dn}</Link>} type="Group" key={index}>
                             {user.member_uids.map((memberUid, index) => (
-                                <Tree content={<Link to="/user" state={{ "user": memberUid }} style={{textDecoration: 'none', color: "blue"}}>{memberUid}</Link>} type="User" key={index}/>
+                                <Tree content={<Link to="/user" state={{ "user": memberUid }} style={{textDecoration: 'none', color: "#242424"}}>{memberUid}</Link>} type="User" key={index}/>
                             ))}
                         </Tree>
                     ))}

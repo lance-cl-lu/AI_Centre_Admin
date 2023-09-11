@@ -15,7 +15,7 @@ function AddLab() {
             console.log(data);
             alert('Lab added successfully');
         } else {
-            console.log('error');
+            alert(response.data);
         }
     }
 

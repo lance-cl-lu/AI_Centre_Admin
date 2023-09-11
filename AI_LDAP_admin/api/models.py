@@ -12,9 +12,34 @@ class UserDetail(models.Model):
     
     def __str__(self):
         return self.uid.username + '\t' + self.labname.name + '\t' + str(self.permission)
-class UploadExcel(models.Model):
-    excel = models.FileField(upload_to='excel')
-    upload_user = models.ForeignKey(User, on_delete=models.CASCADE)
-    def __str__(self):
-        return self.excel.name
     
+from passlib.hash import ldap_md5
+from django.contrib.auth.hashers import BasePasswordHasher
+
+class PasslibLDAPMD5PasswordHasher(BasePasswordHasher):
+    algorithm = "passlib_ldap_md5"
+
+    def encode(self, password, salt):
+        assert password is not None
+
+        # Use passlib to hash the password using ldap_md5
+        hashed_password = ldap_md5.hash(password)
+
+        # Return the encoded password
+        return f'{self.algorithm}${hashed_password}'
+
+    def verify(self, password, encoded):
+        algorithm, hashed_password = encoded.split('$', 1)
+        assert algorithm == self.algorithm
+
+        # Use passlib to verify the password against the hashed value
+        return ldap_md5.verify(password, hashed_password)
+
+    def safe_summary(self, encoded):
+        algorithm, hashed_password = encoded.split('$', 1)
+        return {
+            'algorithm': algorithm,
+            'hash': hashed_password,
+        }
+    def set_password(self, password):
+        self.password = ldap_md5.hash(password)
