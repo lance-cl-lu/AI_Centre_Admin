@@ -1,7 +1,7 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import jwt_decode from "jwt-decode";
-
+import { Button, Form } from "react-bootstrap";
 function LabImport() {
     const lab = useLocation().state['lab'];
     const user = localStorage.getItem('authToken')
@@ -42,15 +42,23 @@ function LabImport() {
         alert('An error occurred while adding Excel');
         }
     };
+    const handeCancel = () => {
+        // back to previous page
+        window.history.back();
+    };
+
     return (
         <div>
-          <h1>Add Excel</h1>
-          <form onSubmit={handleSubmit}>
-            <label>Excel:{    }</label>
-            <input type="file" name="file" id="file" accept=".xlsx" />
-            <br />
-            <input type="submit" value="Submit" className="btn btn-primary" />
-          </form>
+          <h1>Add Excel for {lab}</h1>
+          <Form onSubmit={handleSubmit}>
+            <Form.Group controlId="file">
+                <Form.Label>Excel File</Form.Label>
+                <Form.Control type="file" accept=".xlsx" />
+            </Form.Group>
+            <Button variant="primary" type="submit">Submit</Button>
+            <Button variant="warning" type="button" onClick={handeCancel} style={{ margin: '1rem' }}>Cancel and Back</Button>
+        </Form>
+
         </div>
       );
 }
