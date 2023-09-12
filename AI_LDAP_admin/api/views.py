@@ -204,7 +204,7 @@ def get_user_all_permission(user):
     group_list = []
     for group in user.groups.all():
         ## add permission and groupname into list
-        group_list.append({group.name: get_permission(user.username, group.name)})
+        group_list.append({"permission": get_permission(user.username, group.name), "groupname": group.name})
     return group_list
 
         
