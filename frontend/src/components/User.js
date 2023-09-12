@@ -28,7 +28,7 @@ function User() {
         })
         .then(response => response.json())
         .then(data => {
-
+            console.log('Success:', data);
             setTimeout(() => {
                 setUser(data);
                 setPermissions(data.permission);
@@ -114,36 +114,36 @@ function User() {
                 <h1>User {state && state.user}</h1><br/>
                 <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", display:"flex", flexWrap:"wrap"}}>
                     <Form.Group as={Col} style={{width:"51%"}}>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                         <Form.Label column sm="2">
                             Username
                         </Form.Label>
-                        <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputUsername" style={{width:"20%"}} defaultValue={user && user.username} />
+                        <Col sm="10" style={{width:"100%"}}>
+                            <Form.Control plaintext readOnly id="inputUsername" style={{width:"50%"}} defaultValue={user && user.username} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                         <Form.Label column sm="2">
                             First Name
                         </Form.Label>
-                        <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputFirstName" style={{width:"20%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.first_name} />
+                        <Col sm="10" style={{width:"100%"}}>
+                            <Form.Control plaintext readOnly id="inputFirstName" style={{width:"50%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.first_name} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                         <Form.Label column sm="2">
                             Last Name
                         </Form.Label>
-                        <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputLastName" style={{width:"20%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.last_name} />
+                        <Col sm="10" style={{width:"100%"}}>
+                            <Form.Control plaintext readOnly id="inputLastName" style={{width:"50%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.last_name} />
                         </Col>
                     </Form.Group>
-                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100vw"}}>
+                    <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
                         <Form.Label column sm="2">
                             Email
                         </Form.Label>
-                        <Col sm="10">
-                            <Form.Control plaintext readOnly id="inputEmail" style={{width:"20%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.email} />
+                        <Col sm="10" style={{width:"100%"}}>
+                            <Form.Control plaintext readOnly id="inputEmail" style={{width:"52%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.email} />
                         </Col>
                     </Form.Group>
                     </Form.Group>

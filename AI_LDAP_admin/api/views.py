@@ -203,9 +203,12 @@ def get_user_all_permission(user):
     # get current group
     group_list = []
     for group in user.groups.all():
-        group_list.append(group.name)
-    # get user permission from database
+        ## add permission and groupname into list
+        group_list.append({group.name: get_permission(user.username, group.name)})
     return group_list
+
+        
+    #return group_list
 
 @api_view(['POST'])
 def get_user_info(request):

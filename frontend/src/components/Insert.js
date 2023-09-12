@@ -60,22 +60,19 @@ function Insert() {
         }
     }
 
-        
-    
-
 
     return (
         <div>
-            <h1 style={{fontSize:"36px", fontFamily:"Open Sans", fontWeight:"bold"}}>Insert a existing user to {state.group}</h1>
+            <h1 style={{fontSize:"36px", fontFamily:"Open Sans", fontWeight:"bold"}}>Insert an existed user to {state.group}</h1>
             {/* use a inpute text box to re the option and add all user from outsideuser to selection's opsion */}
                 <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px"}}>
                     <Form.Group className="mb-3" style={{display: 'flex', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'baseline', margin: '20px 0px'}}>
                         <Form.Label>Search User</Form.Label>
                         <Form.Control type="text" placeholder="Search User" onChange={handleInputChange} value={inputValue} style={{border: '1px solid #ced4da', borderRadius: '12px', width: '40%', height: '38px'}}/>
                         <Form.Select aria-label="Default select example" id="adduserlab" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '40%', height: '38px'}}>
-                            <option>Choose a user</option>
+                            <option>Choose an user</option>
                             {reg_user.map((user, index) => (
-                                <option value={user}>{user}</option>
+                                index === 0 ? <option value={user} selected>{user}</option> : <option value={user}>{user}</option>
                             ))}
                         </Form.Select>
                         <Form.Check type="checkbox" label="Admin" style={{margin: '0px 20px'}} id='admin' />
