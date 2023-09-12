@@ -70,7 +70,10 @@ function User() {
             document.getElementById("inputFirstName").readOnly = false;
             document.getElementById("inputLastName").readOnly = false;
             document.getElementById("inputEmail").readOnly = false;
-            document.getElementById("inputRadio").disabled = false;
+            document.getElementById("inputFirstName").style.backgroundColor = "#b4d9d7";
+            document.getElementById("inputLastName").style.backgroundColor = "#b4d9d7";
+            document.getElementById("inputEmail").style.backgroundColor = "#b4d9d7";
+            
             document.getElementById("editandsave").innerHTML = "Save";
             document.getElementById("editandsave").className = "btn btn-success";
         }
@@ -78,7 +81,9 @@ function User() {
             document.getElementById("inputFirstName").readOnly = true;
             document.getElementById("inputLastName").readOnly = true;
             document.getElementById("inputEmail").readOnly = true;
-            document.getElementById("inputRadio").disabled = true;
+            document.getElementById("inputFirstName").style.backgroundColor = "#fff";
+            document.getElementById("inputLastName").style.backgroundColor = "#fff";
+            document.getElementById("inputEmail").style.backgroundColor = "#fff";
             document.getElementById("editandsave").innerHTML = "Edit";
             document.getElementById("editandsave").className = "btn btn-primary";
             //saveUser();

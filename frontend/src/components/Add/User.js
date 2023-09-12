@@ -6,6 +6,8 @@ import { useLocation } from 'react-router-dom';
 function AddUser() {
     const [lab, setLab] = useState([]);
     const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
+    const group = useLocation().state['group'];
+    console.log(group);
     const state = useLocation().state; 
     useEffect(() => {
         fetch('http://120.126.23.245:31190/api/ldap/lab/list/', {
@@ -60,11 +62,12 @@ function AddUser() {
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Username:   </label><input type="text" placeholder="Please enter the username" style={{width: "72%"}} /></div><br/>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Email: </label><input type="text" placeholder="Please enter the email" style={{width: "76%"}} /></div><br/>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>In which labatory:   </label>{lab && <select>
-                    {lab.map((lab) => (
-                        <option key={lab} value={lab}>
-                            {lab}
-                        </option>
-                    ))}
+                    {/* if group is not null, then set the default value of the select tag to group */}
+                    { group !=='null' ? <option value={group}>{group}</option> : <option value="null">Please select the labatory</option>}
+                    {lab.map((lab, index) => {
+                        return <option key={index} value={lab}>{lab}</option>
+                    })}
+
                 </select>}</div><br/>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Is Lab Manager:   <input type="checkbox"/></label></div><br/>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" style={{width: "73%"}} /></div><br/>

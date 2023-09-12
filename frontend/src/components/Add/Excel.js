@@ -31,7 +31,7 @@ function AddExcel() {
 
       if (response.status === 200) {
         alert('Excel added successfully');
-        window.location.reload();
+        window.location.href = '/';
       } else {
         alert('Excel create error');
       }

@@ -1,20 +1,16 @@
-from django.shortcuts import render
 from django.http import HttpResponse, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from ldap3 import *
-import json, re, random 
+import json, random 
 from django.contrib.auth.models import User, Group
+import datetime, openpyxl
 
-import base64
 from passlib.hash import ldap_md5
 
-from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail
-from django.contrib.auth.password_validation import validate_password
 
 
 def get_gid():
@@ -321,7 +317,6 @@ def change_user_info(request):
     except:
         return Response(status=500)
 
-import datetime, openpyxl
 
 @api_view(['POST'])
 def excel(request):
@@ -336,15 +331,19 @@ def excel(request):
         # read and pritn the excel file, attribute ["Username","Group","password","email", "firstname", "lastname", "permission"]
         worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
         for row in worksheet.iter_rows():
+            if row[0].value != "Username" | row[1].value != "Group" | row[2].value != "password" | row[3].value != "email" | row[4].value != "firstname" | row[5].value != "lastname" | row[6].value != "permission":
+                return JsonResponse({'message': 'excel format is not valid'}, status=400)
+            
             if row[0].value == "Username":
                 continue
             # check the permission is valid or not
             if row[6].value != 'admin' and row[6].value != 'user' and row[6].value != 'root':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
             # password is or not valid(all integer)
-            if isinstance(row[2].value, int) is True:
+            if isinstance(row[2].value, int) is True | row[2].value == '':
                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
             # check the user is exist or not
+        
         for row in worksheet.iter_rows():
             if User.objects.filter(username=row[0].value).exists() is True:
                 # check the user is in the group or not
@@ -493,12 +492,14 @@ def import_lab_user(request):
         # intialize check all false
         # check all data is valid or not with database, use pandas
         for row in worksheet.iter_rows():
+            if row[0] != "Username" | row[1] != "password" | row[2] != "email" | row[3] != "firstname" | row[4] != "lastname" | row[5] != "permission":
+                return JsonResponse({'message': 'excel format is not valid'}, status=400)
             if row[0].value == "Username":
                 continue
             if row[5].value != 'admin' and row[5].value != 'user':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
             # password is or not valid(all integer)
-            if isinstance(row[1].value, int) is True:
+            if isinstance(row[1].value, int) is True | row[1].value == '':
                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
         # add user into django
         for row in worksheet.iter_rows():
