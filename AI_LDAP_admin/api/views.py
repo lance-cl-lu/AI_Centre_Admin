@@ -342,7 +342,7 @@ def excel(request):
             if row[6].value != 'admin' and row[6].value != 'user' and row[6].value != 'root':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
             # password is or not valid(all integer)
-            if isinstance(row[2].value, int) is True | row[2].value == '':
+            if isinstance(row[2].value, int) is True:
                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
             # check the user is exist or not
         
@@ -503,7 +503,7 @@ def import_lab_user(request):
             if row[5].value != 'admin' and row[5].value != 'user':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
             # password is or not valid(all integer)
-            if isinstance(row[1].value, int) is True | row[1].value == '':
+            if isinstance(row[1].value, int) is True:
                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
         # add user into django
         for row in worksheet.iter_rows():
