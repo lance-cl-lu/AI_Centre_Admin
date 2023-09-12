@@ -336,7 +336,7 @@ def excel(request):
             
             # if there is any empty value
             for item in row:
-                if item.value == '':
+                if item.value == None:
                     return JsonResponse({'message': 'excel format is not valid'}, status=400)
             # check the permission is valid or not
             if row[6].value != 'admin' and row[6].value != 'user' and row[6].value != 'root':
@@ -498,7 +498,7 @@ def import_lab_user(request):
                 continue
             ## if there is any data is null, return error
             for item in row:
-                if item.value == '':
+                if item.value == None:
                     return JsonResponse({'message': 'excel format is not valid'}, status=400)
             if row[5].value != 'admin' and row[5].value != 'user':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
