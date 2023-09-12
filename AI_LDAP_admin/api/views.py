@@ -331,9 +331,6 @@ def excel(request):
         # read and pritn the excel file, attribute ["Username","Group","password","email", "firstname", "lastname", "permission"]
         worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
         for row in worksheet.iter_rows():
-            if row[0].value != "Username" | row[1].value != "Group" | row[2].value != "password" | row[3].value != "email" | row[4].value != "firstname" | row[5].value != "lastname" | row[6].value != "permission":
-                return JsonResponse({'message': 'excel format is not valid'}, status=400)
-            
             if row[0].value == "Username":
                 continue
             
@@ -496,8 +493,6 @@ def import_lab_user(request):
         # intialize check all false
         # check all data is valid or not with database, use pandas
         for row in worksheet.iter_rows():
-            if row[0] != "Username" | row[1] != "password" | row[2] != "email" | row[3] != "firstname" | row[4] != "lastname" | row[5] != "permission":
-                return JsonResponse({'message': 'excel format is not valid'}, status=400)
             if row[0].value == "Username":
                 continue
             ## if there is any data is null, return error
