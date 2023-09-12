@@ -133,7 +133,7 @@ function Lab() {
                 return newlabinfo;
             })
             setSortinliece(false);
-            document.getElementById("buttonSort").innerHTML = "Sort(Descending)";
+            document.getElementById("buttonSort").innerHTML = "Sort with descending";
         } else {
             let newlabinfo = {...labinfo};
             newlabinfo.memberUid = Object.keys(newlabinfo.memberUid)
@@ -153,7 +153,7 @@ function Lab() {
             , {});
             setLabinfo(newlabinfo);
             setSortinliece(true);
-            document.getElementById("buttonSort").innerHTML = "Sort(Ascending)";
+            document.getElementById("buttonSort").innerHTML = "Sort with ascending";
         }
     }
     const handleOnclick_mutiple_delete = async() => {
@@ -252,24 +252,24 @@ function Lab() {
                         <option value={user}>{user}</option>
                     )) : null}
                 </select>*/}
-                <Button style={{marginLeft: "2vh", backgroundColor:"navy"}}><Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Add</Link></Button>
-                <Button style={{marginLeft: "2vh", backgroundColor: "purple"}}><Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF"}}>Create</Link></Button>
+                <Button style={{marginLeft: "2vh", backgroundColor:"navy"}}><Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Add existing user</Link></Button>
+                <Button style={{marginLeft: "2vh", backgroundColor: "purple"}}><Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF"}} state={{"group": state.lab}}>Add new user</Link></Button>
                 <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
                 <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
-                <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export</Button>
-                <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Import</Link></Button>
-                <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort(Ascending)</Button>
+                <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
+                <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Import Group</Link></Button>
+                <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort with ascending</Button>
             </Container>
             <br/>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>
                 <div style={{ justifyContent: "center"}}>
-                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} ><input type="checkbox" style={{width:"20px", height:"12px"}} id="checkAll" onChange={handleCheckAllChange} /></th>
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} ><input type="checkbox" style={{width:"20px", height:"12px", display: "inline-flex", justifyContent: "center", alignItems: "center", cursor: "pointer"}} id="checkAll" onChange={handleCheckAllChange} /></th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} >Username</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>permission</th>
-                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>移出</th>
-                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>編輯</th>
-                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>刪除</th>
-                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>改密碼</th>
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Remove</th>
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Edit</th>
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Delete</th>
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Change password</th>
                 </div>
                     { labinfo && labinfo.memberUid ? Object.keys(labinfo.memberUid).map((memberUid, index) => (
                         <tr>
@@ -295,7 +295,7 @@ function Lab() {
                                     }
                                 }
                             }>Remove</Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF"}} >編輯</Link></Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF"}} >Edit</Link></Button></div></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="danger" onClick={  
                                 async() => {
                                     if(window.confirm("Are you sure to delete this user?")){
@@ -314,8 +314,8 @@ function Lab() {
                                         }
                                     }
                                 }
-                            } >刪除</Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>改密碼</Link></Button></div></td>
+                            } >Delete</Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
                         </tr>
                     )) : null  
                     }
