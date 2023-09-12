@@ -335,8 +335,9 @@ def excel(request):
                 continue
             
             # if there is any empty value
-            if row[0].value == '' | row[1].value == '' | row[2].value == '' | row[3].value == '' | row[4].value == '' | row[5].value == '' | row[6].value == '':
-                return JsonResponse({'message': 'excel format is not valid'}, status=400)
+            for item in row:
+                if item.value == '':
+                    return JsonResponse({'message': 'excel format is not valid'}, status=400)
             # check the permission is valid or not
             if row[6].value != 'admin' and row[6].value != 'user' and row[6].value != 'root':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
@@ -496,8 +497,9 @@ def import_lab_user(request):
             if row[0].value == "Username":
                 continue
             ## if there is any data is null, return error
-            if row[0].value == '' | row[1].value == '' | row[2].value == '' | row[3].value == '' | row[4].value == '' | row[5].value == '':
-                return JsonResponse({'message': 'there is row data null'}, status=400)
+            for item in row:
+                if item.value == '':
+                    return JsonResponse({'message': 'excel format is not valid'}, status=400)
             if row[5].value != 'admin' and row[5].value != 'user':
                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
             # password is or not valid(all integer)
