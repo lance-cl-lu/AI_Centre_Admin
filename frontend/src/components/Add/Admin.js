@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Button } from "react-bootstrap";
 import { SERVICE_IP, SERVICE_PORT} from '../Urls';
 
 function AddAdmin() {
@@ -48,6 +49,7 @@ function AddAdmin() {
                     <option value={user} id={user}>{user}</option>
                 ))}</select><br/>
                 <input type="submit" value="Submit" />
+                <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
             </form>
         </div>
     )

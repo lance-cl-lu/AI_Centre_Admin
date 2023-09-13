@@ -1,16 +1,14 @@
 import React, { useState, useEffect} from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import Row from 'react-bootstrap/Row';
-import Col from 'react-bootstrap/Col';
-import ListGroup from 'react-bootstrap/ListGroup';
+import { Button, Col, Form, ListGroup, Row } from 'react-bootstrap';
+import jwt_decode from "jwt-decode";
 import { SERVICE_IP, SERVICE_PORT} from './Urls';
 function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
     const [permissions, setPermissions] = useState({});
+    const [ userPermission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
     useEffect(() => {
         getuserinfo();
     }, [state]);
@@ -74,7 +72,14 @@ function User() {
             document.getElementById("inputFirstName").style.backgroundColor = "#b4d9d7";
             document.getElementById("inputLastName").style.backgroundColor = "#b4d9d7";
             document.getElementById("inputEmail").style.backgroundColor = "#b4d9d7";
-            
+
+            if(userPermission && userPermission === "root"){
+                let check = document.getElementsByClassName("form-check-input");
+                for(let i=0; i<check.length; i++){
+                    check[i].disabled = false;
+                    check[i].style.backgroundColor = "#b4d9d7";
+                }
+            }
             document.getElementById("editandsave").innerHTML = "Save";
             document.getElementById("editandsave").className = "btn btn-success";
         }
@@ -85,8 +90,32 @@ function User() {
             document.getElementById("inputFirstName").style.backgroundColor = "#fff";
             document.getElementById("inputLastName").style.backgroundColor = "#fff";
             document.getElementById("inputEmail").style.backgroundColor = "#fff";
+            if(userPermission && userPermission === "root"){
+            let check = document.getElementsByClassName("form-check-input");
+                for(let i=0; i<check.length; i++){
+                    check[i].disabled = true;
+                    check[i].style.backgroundColor = "#fff";
+                }
+            }
+
             document.getElementById("editandsave").innerHTML = "Edit";
             document.getElementById("editandsave").className = "btn btn-primary";
+            // return the checked and unchecked group and group name
+            let saveUser = () => {
+                let check = document.getElementsByClassName("form-check-input");
+                let group = [];
+                for(let i=0; i<check.length; i++){
+                    if(check[i].checked){
+                        group.push({"groupname":check[i].id, "permission":"admin"});
+                    } else {
+                        group.push({"groupname":check[i].id, "permission":"user"});
+                    }
+                }
+                return group;
+            }
+            console.log(saveUser());
+
+
             //saveUser();
             let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/user/change/', {
                 method: "POST",
@@ -98,6 +127,7 @@ function User() {
                     "firstname": document.getElementById("inputFirstName").value,
                     "lastname": document.getElementById("inputLastName").value,
                     "email": document.getElementById("inputEmail").value,
+                    "permission": saveUser(),
                 }),
             });
             if (response.status===200) {
@@ -150,28 +180,36 @@ function User() {
                     </Form.Group>
                     <Form.Group as={Col} style={{width:"50%"}}>
                     <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', alignItems:"start"}}>
-                        <Form.Label column sm="2" style={{width:"40%"}}>
+                        <Form.Label column sm="2" style={{width:"20%"}}>
                             Current Group:
                         </Form.Label>
-                        <ListGroup>
-                            {permissions && Object.keys(permissions).map((permission, index) => (
-                                <ListGroup.Item key={index} style={ {border:"ridge 0px", width:"20%", borderRadius:"10px", listStyleType:"disc", marginLeft:"10px", marginTop:"10px"}}>{permissions[index]}</ListGroup.Item>
-                            ))}
-                        </ListGroup>
-
-
+                        <Form.Group as={Col} style={{width:"80%"}}>
+                            <ListGroup>
+                            { permissions && Object.keys(permissions).map((key, index) => {
+                                return (
+                                    <ListGroup.Item key={index} style={{border:"none", padding:"0px"}}>
+                                        <Form.Label column sm="2" style={{width:"10%"}}>
+                                            {permissions[key].groupname}
+                                        </Form.Label>
+                                        <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={permissions[key].groupname} style={{width:"10%"}}/>
+                                    </ListGroup.Item>
+                                )
+                            })}
+                            </ListGroup>
+                    </Form.Group>
                     </Form.Group>
                     </Form.Group>
                 </Form>
-                    <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
-                        Edit
-                    </Button>
-                    <Button variant="danger" onClick={deleteUser} className='buttom-button'>
-                        Delete
-                    </Button>
-                    <Button variant='dark' className='buttom-button'>
-                        {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
-                    </Button>
+                <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
+                    Edit
+                </Button>
+                <Button variant="danger" onClick={deleteUser} className='buttom-button'>
+                    Delete
+                </Button>
+                <Button variant='dark' className='buttom-button'>
+                    {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
+                </Button>
+                <Button variant='warning' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
         </div>
     )
 }
