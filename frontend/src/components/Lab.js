@@ -254,7 +254,7 @@ function Lab() {
                 </select>*/}
                 <Button style={{marginLeft: "2vh", backgroundColor:"navy"}}><Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Add existed user</Link></Button>
                 <Button style={{marginLeft: "2vh", backgroundColor: "purple"}}><Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF"}} state={{"group": state.lab}}>Add new user</Link></Button>
-                <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
+                {/* <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button> */}
                 <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
                 <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
                 <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Import Group</Link></Button>
