@@ -3,6 +3,7 @@ import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
 import { Row } from 'react-bootstrap';
+import { SERVICE_IP, SERVICE_PORT} from './Urls';
 
 function Password() {
     let state = useLocation().state;
@@ -16,7 +17,7 @@ function Password() {
                 password.value = ""
                 comfirm.value = ""
             } else {
-                let response = await fetch("http://120.126.23.245:31190/api/password/change/", {
+                let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/password/change/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

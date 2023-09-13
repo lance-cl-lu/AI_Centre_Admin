@@ -34,3 +34,12 @@ urlpatterns = [
     path("user/change/", change_user_info, name="change_user_info"),
     
 ]
+
+# LDAP_IP = '120.126.23.245'
+# LDAP_PORT = '31979'
+
+LDAP_IP = '192.168.8.109'
+LDAP_PORT = '32029'
+
+def get_url():
+    return 'ldap://192.168.8.109:32029'

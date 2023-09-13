@@ -13,6 +13,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
+from . import urls
 
 salt = 'cguadmin'
 
@@ -26,7 +27,8 @@ def get_gid():
 '''
 # connect to LDAP server
 def connectLDAP():
-    server = Server('ldap://120.126.23.245:31979')
+    server = Server('ldap://' + urls.LDAP_IP + ':' + urls.LDAP_PORT)
+    # server = Server('ldap://192.168.8.109:32029')
     conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 

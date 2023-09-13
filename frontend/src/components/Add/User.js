@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react'
 import jwt_decode from "jwt-decode";
 import './User.css'
 import { Button } from 'react-bootstrap';
+import { SERVICE_IP, SERVICE_PORT} from '../Urls';
+
 function AddUser() {
     const [lab, setLab] = useState([]);
     const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
 
     useEffect(() => {
-        fetch('http://120.126.23.245:31190/api/ldap/lab/list/', {
+        fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/lab/list/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -27,7 +29,7 @@ function AddUser() {
     let handleSubmit = async(e) => {
         e.preventDefault();
         if(e.target[6].value===e.target[7].value){
-            let response = await fetch('http://120.126.23.245:31190/api/ldap/user/add/', {
+            let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/user/add/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
