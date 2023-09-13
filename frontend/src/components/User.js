@@ -72,7 +72,7 @@ function User() {
             document.getElementById("inputLastName").style.backgroundColor = "#b4d9d7";
             document.getElementById("inputEmail").style.backgroundColor = "#b4d9d7";
 
-            if(userPermission && userPermission[0].permission === "root"){
+            if(userPermission && userPermission === "root"){
                 let check = document.getElementsByClassName("form-check-input");
                 for(let i=0; i<check.length; i++){
                     check[i].disabled = false;
@@ -89,7 +89,7 @@ function User() {
             document.getElementById("inputFirstName").style.backgroundColor = "#fff";
             document.getElementById("inputLastName").style.backgroundColor = "#fff";
             document.getElementById("inputEmail").style.backgroundColor = "#fff";
-            if(userPermission && userPermission[0].permission === "root"){
+            if(userPermission && userPermission === "root"){
             let check = document.getElementsByClassName("form-check-input");
                 for(let i=0; i<check.length; i++){
                     check[i].disabled = true;
