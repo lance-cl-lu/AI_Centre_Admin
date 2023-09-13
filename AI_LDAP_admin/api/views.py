@@ -11,7 +11,7 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail
-
+from . import urls
 
 def get_gid():
     while True:
