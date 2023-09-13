@@ -131,7 +131,7 @@ function User() {
             });
             if (response.status===200) {
                 alert('User information change successfully');
-                //window.location.href='/'
+                window.location.href='/'
             } else {
                 alert('Something wrong!!!')
             }
