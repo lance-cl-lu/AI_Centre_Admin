@@ -11,7 +11,12 @@ function Navbar() {
   return (
     <nav className="navigation">
         <ul className="navigation-ul">
-          <li><img src="https://aic.cgu.edu.tw/var/file/44/1044/msys_1044_4886051_59674.png" alt="CUG AI Centre" style={{marginLeft: "15px"}}/></li>
+          <li>
+            <a href="https://aic.cgu.edu.tw/" style={{textDecoration: "none", color: "white"}}>
+              <img src="https://aic.cgu.edu.tw/var/file/44/1044/msys_1044_4886051_59674.png" alt="CUG AI Centre" style={{marginLeft: "15px"}}>
+              </img>
+            </a>
+          </li>
           <div className="navigation-ul-div">
             <li className="navigation-ul-li"><Link to="/">Home</Link></li>
             <li className="navigation-ul-li"><Link to="/about">About</Link></li>

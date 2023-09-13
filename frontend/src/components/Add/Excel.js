@@ -1,5 +1,6 @@
 import React from 'react';
 import jwt_decode from 'jwt-decode';
+import { Button, Form } from 'react-bootstrap';
 import { SERVICE_IP, SERVICE_PORT} from '../Urls';
 
 function AddExcel() {
@@ -32,7 +33,7 @@ function AddExcel() {
 
       if (response.status === 200) {
         alert('Excel added successfully');
-        window.location.reload();
+        window.location.href = '/';
       } else {
         alert('Excel create error');
       }
@@ -41,16 +42,23 @@ function AddExcel() {
       alert('An error occurred while adding Excel');
     }
   };
+  const handeCancel = () => {
+    // back to previous page
+    window.history.back();
+  };
 
   return (
     <div>
       <h1>Add Excel</h1>
-      <form onSubmit={handleSubmit}>
-        <label>Excel: </label>
-        <input type="file" name="file" id="file" />
-        <br />
-        <input type="submit" value="Submit" />
-      </form>
+      <Form onSubmit={handleSubmit}>
+        <Form.Group controlId="file">
+          <Form.Label>Excel File</Form.Label>
+          <Form.Control type="file" accept=".xlsx" />
+        </Form.Group>
+        
+        <input type="submit" value="Submit" className="btn btn-primary" />
+        <Button variant="warning" type="button" onClick={handeCancel} style={{ margin: '1rem' }}>Cancel and Back</Button>
+      </Form>
     </div>
   );
 }

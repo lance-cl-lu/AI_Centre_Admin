@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import (
 )
 
 urlpatterns = [
+    path("check/syschronize/", db_ldap_check, name="db_ldap_check"),
     path("home/", user_group_num, name="user_group_num"),
     path("syschronize_ldap/", syschronize_ldap, name="syschronize_ldap"),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -17,11 +18,18 @@ urlpatterns = [
     path("ldap/lab/list/", lab_list, name="lab_list"),
     path("ldap/lab/add/", addlab, name="addlab"),
     path("ldap/lab/delete/", lab_delete, name="lab_delete"),
-    #user url
+    path("ldap/outside/user/", outside_user, name="outside_user"),
+    path("ldap/lab/insert/", add_user_to_lab, name="add_user_to_lab"),
+    path("ldap/lab/excel/export/", export_lab_user, name="export_lab_user"),
+    path("ldap/lab/excel/import/", import_lab_user, name="import_lab_user"),
+    path("ldap/lab/remove/", remove_user_from_lab, name="remove_user_from_lab"),
+    path("ldap/lab/mutiple/remove/", remove_multiple_user_from_lab, name="remove_multiple_user_from_lab"),
+         #user url
     path("ldap/user/", get_user_info, name="get_user_info"),
     path("ldap/user/list/", user_list, name="user_list"),
     path("ldap/user/add/", adduser, name="get_lab_info"),
     path("ldap/user/delete/", user_delete, name="user_delete"),
+    path("ldap/user/mutiple/delete/", multiple_user_delete, name="multiple_lab_delete"),
     
     path("ldap/admin/add/", add_admin, name="add_admin"),
     
@@ -33,6 +41,8 @@ urlpatterns = [
     path("password/change/", change_password, name="change_password"),
     path("user/change/", change_user_info, name="change_user_info"),
     
+    # danger for deploy
+    # path("ldap/danger/", remove_all_entr, name="danger"),
 ]
 
 # LDAP_IP = '120.126.23.245'
