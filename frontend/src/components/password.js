@@ -42,26 +42,45 @@ function Password() {
         <div style={{fontFamily: "Segoe UI"}}>
             <h1>Please enter  new password for {state.user}</h1><br/>
             <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px"}}>
-                <Form.Group as={Row} className="mb-3" controlId="formnewpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
-                    <Form.Label column sm="2">
-                        New Password
-                    </Form.Label>
-                    <Col sm="10">
-                        <Form.Control plaintext id="inputPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '40%', height: '38px'}} />
-                    </Col>
-                </Form.Group>
-                <Form.Group as={Row} className="mb-3" controlId="formnewcomfirmpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
-                    <Form.Label column sm="2">
-                        ComfirmPassword
-                    </Form.Label>
-                    <Col sm="10">
-                        <Form.Control plaintext id="inputComfirmPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '40%', height: '38px'}} />
-                    </Col>
-                </Form.Group>
-                <Button variant="primary" type="button" onClick={handleSubmit} style={{margin: "1rem"}}>
-                    Submit
-                </Button>
+                <div style={{display: "inline-flex", width: "100%"}}>
+                <div style={{width: "60%", textAlign: "center", justifyContent: "center", flexWrap: "nowrap", display: "inline-flex", flexDirection: "column"}}>
+                    <Form.Group as={Row} className="mb-3" controlId="formnewpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
+                        <Form.Label column sm="2">
+                            New Password
+                        </Form.Label>
+                        <Col sm="10">
+                            <Form.Control plaintext id="inputPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
+                        </Col>
+                    </Form.Group>
+                    <Form.Group as={Row} className="mb-3" controlId="formnewcomfirmpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
+                        <Form.Label column sm="2">
+                            ComfirmPassword
+                        </Form.Label>
+                        <Col sm="10">
+                            <Form.Control plaintext id="inputComfirmPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
+                        </Col>
+                    </Form.Group>
+                    <div style={{display: "inline-flex", width: "100%", justifyContent: "center"}}>
+                    <Button variant="primary" type="button" onClick={handleSubmit} style={{margin: "1rem", width: "30%"}}> Submit </Button>
+                    <Button variant='warning' type='button' onClick={() => window.history.back()} style={{margin: "1rem", width: "30%"}}>Cancel and Back</Button>
+                    </div>
+                </div>
+                            {/* List the password rule*/}
+                <div style={{ textAlign: "left", width: "40%"}}>
+                    <h3>Password must contain the following:</h3>
+                    <ul style={{ listStyleType: "none"}}>   
+                        <li>A lowercase letter</li>
+                        <li>A capital (uppercase) letter</li>
+                        <li>A number</li>
+                        <li>Minimum 8 characters</li>
+                        <li>Cannot be all numbers</li>
+                    </ul>
+                </div>
+            </div>
             </Form>
+
+
+
         </div>
     )
 }

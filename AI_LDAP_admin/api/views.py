@@ -304,6 +304,7 @@ def change_user_info(request):
     firstname = data['firstname']
     lastname = data['lastname']
     email = data['email']
+    permission = data['permission']
     try:
         conn = connectLDAP()
         conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
@@ -316,6 +317,30 @@ def change_user_info(request):
         user.last_name = lastname
         user.email = email
         user.save()
+        """
+        permission : [
+            {
+                "groupname": "PUtest",
+                "permission": "admin"
+            },
+            {
+                "groupname": "PUtest2",
+                "permission": "admin"
+            }
+        ]
+        """
+        for permission_obj in permission:
+            # check the permission is same or not
+            if permission_obj['permission'] == get_permission(username, permission_obj['groupname']):
+                pass
+            else:
+                # change the permission
+                detail_obj = UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=permission_obj['groupname']))
+                if permission_obj['permission'] == 'admin':
+                    detail_obj.permission = 1
+                elif permission_obj['permission'] == 'user':
+                    detail_obj.permission = 2
+                detail_obj.save()
         return Response(status=200)
     except:
         return Response(status=500)

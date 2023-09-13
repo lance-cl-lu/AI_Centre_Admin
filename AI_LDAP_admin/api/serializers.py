@@ -41,18 +41,16 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             return token
         # get permission from ldap user description. only labname is user, permission is 2; labnameadmin is admin, permission is 1, admin is superuser, permission is 0
         list = []
-            # get user permission from database
         user = User.objects.get(username=user.username)
         # will get more than one userdetail, so use get
         detail = UserDetail.objects.filter(uid=user.id)
         for item in detail:
-            print(item.permission)
             if item.permission == 0:
                 token['permission'] = "root"
                 return token
-            elif item.permission == 1:
+        for item in detail:
+            if item.permission == 1:
                 token['permission'] = "admin"
-                
             elif item.permission == 2:
                 token['permission'] = "user"
         return token
