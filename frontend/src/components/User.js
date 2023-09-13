@@ -199,15 +199,16 @@ function User() {
                     </Form.Group>
                     </Form.Group>
                 </Form>
-                    <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
-                        Edit
-                    </Button>
-                    <Button variant="danger" onClick={deleteUser} className='buttom-button'>
-                        Delete
-                    </Button>
-                    <Button variant='dark' className='buttom-button'>
-                        {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
-                    </Button>
+                <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
+                    Edit
+                </Button>
+                <Button variant="danger" onClick={deleteUser} className='buttom-button'>
+                    Delete
+                </Button>
+                <Button variant='dark' className='buttom-button'>
+                    {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
+                </Button>
+                <Button variant='warning' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
         </div>
     )
 }

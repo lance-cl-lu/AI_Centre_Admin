@@ -21,9 +21,13 @@ function AddLab() {
     return (
         <div style={{fontFamily: "Comic Sans MS"}}>
             <h1>Add Lab</h1><br/>
-            <Form onSubmit={addLab} style={{height: "10vh", display: "flex", alignItems: "center", justifyContent: "center"}}>
-                <label style={{fontSize:"24px"}}>Labatory Name:   </label><input style={{marginLeft:"2.5vh"}} type="text" placeholder="Please enter the lab name" />
-                <Button type="submit" value="Submit" variant="primary" style={{marginLeft:"2.5vh"}}>Submit</Button>
+            <Form onSubmit={addLab}>
+                <Form.Group controlId="formBasicEmail">
+                    <Form.Label>Group Name</Form.Label>
+                    <Form.Control type="text" placeholder="Enter Lab Name" />
+                </Form.Group>
+                <Button variant="primary" type="submit">Submit</Button>
+                <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
             </Form>
         </div>
     )

@@ -77,7 +77,7 @@ function Insert() {
                         </Form.Select>
                         <Form.Check type="checkbox" label="Admin" style={{margin: '0px 20px'}} id='admin' />
                         <button type="button" class="btn btn-primary" style={{margin: "1rem"}} onClick={handleSubmit}>Submit</button>
-
+                        <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
                     </Form.Group>
                     <div>
                         <p>User Filter: <List>
