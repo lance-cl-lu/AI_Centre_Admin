@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Button } from "react-bootstrap";
 
 function AddAdmin() {
     const [user, setUser] = useState([]);
@@ -47,6 +48,7 @@ function AddAdmin() {
                     <option value={user} id={user}>{user}</option>
                 ))}</select><br/>
                 <input type="submit" value="Submit" />
+                <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
             </form>
         </div>
     )

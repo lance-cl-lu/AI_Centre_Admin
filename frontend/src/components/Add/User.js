@@ -73,6 +73,7 @@ function AddUser() {
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" style={{width: "73%"}} /></div><br/>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" style={{width: "66%"}} /></div><br/>
             	<Button type="submit">Submit</Button>
+                <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
 	    </form>
             <br/>
 
