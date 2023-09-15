@@ -1,12 +1,17 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import Button from 'react-bootstrap/Button';
 import Col from 'react-bootstrap/Col';
 import Form from 'react-bootstrap/Form';
-import { Row } from 'react-bootstrap';
+import { Container, Row } from 'react-bootstrap';
+import { useState } from 'react';
+import jwt_decode from "jwt-decode";
+import Card from 'react-bootstrap/Card';
 
 function Password() {
-    let state = useLocation().state;
-    console.log(state)
+    const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
+    const state = useLocation().state;
+    const [ user ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null)
+    let send_user = permission==='user' ? user : state['user']
     const handleSubmit = async () => {
         let password = document.getElementById("inputPassword")
         let comfirm = document.getElementById("inputComfirmPassword")
@@ -22,7 +27,7 @@ function Password() {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        "username": state.user,
+                        "username": send_user,
                         "password": password.value
                     }),
                 })
@@ -39,9 +44,9 @@ function Password() {
         }
     }
     return (
-        <div style={{fontFamily: "Segoe UI"}}>
-            <h1>Please enter  new password for {state.user}</h1><br/>
-            <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px"}}>
+        <div style={{fontFamily: "Segoe UI", display: "flex", flexDirection: "column", alignItems: "center"}}>
+            <h1>Please enter  new password for {send_user}</h1><br/>
+            <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", width: "75%"}}>
                 <div style={{display: "inline-flex", width: "100%"}}>
                 <div style={{width: "60%", textAlign: "center", justifyContent: "center", flexWrap: "nowrap", display: "inline-flex", flexDirection: "column"}}>
                     <Form.Group as={Row} className="mb-3" controlId="formnewpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
@@ -54,7 +59,7 @@ function Password() {
                     </Form.Group>
                     <Form.Group as={Row} className="mb-3" controlId="formnewcomfirmpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
                         <Form.Label column sm="2">
-                            ComfirmPassword
+                            Comfirm Password
                         </Form.Label>
                         <Col sm="10">
                             <Form.Control plaintext id="inputComfirmPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
@@ -78,7 +83,20 @@ function Password() {
                 </div>
             </div>
             </Form>
+            { permission === "user" ? <Container style={{paddingTop: "20px"}}>
+            <Card className="text-center" style={{boxShadow: "0px 0px 10px 0px #888888", borderRadius: "12px"}}>
+                <Card.Header>Kubeflow</Card.Header>
+                <Card.Body>
+                    <Card.Title>CGU AI Center Kubeflow System</Card.Title>
+                    <Card.Text>
+                    With Kubeflow you can build, deploy, and manage your machine learning workflows on Kubernetes.
+                    </Card.Text>
+                    <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
+                </Card.Body>
+            </Card>
+            </Container> : null
 
+            }
 
 
         </div>

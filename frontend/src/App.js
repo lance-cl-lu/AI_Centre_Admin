@@ -16,7 +16,6 @@ import {Routes, Route } from 'react-router-dom';
 import Infolist from './components/Infolist';
 import "../node_modules/bootstrap/dist/css/bootstrap.min.css";
 import { useContext } from 'react';
-import Help from './components/Help';
 import { useState } from "react"
 import jwt_decode from "jwt-decode"
 import LabImport from './components/Lab/Import';
@@ -24,6 +23,7 @@ import Insert from './components/Insert';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
+  const [ username ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null)
   console.log(permission)
   let resultMatch = /.*admin$/.test(permission);
   return (
@@ -54,7 +54,6 @@ function App() {
                     <Route path="login" element={<Login />} />
                     <Route path="lab" element={<Lab />} />
                     <Route path="user" element={<User />} />
-                    <Route path="help" element={<Help />} />
                     <Route path="/insert" element={<Insert/>}/>
                     <Route path="*" element={<Home />} />
                   </Routes>
@@ -67,19 +66,9 @@ function App() {
           <div className='Centre-Page-user'>
               <div className='Centre-Page-Content-user'>
                   <Routes>
-                    <Route exact path="/" element={<Home />} />
-                    <Route path='password' element={<Password></Password>}/>
-                    <Route path="about/" element={<About />} />
-                    <Route path="add/" element={<Add />} />
-                    <Route path="add/lab" element={<AddLab />} />
-                    <Route path="add/user" element={<AddUser />} />
-                    <Route path="add/admin" element={<AddAdmin />} />
-                    <Route path="add/excel" element={<AddExcel />} />
-                    <Route path="login" element={<Login />} />
-                    <Route path="lab" element={<Lab />} />
-                    <Route path="user" element={<User />} />
-                    <Route path="help" element={<Help />} />
-                    <Route path="*" element={<Home />} />
+                    <Route path="/" element={<Password state={{"user": username}}/>} />
+                    <Route path='about' element={<About/>}/>
+                    <Route path="*" element={<Password state={{"user": username}}/>} />
                   </Routes>
               </div>
           </div>
