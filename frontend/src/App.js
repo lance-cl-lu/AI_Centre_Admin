@@ -67,6 +67,7 @@ function App() {
               <div className='Centre-Page-Content-user'>
                   <Routes>
                     <Route path="/" element={<Password state={{"user": username}}/>} />
+                    <Route path="user" element={<User />} />
                     <Route path='about' element={<About/>}/>
                     <Route path="*" element={<Password state={{"user": username}}/>} />
                   </Routes>
