@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Form} from 'react-bootstrap';
 import { List, ListItem } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import Button from '@mui/material/Button';
+import Button from 'react-bootstrap/Button';
 function Insert() {
     const state = useLocation().state;
     let [outsideuser, setOutsideuser] = useState([]);
@@ -65,6 +65,8 @@ function Insert() {
     return (
         <div>
             <h1 style={{fontSize:"36px", fontFamily:"Open Sans", fontWeight:"bold"}}>Insert an existed user to {state.group}</h1>
+            <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
+            <br/>
             {/* use a inpute text box to re the option and add all user from outsideuser to selection's opsion */}
                 <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px"}}>
                     <Form.Group className="mb-3" style={{display: 'flex', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'baseline', margin: '20px 0px'}}>
@@ -78,7 +80,6 @@ function Insert() {
                         </Form.Select>
                         <Form.Check type="checkbox" label="Admin" style={{margin: '0px 20px'}} id='admin' />
                         <button type="button" class="btn btn-primary" style={{margin: "1rem"}} onClick={handleSubmit}>Submit</button>
-                        <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
                     </Form.Group>
                     <div>
                         <p>User Filter: <List>

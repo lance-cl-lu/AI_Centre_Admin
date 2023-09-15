@@ -51,7 +51,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         for item in detail:
             if item.permission == 1:
                 token['permission'] = "admin"
-            elif item.permission == 2:
+        for item in detail:
+            if item.permission == 2:
                 token['permission'] = "user"
         return token
 

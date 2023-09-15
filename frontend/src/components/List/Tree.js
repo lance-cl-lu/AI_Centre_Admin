@@ -16,7 +16,7 @@ function TreeView() {
             <AuthProvider>
                 <Card>
                     <Card.Header>Group List</Card.Header>
-                    <div className="TreeStyle" style={{fontFamily: "Segoe UI"}}>
+                    <div className="TreeStyle" style={{fontFamily: "Segoe UI", padding: "10px", margin: "10px"}}>
                     {userlist && userlist.map((user, index) => (
                         <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }} style={{textDecoration: 'none', color: "#242424"}} className="TreeStyle">{user.group_dn}</Link>} type="Group" key={index}>
                             {user.member_uids.map((memberUid, index) => (

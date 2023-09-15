@@ -20,14 +20,14 @@ function AddLab() {
 
     return (
         <div style={{fontFamily: "Comic Sans MS"}}>
-            <h1>Add Lab</h1><br/>
+            <h1>Add Group</h1><br/>
             <Form onSubmit={addLab}>
                 <Form.Group controlId="formBasicEmail">
                     <Form.Label>Group Name</Form.Label>
-                    <Form.Control type="text" placeholder="Enter Lab Name" />
+                    <Form.Control type="text" placeholder="Enter Group Name" />
                 </Form.Group>
                 <Button variant="primary" type="submit">Submit</Button>
-                <Button variant="warning" onClick={() => window.location.reload()}>Cancel and Back</Button>
+                <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
             </Form>
         </div>
     )

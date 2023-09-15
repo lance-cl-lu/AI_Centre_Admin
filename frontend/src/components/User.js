@@ -186,8 +186,8 @@ function User() {
                             <ListGroup>
                             { permissions && Object.keys(permissions).map((key, index) => {
                                 return (
-                                    <ListGroup.Item key={index} style={{border:"none", padding:"0px"}}>
-                                        <Form.Label column sm="2" style={{width:"10%"}}>
+                                    <ListGroup.Item key={index} style={{border:"none", padding:"0px", display:"flex", flexWrap:"nowrap", alignItems:"center", justifyContent:"space-evenly"}}>
+                                        <Form.Label column sm="2" style={{width:"90%"}}>
                                             {permissions[key].groupname}
                                         </Form.Label>
                                         <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={permissions[key].groupname} style={{width:"10%"}}/>

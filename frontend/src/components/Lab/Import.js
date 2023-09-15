@@ -35,7 +35,9 @@ function LabImport() {
             alert('Excel added successfully');
             window.location.href = '/';
         } else {
-            alert('Excel create error');
+            // alert error message
+            let data = await response.json();
+            alert(data['message']);
         }
         } catch (error) {
         console.error('Error adding Excel:', error);

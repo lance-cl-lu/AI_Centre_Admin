@@ -62,6 +62,8 @@ def get_group_corresponding_user(request):
         print(detail_obj[0].permission)
         if detail_obj[0].permission == 0:
             for group in Group.objects.all():
+                if(group.name == 'root'):
+                    continue
                 User.objects.filter(groups=group)
                 user_list = []
                 for user in User.objects.filter(groups=group):
@@ -71,6 +73,8 @@ def get_group_corresponding_user(request):
         elif detail_obj[0].permission == 1:
             # get only the group that user is in
             for group_item in detail_obj:
+                if(group_item.labname.name == 'root'):
+                    continue
                 User.objects.filter(groups=group_item.labname)
                 user_list = []
                 for user in User.objects.filter(groups=group_item.labname):
@@ -79,6 +83,8 @@ def get_group_corresponding_user(request):
             return Response(group_list, status=200)
     else:
         for group_item in detail_obj:
+            if(group_item.labname.name == 'root'):
+                continue
             User.objects.filter(groups=group_item.labname)
             user_list = []
             for user in User.objects.filter(groups=group_item.labname):
@@ -175,6 +181,8 @@ def add_admin(request):
     user = User.objects.get(username=username)
     user.is_superuser = True
     user.is_staff = True
+    for group in user.groups.all():
+        user.groups.remove(group)
     user.groups.add(Group.objects.get(name='root'))
     user.save()
     detail = UserDetail.objects.filter(uid=user.id)
@@ -291,8 +299,8 @@ def change_password(request):
     # change password in database
     user = User.objects.get(username=username)
     # check the password is valid or not
-    if user.check_password(password) is not True:
-        return JsonResponse({'message': 'password is not valid'}, status=400)
+    if isinstance(password, int) is True:
+        return Response({'message': 'password is cannot be all number'}, status=400)
     user.set_password(password)
     user.save()
     return Response(status=200)
@@ -374,21 +382,55 @@ def excel(request):
                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
             # check the user is exist or not
         
+        
         for row in worksheet.iter_rows():
+            if Group.objects.filter(name=row[1].value).exists() is False:
+                group = Group.objects.create(name=row[1].value)
+                print("add lab {} success".format(row[1].value))
             if User.objects.filter(username=row[0].value).exists() is True:
                 # check the user is in the group or not
+                subuser_obj = User.objects.get(username=row[0].value)
+                if subuser_obj.email != row[3].value:
+                    subuser_obj.email = row[3].value
+                if subuser_obj.first_name != row[4].value:
+                    subuser_obj.first_name = row[4].value
+                if subuser_obj.last_name != row[5].value:
+                    subuser_obj.last_name = row[5].value
+                subuser_obj.save()
+
                 for group_obj in User.objects.get(username=row[0].value).groups.all():
                     if group_obj.name == row[1].value:
                         # check password is correct or not
                         if User.objects.get(username=row[0].value).check_password(row[2].value) is False:
                             if User.objects.get(username=row[0].value).password == row[2].value:
                                 print("user {} password is correct".format(row[0].value))
-                                continue
-                            user_obj_password = User.objects.get(username=row[0].value)
-                            print(user_obj_password.set_password(row[2].value))
-                            user_obj_password.save()
-                            print("user {} password is not correct, change password to {}".format(row[0].value, row[2].value))
+                            else:
+                                user_obj_password = User.objects.get(username=row[0].value)
+                                print(user_obj_password.set_password(row[2].value))
+                                user_obj_password.save()
+                                print("user {} password is not correct, change password to {}".format(row[0].value, row[2].value))
+                        if get_permission(row[0].value, row[1].value) == row[6].value:
+                            print("user {} permission is correct".format(row[0].value))
+                        else:
+                            UserDetail.objects.get(uid=User.objects.get(username=row[0].value).id, labname=Group.objects.get(name=row[1].value)).delete()
+                            if row[6].value == 'admin':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=row[1].value))
+                            elif row[6].value == 'user':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=row[1].value))
+                            print("user {} permission is not correct, change permission to {}".format(row[0].value, row[6].value))
                         break
+                    else:
+                        try:
+                            User.objects.get(username=row[0].value).groups.add(Group.objects.get(name=row[1].value))
+                            print("add user {} into group {} success".format(row[0].value, row[1].value))
+                            if row[6].value == 'admin':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=row[1].value))
+                            elif row[6].value == 'user':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=row[1].value))
+                            elif row[6].value == 'root':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=0, labname=Group.objects.get(name=row[1].value))
+                        except:
+                            pass
                 continue
             # add user into django
             user_obj = User.objects.create_user(username=row[0].value, password=row[2].value, first_name=row[4].value, last_name=row[5].value, email=row[3].value)
@@ -540,6 +582,15 @@ def import_lab_user(request):
             # if user is exist and in correct group, skip
             user_corresponding_group = False
             if User.objects.filter(username=row[0].value).exists() is True:
+                subuser_obj = User.objects.get(username=row[0].value)
+                if subuser_obj.email != row[2].value:
+                    subuser_obj.email = row[2].value
+                if subuser_obj.first_name != row[3].value:
+                    subuser_obj.first_name = row[3].value
+                if subuser_obj.last_name != row[4].value:
+                    subuser_obj.last_name = row[4].value
+                subuser_obj.save()
+
                 for group_obj in User.objects.get(username=row[0].value).groups.all():
                     if group_obj.name == group:
                         user_corresponding_group = True
@@ -553,6 +604,16 @@ def import_lab_user(request):
                             print(user_obj_password.set_password(row[1].value))
                             user_obj_password.save()
                             print("user {} password is not correct, change password to {}".format(row[0].value, row[1].value))
+
+                        if get_permission(row[0].value, group) == row[5].value:
+                            print("user {} permission is correct".format(row[0].value))
+                        else:
+                            UserDetail.objects.get(uid=User.objects.get(username=row[0].value).id, labname=Group.objects.get(name=group)).delete()
+                            if row[5].value == 'admin':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
+                            elif row[5].value == 'user':
+                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
+                            print("user {} permission is not correct, change permission to {}".format(row[0].value, row[5].value))
                         break
                 if user_corresponding_group is True:
                     continue

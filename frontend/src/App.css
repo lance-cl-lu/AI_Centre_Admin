@@ -5,17 +5,15 @@
 .Centre-Page-user {
   display: inline-flex;
   justify-content: center;
-  width: 100vw;
   height: 80vh;
-  margin-top: 20px;
+  margin-top: 32px;
   transition: opacity 0.5s ease-in-out;
 }
 .Centre-Page {
   display: inline-flex;
   justify-content: center;
-  width: 100vw;
   height: 100%;
-  margin-top: 1em;
+  margin-top: 28px;
   transition: opacity 0.5s ease-in-out;
 }
 .Centre-Page-Content {

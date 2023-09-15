@@ -252,12 +252,12 @@ function Lab() {
                         <option value={user}>{user}</option>
                     )) : null}
                 </select>*/}
-                <Button style={{marginLeft: "2vh", backgroundColor:"navy"}}><Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Add existed user</Link></Button>
-                <Button style={{marginLeft: "2vh", backgroundColor: "purple"}}><Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF"}} state={{"group": state.lab}}>Add new user</Link></Button>
+                <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh"}}><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
+                <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh"}} state={{"group": state.lab}}><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
                 {/* <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button> */}
                 <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
                 <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
-                <Button variant="info" style={{marginLeft: "2vh"}}><Link to="import" state={{'lab': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF"}}>Import Group</Link></Button>
+                <Link to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" >Import Group</Button></Link>
                 <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort with ascending</Button>
             </Container>
             <br/>
@@ -295,7 +295,7 @@ function Lab() {
                                     }
                                 }
                             }>Remove</Button></div></td>*/}
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF"}} >Edit</Link></Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF", height: "100%", width: "100%"}} >Edit</Link></Button></div></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="danger" onClick={  
                                 async() => {
                                     if(window.confirm("Are you sure to delete this user?")){

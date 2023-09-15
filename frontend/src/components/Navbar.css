@@ -6,8 +6,8 @@
 .navigation a {
     color: white;
     text-decoration: none;
-    font-family: Comic Sans MS;
-    font-size: 20px;
+    font-family: 'Lato';
+    font-size: 28px;
 }
 
 .navigation a:hover {
@@ -16,7 +16,7 @@
 }
 .navigation-ul {
     list-style-type: none;
-    height: 10vh;
+    height: 8vh;
     margin: 0;
     padding: 0;
     display: flex;
@@ -45,8 +45,9 @@
 }
 .navigation-ul img {
     float: left;
-    width: 40%;
+    width: 35%;
     height: 60%;
+    padding: 0.5em;
 }
 .navigation-ul li button {
     border: none;
