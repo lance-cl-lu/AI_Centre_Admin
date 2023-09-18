@@ -1,5 +1,3 @@
-# backend-deployment.yaml
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,6 +15,20 @@ spec:
       containers:
         - name: backend
           image: lms025187/backend
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
-
+          volumeMounts:
+            - mountPath: /code/db
+              name: sqlite-data
+      #terminationMessagePath: /dev/termination-log
+      #terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim:
+            claimName: pvc-backend-sqlite

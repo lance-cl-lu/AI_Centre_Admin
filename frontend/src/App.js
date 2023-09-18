@@ -37,7 +37,7 @@ function App() {
       <>
         { resultMatch || permission==='root' ? (
         <>
-        <Navbar />
+        <Navbar className='Navbar'/>
           <div className='Centre-Page'>
               <Infolist/>
               <div className='Centre-Page-Content'>

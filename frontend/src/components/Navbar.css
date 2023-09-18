@@ -54,3 +54,16 @@
     background-color: #333;
 }
 
+@media(max-width: 540px) {
+    .navigation-ul-li {
+        width: 100%;
+        padding: 0;
+        margin: 5px;
+        display: inline-block;
+    }
+    .navigation-ul img{
+        width: 60%;
+        height: 100%;
+        padding: 10px;
+    }
+}

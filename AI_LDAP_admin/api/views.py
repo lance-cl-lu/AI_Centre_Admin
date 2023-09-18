@@ -262,18 +262,17 @@ def lab_delete(request):
 
     
 def user_group_num(requset):
-    conn = connectLDAP()
     group_list = []
     user_list = []
-    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
-    for entry in conn.entries:
-        group_list.append(entry.cn.value)
-    conn.search('dc=example,dc=org', '(objectclass=posixAccount)', attributes=['cn'])
-    for entry in conn.entries:
-        user_list.append(entry.cn.value)
-    conn.unbind()
+    for user_obj in User.objects.all():
+        user_list.append(user_obj.username)
+    for group_obj in Group.objects.all():
+        group_list.append(group_obj.name)
+    # user_num in database
+    user_num = len(User.objects.all())
+    group_num = len(Group.objects.all())
     # return the number of group and user
-    data = {'lab_num': len(group_list), 'lab_list': group_list, 'user_num': len(user_list), 'user_list': user_list}
+    data = {'lab_num': group_num, 'lab_list': group_list, 'user_num': user_num, 'user_list': user_list}
     return JsonResponse(data, safe=False)
 
 

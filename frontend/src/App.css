@@ -50,3 +50,17 @@
 .fade-link:hover {
   color: #f39c12;
 }
+@media (max-width: 540px) {
+  .App {
+    text-align: center;
+    display: inline;
+  }
+  .Navbar {
+    display: inline;
+    width: 100%;
+  }
+  .Centre-Page {
+    display: inline;
+    width: 100%;
+  }
+}

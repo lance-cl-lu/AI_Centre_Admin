@@ -25,3 +25,12 @@
     font-size: 1em;
     font-family: Comic Sans MS;
 }
+
+@media (max-width: 540px) {
+    .infolist {
+        box-sizing: border-box;
+        margin: 2vw;
+        width: 90vw;
+        display: block;
+    }
+}

@@ -33,3 +33,17 @@
     margin-left: 5% ;
     width: 90%;
 }
+
+@media(max-width: 540px) {
+    .piediv {
+        margin: 10px;
+        width: 90%;
+        height: 40vh;
+        display: inline-grid;
+    }
+    .PieStyle {
+        margin: 10px;
+        width: 90%;
+        height: 80%;
+    }
+}
