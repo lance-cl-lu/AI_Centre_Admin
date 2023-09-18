@@ -1,0 +1,13 @@
+# For your PersistentVolume (PV) definition (django-db-pv.yaml)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi  # Should match the storage size in your PV
+  storageClassName: django-db-storage-class  # Use the name of your StorageClass
+

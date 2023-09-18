@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-pv
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 1Gi  # Adjust the storage size as needed
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: django-db-storage-class
+  hostPath:
+    path: /db/  # Path to your db.sqlite3 file
+
