@@ -1,7 +1,0 @@
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: django-db-storage-class  # Choose a meaningful name
-provisioner: your-storage-provisioner  # Replace with the actual storage provisioner (e.g., your-cloud-provider's provisioner)
-# Add other storage class options as needed
-
