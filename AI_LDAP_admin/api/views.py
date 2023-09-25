@@ -82,9 +82,23 @@ def get_group_corresponding_user(request):
                 group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
             return Response(group_list, status=200)
     else:
+        # get user permission from database
+        
         for group_item in detail_obj:
-            if(group_item.labname.name == 'root'):
-                continue
+
+            # if root user, get all group
+            print(group_item.permission)
+            if group_item.permission == 0:
+                for group in Group.objects.all():
+                    if(group.name == 'root'):
+                        continue
+                    User.objects.filter(groups=group)
+                    user_list = []
+                    for user in User.objects.filter(groups=group):
+                        user_list.append(user.username)
+                    group_list.append({"group_dn": group.name, "member_uids": user_list})
+                return Response(group_list, status=200)
+            
             User.objects.filter(groups=group_item.labname)
             user_list = []
             for user in User.objects.filter(groups=group_item.labname):
@@ -153,7 +167,6 @@ def adduser(request):
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
     password = user.password
-    """
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
     conn = connectLDAP()
@@ -164,8 +177,9 @@ def adduser(request):
         'userPassword': ldap_md5.hash(password), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
         'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
         'shadowExpire': '99999', 'Description': [labname]})
-    """
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
+    conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
+    conn.unbind()
     if data['is_lab_manager'] is False:
         detail_db = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
@@ -189,6 +203,22 @@ def add_admin(request):
     for item in detail:
         item.delete()
     UserDetail.objects.create(uid=user, permission=0, labname=Group.objects.get(name='root'))
+    # remove the user from all group in ldap 
+    conn = connectLDAP()
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    for entry in conn.entries:
+        try:
+            conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
+        except:
+            pass
+    # add user into root group
+    conn.modify('cn=root,ou=Groups,dc=example,dc=org', {'memberUid': [(MODIFY_ADD, [username])]})
+    # add description into user 'root'
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+    for entry in conn.entries:
+        conn.modify(entry.entry_dn, {'Description': [(MODIFY_ADD, ['root'])]})
+    conn.unbind()
+
     return Response(status=200)
 
 def syschronize_ldap(requset):
@@ -257,6 +287,10 @@ def lab_delete(request):
     labname = data['lab']
     # delete the group from database
     Group.objects.get(name=labname).delete()
+    conn = connectLDAP()
+    # delete the group from ldap
+    conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
+    conn.unbind()
     
     return Response(status=200)
 
@@ -302,6 +336,14 @@ def change_password(request):
         return Response({'message': 'password is cannot be all number'}, status=400)
     user.set_password(password)
     user.save()
+    user_password = user.password
+    # change password in ldap
+    conn = connectLDAP()
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+    for entry in conn.entries:
+        conn.modify(entry.entry_dn, {'userPassword': [(MODIFY_REPLACE, [user.password.split('$')[1]])]})
+    conn.unbind()
+
     return Response(status=200)
 
 @api_view(['POST'])
@@ -383,6 +425,8 @@ def excel(request):
         
         
         for row in worksheet.iter_rows():
+            if row[0].value == "Username":
+                continue
             if Group.objects.filter(name=row[1].value).exists() is False:
                 group = Group.objects.create(name=row[1].value)
                 print("add lab {} success".format(row[1].value))
@@ -500,6 +544,10 @@ def outside_user(request):
     for user in user_all_obj:
         if user.groups.filter(name=lab).exists() is False:
             outside_user.append(user.username)
+    # if user in the root group, remove it
+    for user in User.objects.filter(groups=Group.objects.get(name='root')):
+        if user.username in outside_user:
+            outside_user.remove(user.username)
     return Response(outside_user, status=200)
 
 @api_view(['POST'])
