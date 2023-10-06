@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: ai-react
-          image: lms025187/react-init
+          image: lms025187/ai_frontend_dev
           ports:
             - containerPort: 3000
 
