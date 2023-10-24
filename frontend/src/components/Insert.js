@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Form} from 'react-bootstrap';
 import { List, ListItem } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import Button from 'react-bootstrap/Button';
+import { SERVICE_IP, SERVICE_PORT} from './Urls';
 function Insert() {
     const state = useLocation().state;
     let [outsideuser, setOutsideuser] = useState([]);
@@ -12,7 +12,7 @@ function Insert() {
     const [selectedOption, setSelectedOption] = useState('');
     useEffect(() => {
         let getuserinfo = async () => {
-            let response = await fetch('http://120.126.23.245:31190/api/ldap/outside/user/', {
+            let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/outside/user/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ function Insert() {
         let username = document.getElementById("adduserlab").value;
         console.log(document.getElementById("admin").checked);
         console.log(username);
-        let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/insert/", {
+        let response = await fetch("http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/lab/insert/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',

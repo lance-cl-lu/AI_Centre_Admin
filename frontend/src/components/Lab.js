@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
 import { Checkbox, Container } from '@mui/material';
+import { SERVICE_IP, SERVICE_PORT} from './Urls';
 function Lab() {
     const location = useLocation();
     const state = location.state;
@@ -17,7 +18,7 @@ function Lab() {
 
 
     let labinfofetch = async() => {
-        let response = await fetch('http://120.126.23.245:31190/api/ldap/lab/', {
+        let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/lab/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -35,7 +36,7 @@ function Lab() {
     }
     const deleteGroup = async() => {
         if(window.confirm("It will also delete all user in Lab, are you sure to do it?")){
-            let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/delete/", {
+            let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/delete/", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -52,7 +53,7 @@ function Lab() {
         if(window.confirm("Are you sure to add this user?")){
             let username = document.getElementById("adduserlab").value;
             console.log(username);
-            let response = await fetch("http://120.126.23.245:31190/api/ldap/lab/insert/", {
+            let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/insert/", {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',

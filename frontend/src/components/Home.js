@@ -7,6 +7,7 @@ import './Home.css'
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import jwt_decode from "jwt-decode";
+import { SERVICE_IP, SERVICE_PORT, KUBEFLOW_HTTP} from './Urls';
 function getRandomBlueShade() {
   const blueComponent = Math.floor(Math.random() * 256).toString(16).padStart(2, '0'); // Random blue component
   const color = `#0000${blueComponent}`; // Fixed red and green, random blue
@@ -30,7 +31,7 @@ function Home() {
   const [PieData, setPieData] = useState([]);
   const [PieData2, setPieData2] = useState([]);
   useEffect(() => {
-    fetch('http://120.126.23.245:31190/api/home/', { // 'http://localhost:31190/api/ldap/home/
+    fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/home/', { // 'http://localhost:31190/api/ldap/home/
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -55,7 +56,7 @@ function Home() {
   const permission = jwt_decode(localStorage.getItem('authToken'))['permission']
   const [ unsych_list, setUnsych_list ] = useState([]);
   useEffect(() => {
-    fetch('http://120.126.23.245:31190/api/check/syschronize/', {
+    fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/check/syschronize/', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -118,7 +119,7 @@ function Home() {
             <Card.Text>
             With Kubeflow you can build, deploy, and manage your machine learning workflows on Kubernetes.
             </Card.Text>
-            <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
+            <Link to={KUBEFLOW_HTTP} className="btn btn-primary">Kubernetes Dashboard</Link>
           </Card.Body>
         </Card>
       </div>

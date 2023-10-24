@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Button, Form } from "react-bootstrap";
+import { SERVICE_IP, SERVICE_PORT} from '../Urls';
 
 function AddAdmin() {
     const [user, setUser] = useState([]);
 
     useEffect(() => {
-        fetch('http://120.126.23.245:31190/api/ldap/user/list/', {
+        fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/user/list/', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -22,7 +23,7 @@ function AddAdmin() {
     let handleSubmit = async(e) => {
         if(window.confirm('Are you sure you want to add this user as an admin?')){
             e.preventDefault();
-            let response = await fetch('http://120.126.23.245:31190/api/ldap/admin/add/', {
+            let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/admin/add/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
