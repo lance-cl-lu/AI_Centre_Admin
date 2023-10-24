@@ -2,6 +2,8 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import jwt_decode from "jwt-decode";
 import { Button, Form } from "react-bootstrap";
+import { SERVICE_IP, SERVICE_PORT} from '../Urls';
+
 function LabImport() {
     const lab = useLocation().state['lab'];
     const user = localStorage.getItem('authToken')
@@ -22,7 +24,7 @@ function LabImport() {
         formData.append('lab', lab);
 
         try {
-        const response = await fetch('http://120.126.23.245:31190/api/ldap/lab/excel/import/', {
+        const response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/lab/excel/import/', {
             method: 'POST',
             headers: {
             // No need for Content-Type when sending FormData

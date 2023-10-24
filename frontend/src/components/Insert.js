@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Form} from 'react-bootstrap';
 import { List, ListItem } from '@mui/material';
 import { useLocation } from 'react-router-dom';
+import { Button } from 'react-bootstrap';
 import { SERVICE_IP, SERVICE_PORT} from './Urls';
 function Insert() {
     const state = useLocation().state;

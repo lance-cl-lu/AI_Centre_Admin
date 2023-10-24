@@ -6,7 +6,7 @@ import { Container, Row } from 'react-bootstrap';
 import { useState } from 'react';
 import jwt_decode from "jwt-decode";
 import Card from 'react-bootstrap/Card';
-import { SERVICE_IP, SERVICE_PORT} from './Urls';
+import { SERVICE_IP, SERVICE_PORT, KUBEFLOW_HTTP} from './Urls';
 
 function Password() {
     const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -92,7 +92,7 @@ function Password() {
                     <Card.Text>
                     With Kubeflow you can build, deploy, and manage your machine learning workflows on Kubernetes.
                     </Card.Text>
-                    <Link to="http://120.126.23.245/" className="btn btn-primary">Kubernetes Dashboard</Link>
+                    <Link to={KUBEFLOW_HTTP} className="btn btn-primary">Kubernetes Dashboard</Link>
                 </Card.Body>
             </Card>
             </Container> : null
