@@ -11,7 +11,7 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail
-
+from . import urls
 
 def get_gid():
     while True:
@@ -23,7 +23,8 @@ def get_gid():
 '''
 # connect to LDAP server
 def connectLDAP():
-    server = Server('ldap://120.126.23.245:31979')
+    # server = Server('ldap://120.126.23.245:31979')
+    server = Server('ldap://' + urls.LDAP_IP + ':' + urls.LDAP_PORT)
     conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 
