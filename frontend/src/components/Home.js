@@ -30,7 +30,7 @@ function Home() {
   const [PieData, setPieData] = useState([]);
   const [PieData2, setPieData2] = useState([]);
   useEffect(() => {
-    fetch('http://120.126.23.231:31190/api/home/', { // 'http://localhost:31190/api/ldap/home/
+    fetch('/api/home/', { // 'http://localhost:31190/api/ldap/home/
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -55,7 +55,7 @@ function Home() {
   const permission = jwt_decode(localStorage.getItem('authToken'))['permission']
   const [ unsych_list, setUnsych_list ] = useState([]);
   useEffect(() => {
-    fetch('http://120.126.23.231:31190/api/check/syschronize/', {
+    fetch('/api/check/syschronize/', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

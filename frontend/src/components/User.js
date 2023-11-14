@@ -15,7 +15,7 @@ function User() {
     let getuserinfo = async () => {
         document.getElementsByClassName('userPage')[0].style.opacity = 0;
 
-        fetch('http://120.126.23.231:31190/api/ldap/user/', {
+        fetch('/api/ldap/user/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -45,7 +45,7 @@ function User() {
 
     const deleteUser = async () => {
         if(!window.confirm("Are you sure you want to delete this user?")) return;
-        let response = await fetch('http://120.126.23.231:31190/api/ldap/user/delete/', {
+        let response = await fetch('/api/ldap/user/delete/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -116,7 +116,7 @@ function User() {
 
 
             //saveUser();
-            let response = await fetch('http://120.126.23.231:31190/api/user/change/', {
+            let response = await fetch('/api/user/change/', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',

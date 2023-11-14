@@ -12,7 +12,7 @@ export const AuthProvider = ({ children }) => {
     const [userlist, setUesrlist] = useState(null)
 
     let getUserList = async ( ) => {
-        let response = await fetch('http://120.126.23.231:31190/api/ldap/info/', {
+        let response = await fetch('http://backend-service.default.svc.cluster.local/api/ldap/info/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

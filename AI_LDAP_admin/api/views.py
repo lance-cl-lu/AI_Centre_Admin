@@ -23,7 +23,7 @@ def get_gid():
 '''
 # connect to LDAP server
 def connectLDAP():
-    server = Server('ldap://120.126.23.245:31979')
+    server = Server('ldap://openldap.default.svc.cluster.local/')
     conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 

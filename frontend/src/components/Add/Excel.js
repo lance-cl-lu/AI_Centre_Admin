@@ -21,7 +21,7 @@ function AddExcel() {
     formData.append('user', user);
 
     try {
-      const response = await fetch('http://120.126.23.231:31190/api/ldap/excel/', {
+      const response = await fetch('/api/ldap/excel/', {
         method: 'POST',
         headers: {
           // No need for Content-Type when sending FormData
