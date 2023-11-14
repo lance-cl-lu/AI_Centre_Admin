@@ -247,14 +247,14 @@ function Lab() {
             <br/>
             <Container style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
                 <span style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</span>
-                {/*<select id="adduserlab" style={{marginLeft: "2vh", borderRadius: "8px"}}>
+                <select id="adduserlab" style={{marginLeft: "2vh", borderRadius: "8px"}}>
                     {outsideuser ? outsideuser.map((user, index) => (
                         <option value={user}>{user}</option>
                     )) : null}
-                </select>*/}
+                </select>
                 <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh"}}><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
                 <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh"}} state={{"group": state.lab}}><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
-                {/* <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button> */}
+                <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
                 <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
                 <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
                 <Link to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" >Import Group</Button></Link>
@@ -266,7 +266,7 @@ function Lab() {
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} ><input type="checkbox" style={{width:"20px", height:"12px", display: "inline-flex", justifyContent: "center", alignItems: "center", cursor: "pointer"}} id="checkAll" onChange={handleCheckAllChange} /></th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} >Username</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>permission</th>
-                    {/*<th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Remove</th>*/}
+                    <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Remove</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Edit</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Delete</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Change password</th>
@@ -276,7 +276,7 @@ function Lab() {
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><input type="checkbox" style={{width:"20px", height:"12px"}} name="checkbox" /></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><Link to="/user" state={{ "user": memberUid }} style={{textDecoration:"none"}}>{memberUid}</Link></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>{labinfo.memberUid[memberUid] === 'admin' ? <span style={{color: "#A020F0"}}>{labinfo.memberUid[memberUid]}</span>: <span>{labinfo.memberUid[memberUid]}</span>}</td>
-                            {/*<td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button style={{ backgroundColor: "Gold", color: "#242424"}} onClick={
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button style={{ backgroundColor: "Gold", color: "#242424"}} onClick={
                                 async() => {
                                     if(window.confirm("Are you sure to remove this user from this lab?")){
                                         let response = await fetch("http://120.126.23.231:31190/api/ldap/lab/remove/", {
@@ -294,7 +294,7 @@ function Lab() {
                                         }
                                     }
                                 }
-                            }>Remove</Button></div></td>*/}
+                            }>Remove</Button></div></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF", height: "100%", width: "100%"}} >Edit</Link></Button></div></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="danger" onClick={  
                                 async() => {

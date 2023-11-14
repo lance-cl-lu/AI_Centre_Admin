@@ -40,12 +40,19 @@ def lab_list(request):
 def user_list(request):
     User_object = User.objects.all()
     user_list = []
+    root_list = []
     for user in User_object:
         user_list.append(user.username)
-    # remote root user
-    User_object = User.objects.filter(groups=Group.objects.get(name='root'))
+    # remote permission is 0
+    for user in UserDetail.objects.filter(permission=0):
+        root_list.append(user.uid.username)
+    # remove root user
+    for user in root_list:
+        user_list.remove(user)
     for user in User_object:
-        user_list.remove(user.username)
+        # if user exit in user_list, remove it
+        if user.username in user_list:
+            user_list.remove(user.username)
     return Response(user_list, status=200)
 
 
@@ -55,6 +62,7 @@ def get_group_corresponding_user(request):
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
     group_list = []
+
     user_obj = User.objects.get(username=user)
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
     print(len(detail_obj))
@@ -541,13 +549,14 @@ def outside_user(request):
     lab = data['lab']
     user_all_obj = User.objects.all()
     outside_user = []
+    print(user_all_obj)
     for user in user_all_obj:
         if user.groups.filter(name=lab).exists() is False:
             outside_user.append(user.username)
-    # if user in the root group, remove it
-    for user in User.objects.filter(groups=Group.objects.get(name='root')):
-        if user.username in outside_user:
-            outside_user.remove(user.username)
+    # if user is permission 0 remove it
+    for user in UserDetail.objects.filter(permission=0):
+        outside_user.remove(user.uid.username)
+    print(outside_user)
     return Response(outside_user, status=200)
 
 @api_view(['POST'])
