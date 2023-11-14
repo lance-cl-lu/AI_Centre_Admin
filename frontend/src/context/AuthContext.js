@@ -30,7 +30,7 @@ export const AuthProvider = ({ children }) => {
 
     let loginUser = async(e )=> {
         e.preventDefault()
-        let response = await fetch('http://120.126.23.231:31190/api/token/', {
+        let response = await fetch('/api/token/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

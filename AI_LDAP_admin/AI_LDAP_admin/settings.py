@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'drf_yasg',
     'corsheaders',
+    'frontend',
 ]
 
 REST_FRAMEWORK = {
@@ -181,3 +182,7 @@ SIMPLE_JWT = {
 
 # cors
 CORS_ALLOW_ALL_ORIGINS = True
+
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]

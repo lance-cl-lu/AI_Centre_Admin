@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: lms025187/backend
+          image: lms025187/backend_dev
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
