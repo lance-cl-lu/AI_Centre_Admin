@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
 import { Checkbox, Container } from '@mui/material';
-import { SERVICE_IP, SERVICE_PORT} from './Urls';
+
 function Lab() {
     const location = useLocation();
     const state = location.state;
@@ -18,7 +18,7 @@ function Lab() {
 
 
     let labinfofetch = async() => {
-        let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/lab/', {
+        let response = await fetch('/api/ldap/lab/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -36,7 +36,7 @@ function Lab() {
     }
     const deleteGroup = async() => {
         if(window.confirm("It will also delete all user in Lab, are you sure to do it?")){
-            let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/delete/", {
+            let response = await fetch('/api/ldap/lab/delete/', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -53,7 +53,7 @@ function Lab() {
         if(window.confirm("Are you sure to add this user?")){
             let username = document.getElementById("adduserlab").value;
             console.log(username);
-            let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/insert/", {
+            let response = await fetch('/api/ldap/lab/insert/', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ function Lab() {
         }
     }
     const handleOnclick_export = async() => {
-        let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/excel/export/", {
+        let response = await fetch('/api/ldap/lab/excel/export/', {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ function Lab() {
         }
     }
     const handleOnclick_import = async() => {
-        let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/import/", {
+        let response = await fetch('/api/ldap/lab/import/', {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
@@ -171,7 +171,7 @@ function Lab() {
                 return;
             }
             console.log(usernames);
-            let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/user/mutiple/delete/", {
+            let response = await fetch('/api/ldap/user/mutiple/delete/', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ function Lab() {
                 return;
             }
             console.log(usernames);
-            let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/mutiple/remove/", {
+            let response = await fetch('/api/ldap/lab/mutiple/remove/', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',
@@ -280,7 +280,7 @@ function Lab() {
                             {/*<td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button style={{ backgroundColor: "Gold", color: "#242424"}} onClick={
                                 async() => {
                                     if(window.confirm("Are you sure to remove this user from this lab?")){
-                                        let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/lab/remove/", {
+                                        let response = await fetch('/api/ldap/lab/remove/', {
                                             method: "POST",
                                             headers: {
                                                 'Content-Type': 'application/json',
@@ -300,7 +300,7 @@ function Lab() {
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="danger" onClick={  
                                 async() => {
                                     if(window.confirm("Are you sure to delete this user?")){
-                                        let response = await fetch("http://" + SERVICE_IP + ":" + SERVICE_PORT + "/api/ldap/user/delete/", {
+                                        let response = await fetch('/api/ldap/user/delete/', {
                                             method: "POST",
                                             headers: {
                                                 'Content-Type': 'application/json',

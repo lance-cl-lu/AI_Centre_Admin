@@ -1,9 +1,9 @@
 import { Button, Form } from "react-bootstrap";
 import { useLocation } from "react-router-dom";
-import { SERVICE_IP, SERVICE_PORT} from '../Urls';
+
 function AddLab() {
     let addLab = async(e) => {
-        let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/lab/add/', {    
+        let response = await fetch('/api/ldap/lab/add/', {    
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

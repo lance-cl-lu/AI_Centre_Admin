@@ -1,6 +1,6 @@
 import { createContext, useState } from "react";
 import jwt_decode from "jwt-decode";
-import { SERVICE_IP, SERVICE_PORT} from '../components/Urls';
+
 
 const AuthContext = createContext();
 
@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
     const [userlist, setUesrlist] = useState(null)
 
     let getUserList = async ( ) => {
-        let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/info/', {
+        let response = await fetch('/api/ldap/info/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
 
     let loginUser = async(e )=> {
         e.preventDefault()
-        let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/token/', {
+        let response = await fetch('/api/token/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

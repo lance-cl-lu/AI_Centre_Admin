@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
 import { Button, Col, Form, ListGroup, Row } from 'react-bootstrap';
 import jwt_decode from "jwt-decode";
-import { SERVICE_IP, SERVICE_PORT} from './Urls';
+
 function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
@@ -16,7 +16,7 @@ function User() {
     let getuserinfo = async () => {
         document.getElementsByClassName('userPage')[0].style.opacity = 0;
 
-        fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/user/', {
+        fetch('/api/ldap/user/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -46,7 +46,7 @@ function User() {
 
     const deleteUser = async () => {
         if(!window.confirm("Are you sure you want to delete this user?")) return;
-        let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/ldap/user/delete/', {
+        let response = await fetch('/api/ldap/user/delete/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -117,7 +117,7 @@ function User() {
 
 
             //saveUser();
-            let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/user/change/', {
+            let response = await fetch('/api/user/change/', {
                 method: "POST",
                 headers: {
                     'Content-Type': 'application/json',

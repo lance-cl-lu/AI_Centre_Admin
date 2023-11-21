@@ -798,3 +798,5 @@ def remove_all_entr(request):
         conn.delete(entry.entry_dn)
     conn.unbind()
     return Response(status=200)
+
+

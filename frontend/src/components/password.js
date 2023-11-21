@@ -6,7 +6,7 @@ import { Container, Row } from 'react-bootstrap';
 import { useState } from 'react';
 import jwt_decode from "jwt-decode";
 import Card from 'react-bootstrap/Card';
-import { SERVICE_IP, SERVICE_PORT, KUBEFLOW_HTTP} from './Urls';
+import { KUBEFLOW_HTTP} from './Urls';
 
 function Password() {
     const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -22,7 +22,7 @@ function Password() {
                 password.value = ""
                 comfirm.value = ""
             } else {
-                let response = await fetch('http://' + SERVICE_IP + ':' + SERVICE_PORT + '/api/password/change/', {
+                let response = await fetch('/api/password/change/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
