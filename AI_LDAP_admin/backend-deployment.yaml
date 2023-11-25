@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend-deployment
+  namespace: kubeflow
 spec:
   replicas: 1
   selector:
@@ -14,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: twentyfouritaiwan/ldap_backend:0.2
+          image: twentyfouritaiwan/ldap_backend:0.36
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -26,8 +27,8 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      securityContext: {}
       terminationGracePeriodSeconds: 30
+      serviceAccountName: jupyter-web-app-service-account
       volumes:
         - name: sqlite-data
           persistentVolumeClaim:

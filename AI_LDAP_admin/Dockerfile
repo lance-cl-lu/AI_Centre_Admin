@@ -14,8 +14,14 @@ COPY requirements.txt /code/
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN pip install kubernetes
+
 # Copy the project code to the container
 COPY . /code/
+RUN mkdir /static
+COPY static /static
+RUN rm -rf /code/static
+# COPY static /
 
 # Expose the port on which the Django app will run (change as needed)
 EXPOSE 8000
