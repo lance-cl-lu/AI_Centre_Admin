@@ -23,6 +23,9 @@ COPY static /static
 RUN rm -rf /code/static
 # COPY static /
 
+# FROM bitnami/kubectl:1.20.9 as kubectl
+# COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/local/bin/
+
 # Expose the port on which the Django app will run (change as needed)
 EXPOSE 8000
 

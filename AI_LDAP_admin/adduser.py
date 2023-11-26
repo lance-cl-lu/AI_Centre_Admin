@@ -37,4 +37,3 @@ f.write('    kind: User\n')
 f.write('    name: '+ EMAIL+'\n')
 f.close()
 os.system('kubectl apply -f dex-profile.yaml')
-
