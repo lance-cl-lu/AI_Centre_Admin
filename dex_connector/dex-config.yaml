@@ -1,0 +1,83 @@
+issuer: http://dex.auth.svc.cluster.local:5556/dex
+storage:
+  type: kubernetes
+  config:
+    inCluster: true
+web:
+  http: 0.0.0.0:5556
+logger:
+  level: "debug"
+  format: text
+oauth2:
+  skipApprovalScreen: true
+enablePasswordDB: true
+staticPasswords:
+- email: illops19@gmail.com
+  hash: $2y$12$lnUsPp4lEO/5XyCLYEVTBeA/OWgeCXxodNtkvVPBh0vh3SjGw5P9K
+  username: m1161002-2
+  userID: e54af41a-019c-4025-925f-340a5a565bda
+
+- email: illops19@gmail.ocm
+  hash: $2y$12$OvZLRE4YM2l1q3A0rdFFP.whQaG8K0ZMq73.sW1dC820jtAHflLQG
+  username: M
+  userID: a9509556-7232-4ad3-b18b-8eb489c36a38
+
+- email: yuch917@gmail.com
+  hash: $2y$12$gPxHkHPP.3/eVrqNjCZ.4OMkAWiCsE1Q/I/Y9FxyRnwTre1EK8ITS
+  username: m1161002-1
+  userID: e13be9af-6a83-480c-954c-e73097e0d38c
+
+- email: m1161002@cgu.edu.tw
+  hash: $2y$12$L9Cer20yRdaSjIumETiJW.dpnTXGE2myCpmkn.T8.hnA/hK6SzGVG
+  username: m1161002
+  userID: 4bfbc71f-1b15-441e-abc6-6cdc915c1e85
+
+- email: m1121002@cgu.edu.tw
+  hash: $2y$12$9bKpoZNOE22zdDWbi1S1huVi7bwGT5oOReFugzjD9qwCFWMZ2YHF6
+  username: M1161002
+  userID: a343d667-d2b8-4d14-8122-d00ad92a5657
+
+- email: m1121002@cgu.edu.tw
+  hash: $2y$12$dXVfwU3SdOwD586x3/nOwOR6rET2/tEPVfYAsWEE7aq/gnKqA9lFu
+  username: M1161002
+  userID: b91316f8-f006-4223-8147-29f4352aac9a
+
+- email: user@example.com
+  hash: $2y$12$4K/VkmDd1q1Orb3xAt82zu8gk7Ad6ReFR4LCP9UeYE90NLiN9Df72
+  # https://github.com/dexidp/dex/pull/1601/commits
+  # FIXME: Use hashFromEnv instead
+  username: user
+  userID: "15841185641784"
+staticClients:
+# https://github.com/dexidp/dex/pull/1664
+- idEnv: OIDC_CLIENT_ID
+  redirectURIs: ["/login/oidc"]
+  name: 'Dex Login Application'
+  secretEnv: OIDC_CLIENT_SECRET
+connectors:
+- type: ldap
+  id: ldap
+  name: LDAP
+  config:
+    host: openldap.default.svc.cluster.local:389
+    insecureNoSSL: true
+    insecureSkipVerify: true
+    startTLS: false
+    redirectURI: https://120.126.23.231/
+    bindDN: cn=admin,dc=example,dc=org #admin dn
+    bindPW: Not@SecurePassw0rd # admin password
+    usernamePrompt: example Username
+    userSearch:
+      baseDN: ou=users,dc=example,dc=org
+      filter: "(objectClass=inetOrgPerson)"
+      username: cn
+      idAttr: DN
+      emailAttr: mail
+      nameAttr: cn
+    groupSearch:
+      baseDN: ou=Groups,dc=example,dc=org
+      filter: "(objectClass=groupOfNames)"
+      userMatchers:
+      - userAttr: cn
+        groupAttr: member
+      nameAttr: cn

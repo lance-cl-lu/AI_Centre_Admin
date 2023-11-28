@@ -20,6 +20,7 @@ COPY . /code/
 # Expose the port on which the Django app will run (change as needed)
 EXPOSE 8000
 
-# Run the Django development server
+# migrate the database and run the server
+
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 
