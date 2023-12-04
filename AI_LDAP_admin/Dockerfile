@@ -20,7 +20,7 @@ RUN pip install kubernetes
 COPY . /code/
 RUN mkdir /static
 COPY static /static
-RUN rm -rf /code/static
+# RUN rm -rf /code/static
 # COPY static /
 
 # FROM bitnami/kubectl:1.20.9 as kubectl
