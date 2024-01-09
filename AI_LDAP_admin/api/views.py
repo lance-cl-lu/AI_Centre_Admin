@@ -82,6 +82,7 @@ def get_group_corresponding_user(request):
                     user_list.append(user.username)
                 group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
             return Response(group_list, status=200)
+        return Response(group_list, status=200)
     else:
         # get user permission from database
         
@@ -106,6 +107,7 @@ def get_group_corresponding_user(request):
                 user_list.append(user.username)
             group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list}) 
         return Response(group_list, status=200)            
+    return Response(group_list, status=200)
 
 def get_all_user_permission(user, labname):
     memberuid = {}
