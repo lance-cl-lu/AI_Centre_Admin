@@ -14,8 +14,17 @@ COPY requirements.txt /code/
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN pip install kubernetes
+
 # Copy the project code to the container
 COPY . /code/
+RUN mkdir /static
+COPY static /static
+# RUN rm -rf /code/static
+# COPY static /
+
+# FROM bitnami/kubectl:1.20.9 as kubectl
+# COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/local/bin/
 
 # Expose the port on which the Django app will run (change as needed)
 EXPOSE 8000

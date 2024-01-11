@@ -3,11 +3,13 @@ from django.contrib.auth.models import User, Group
 from .models import UserDetail
 from ldap3 import *
 import json
-
+from . import urls
 
 
 def connectLDAP():
-    server = Server('ldap://120.126.23.245:31979')
+    server = Server('ldap://' + urls.LDAP_IP + ':' + urls.LDAP_PORT)
+    # server = Server(urls.get_url())
+    # server = Server('ldap://120.126.23.245:31979')
     conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 

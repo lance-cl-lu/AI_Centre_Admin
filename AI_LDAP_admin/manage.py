@@ -2,10 +2,18 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+import shutil
 
+src = 'db.sqlite3'
+dst = 'db/db.sqlite3'
 
 def main():
     """Run administrative tasks."""
+    if os.path.exists(dst):
+        print('The file exists!')
+    else:
+        shutil.copy(src, dst)
+        print('The file does not exist.')
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "AI_LDAP_admin.settings")
     try:
         from django.core.management import execute_from_command_line

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: ai-react
-          image: lms025187/react-init
+          image: twentyfouritaiwan/ldap_frontend:0.2
           ports:
             - containerPort: 3000
 
