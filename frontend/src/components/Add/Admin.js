@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button, Form } from "react-bootstrap";
 
-
 function AddAdmin() {
     const [user, setUser] = useState([]);
 

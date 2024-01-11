@@ -3,7 +3,6 @@ import jwt_decode from "jwt-decode";
 import './User.css'
 import { Button, Form } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
-
 function AddUser() {
     const [lab, setLab] = useState([]);
     const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);

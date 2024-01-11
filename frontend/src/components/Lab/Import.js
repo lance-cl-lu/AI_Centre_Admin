@@ -2,7 +2,6 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import jwt_decode from "jwt-decode";
 import { Button, Form } from "react-bootstrap";
-
 function LabImport() {
     const lab = useLocation().state['lab'];
     const user = localStorage.getItem('authToken')

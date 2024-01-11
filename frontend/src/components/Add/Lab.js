@@ -1,6 +1,5 @@
 import { Button, Form } from "react-bootstrap";
 import { useLocation } from "react-router-dom";
-
 function AddLab() {
     let addLab = async(e) => {
         let response = await fetch('/api/ldap/lab/add/', {    

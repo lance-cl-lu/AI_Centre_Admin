@@ -3,7 +3,6 @@ import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
 import { Button, Col, Form, ListGroup, Row } from 'react-bootstrap';
 import jwt_decode from "jwt-decode";
-
 function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);

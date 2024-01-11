@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Form} from 'react-bootstrap';
 import { List, ListItem } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import { Button } from 'react-bootstrap';
-
+import Button from 'react-bootstrap/Button';
 function Insert() {
     const state = useLocation().state;
     let [outsideuser, setOutsideuser] = useState([]);
@@ -47,7 +46,7 @@ function Insert() {
         let username = document.getElementById("adduserlab").value;
         console.log(document.getElementById("admin").checked);
         console.log(username);
-        let response = await fetch('/api/ldap/lab/insert/', {
+        let response = await fetch("/api/ldap/lab/insert/", {
             method: "POST",
             headers: {
                 'Content-Type': 'application/json',
