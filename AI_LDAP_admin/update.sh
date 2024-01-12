@@ -1,7 +1,8 @@
 [ -d frontend/templates/ ] || mkdir frontend/templates/
 [ -d frontend/templates/frontend/ ] || mkdir frontend/templates/frontend/
 cp -f ../frontend/build/index.html frontend/templates/frontend/
-rm -rf static/*
+rm -rf static
+mkdir static
 cp -a ../frontend/build/* static/
 rm -f static/index.html
 
