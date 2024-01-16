@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import jwt_decode from "jwt-decode";
 import './User.css'
-import { Button, Form } from 'react-bootstrap';
+import { Button, Form, FloatingLabel } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
+
 function AddUser() {
     const [lab, setLab] = useState([]);
     const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
@@ -25,6 +26,9 @@ function AddUser() {
     }, []);
 
     let handleSubmit = async(e) => {
+        console.log(e.target[8].value);
+        console.log(e.target[9].value);
+        console.log(e.target[10].value);
         e.preventDefault();
         if(e.target[6].value===e.target[7].value){
             let response = await fetch('/api/ldap/user/add/', {
@@ -40,6 +44,9 @@ function AddUser() {
                     "lab":e.target[4].value,
                     "is_lab_manager": e.target[5].checked,
                     "password":e.target[6].value,
+                    "cpu_quota":e.target[8].value,
+                    "mem_quota":e.target[9].value,
+                    "gpu_quota":e.target[10].value,
                 }),
             });
             if(response.status===200){
@@ -114,6 +121,41 @@ function AddUser() {
                         <Form.Label style={{width:"20%"}}>Confirm Password</Form.Label>
                         <Form.Control type="password" placeholder="Enter Password Again" />
                     </Form.Group>
+                    <Form.Group>
+                        CPU Usage
+                        <FloatingLabel
+                            controlId="floatingSelect"
+                            label="CPU Quota"
+                            className="mb-3"
+                        >
+                        <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="8" defaultValue="0.5" step="0.1" />
+                        </FloatingLabel>
+                    </Form.Group>
+                    <Form.Group>
+                        Memory Usage
+                        <FloatingLabel
+                            controlId="floatingSelect"
+                            label="Memory Quota (GiB)"
+                            className="mb-3"
+                        >
+                        <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="1" step="0.1"/>
+                        </FloatingLabel>
+                    </Form.Group>
+                    <Form.Group>
+                        GPU Usage
+                        <FloatingLabel
+                            controlId="floatingSelect"
+                            label="GPU Quota"
+                            className="mb-3"
+                        >
+                            <Form.Select>
+                                <option defaultChecked>0</option>
+                                <option>1</option>
+                                <option>2</option>
+                            </Form.Select>
+                        </FloatingLabel>
+                    </Form.Group>
+
                     <Button variant="primary" type="submit" style={{ margin: '1rem' }}>Submit</Button>
                     <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
                 </Form>
