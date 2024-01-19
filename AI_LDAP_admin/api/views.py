@@ -17,15 +17,18 @@ import yaml
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
 
-# how to write python coe to add two string
-
 def create_profile(username, email, cpu, gpu, memory):
     try:
         config.load_incluster_config()
     except ConfigException:
         config.load_kube_config()
 
-    memoryStr = memory + "Gi"
+
+    # print("create profile: username = {}, email = {}, cpu = {}, gpu = {}, memory = {}".format(username, email, cpu, gpu, memory))
+
+    memoryStr = str(int(float(memory)*1000)) + "Mi"
+    
+    # print(" memoryStr = {}".format(memoryStr))
     
     profile_data = {
         "apiVersion": "kubeflow.org/v1",
@@ -224,6 +227,10 @@ def adduser(request):
     password = data['password']
     labname = data['lab']
     email = data['email']
+    cpu_quota = data['cpu_quota']
+    mem_quota = data['mem_quota']
+    gpu_quota = data['gpu_quota']
+
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
     password = user.password
@@ -246,7 +253,7 @@ def adduser(request):
         detail_db = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
     
-    create_profile(username, email)
+    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota)
     
     return Response(status=200)
 
