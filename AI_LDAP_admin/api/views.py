@@ -17,13 +17,16 @@ import yaml
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
 
+# how to write python coe to add two string
 
-def create_profile(username, email):
+def create_profile(username, email, cpu, gpu, memory):
     try:
         config.load_incluster_config()
     except ConfigException:
         config.load_kube_config()
 
+    memoryStr = memory + "Gi"
+    
     profile_data = {
         "apiVersion": "kubeflow.org/v1",
         "kind": "Profile",
@@ -34,6 +37,13 @@ def create_profile(username, email):
             "owner": {
                 "kind": "User",
                 "name": email
+            },
+            "resourceQuotaSpec": {
+                "hard": {
+                    "cpu": cpu,
+                    "memory": memoryStr,
+                    "requests.nvidia.com/gpu": gpu
+                }
             }
         }
     }
