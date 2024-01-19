@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN pip install kubernetes
 
+RUN apt-get update
+RUN apt-get install vim -y
+
 # Copy the project code to the container
 COPY . /code/
 RUN mkdir /static

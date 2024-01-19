@@ -13,6 +13,46 @@ from .serializers import UserSerializer, GroupSerializer
 from .models import UserDetail
 from . import urls
 
+import yaml
+from kubernetes import client, config
+from kubernetes.config.config_exception import ConfigException
+
+
+def create_profile(username, email):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    profile_data = {
+        "apiVersion": "kubeflow.org/v1",
+        "kind": "Profile",
+        "metadata": {
+            "name": username
+        },
+        "spec": {
+            "owner": {
+                "kind": "User",
+                "name": email
+            }
+        }
+    }
+
+    api_instance = client.CustomObjectsApi()
+
+    group = 'kubeflow.org'  # CRD 的 Group
+    version = 'v1'            # CRD 的 Version
+    plural = 'profiles'       # CRD 的 Plural
+
+    api_response = api_instance.create_cluster_custom_object(
+        group=group,
+        version=version,
+        plural=plural,
+        body=profile_data,
+    )
+
+    print(api_response)
+
 def get_gid():
     while True:
         uid = random.randint(10000, 65535)  # Generate a random UID within the range of user IDs
@@ -195,6 +235,8 @@ def adduser(request):
     elif data['is_lab_manager'] is True:
         detail_db = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
+    
+    create_profile(username, email)
     
     return Response(status=200)
 
