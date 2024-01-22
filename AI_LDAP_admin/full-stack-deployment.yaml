@@ -53,6 +53,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
+  namespace: ldap
 spec:
   type: NodePort
-  selector:git status
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 8000
+      nodePort: 31190
+      targetPort: 8000
