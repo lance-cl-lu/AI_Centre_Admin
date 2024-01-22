@@ -397,20 +397,21 @@ def get_user_info(request):
         try:
             cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
         except:
-            cpu = ""
+            cpu = "0"
         try:
             gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
         except:
-           gpu = ""
+           gpu = "0"
         try:
             memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+            memory = memory[:-2]
         except:
-            memory = ""
+            memory = "0"
     else:
         print("Profile not found")
-        memory = ""
-        cpu = ""
-        gpu = ""
+        memory = "0"
+        cpu = "0"
+        gpu = "0"
     memoryStr = str(float(memory)/1000)    
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     data = {
