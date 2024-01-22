@@ -12,7 +12,7 @@ rules:
 - apiGroups:
   - kubeflow.org
   resources:
-  - profile
+  - profiles
   verbs:
   - get
   - list
