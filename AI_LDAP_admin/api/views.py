@@ -22,7 +22,7 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
-def create_profile(username, email, cpu, gpu, memory):
+def create_profile(username, email, cpu, gpu, memory, manager):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -38,7 +38,10 @@ def create_profile(username, email, cpu, gpu, memory):
         "apiVersion": "kubeflow.org/v1",
         "kind": "Profile",
         "metadata": {
-            "name": username
+            "name": username,
+            "annotations": {
+                "manager": manager
+            }
         },
         "spec": {
             "owner": {
@@ -292,6 +295,7 @@ def adduser(request):
     password = data['password']
     labname = data['lab']
     email = data['email']
+    is_lab_manager = data['is_lab_manager']
     cpu_quota = data['cpu_quota']
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
@@ -318,7 +322,7 @@ def adduser(request):
         detail_db = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
     
-    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota)
+    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=is_lab_manager)
     
     return Response(status=200)
 
