@@ -1,9 +1,11 @@
 import React, { useState, useEffect} from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
-import { Button, Col, Form, ListGroup, Row, FloatingLabel } from 'react-bootstrap';
+import { Col, Form, ListGroup, Row, FloatingLabel } from 'react-bootstrap';
+import { FormControl, Button } from '@chakra-ui/react';
 import jwt_decode from "jwt-decode";
 import ListNoteBook from './ListNoteBook';
+
 function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
@@ -158,6 +160,11 @@ function User() {
         }
     }
 
+    function handleShowNotebooks() {
+        return () => {
+            document.getElementById("listNotebook").style.display = "block";
+        }
+    }
     return (
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
@@ -196,7 +203,7 @@ function User() {
                             </Col>
                         </Form.Group>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
-                            CPU Usage
+                            CPU Quota
                             <FloatingLabel
                                 controlId="floatingSelect"
                                 label="CPU Quota"
@@ -206,7 +213,7 @@ function User() {
                             </FloatingLabel>
                         </Form.Group>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
-                            Memory Usage
+                            Memory Quota
                             <FloatingLabel
                             controlId="floatingSelect"
                             label="Memory Quota (GiB)"
@@ -216,7 +223,7 @@ function User() {
                             </FloatingLabel>
                         </Form.Group>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
-                            GPU Usage
+                            GPU Quota
                             <FloatingLabel
                             controlId="floatingSelect"
                             label="GPU Quota"
@@ -256,13 +263,16 @@ function User() {
                 <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
                     Edit
                 </Button>
-                <Button variant="danger" onClick={deleteUser} className='buttom-button'>
+                <Button colorScheme='red' onClick={deleteUser} className='buttom-button'>
                     Delete
                 </Button>
-                <Button variant='dark' className='buttom-button'>
+                <Button colorScheme='blackAlpha' className='buttom-button'>
                     {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
                 </Button>
-                <Button variant='warning' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
+                <Button colorScheme='yellow' className='buttom-button' onClick={handleShowNotebooks()}>
+                    Notebook
+                </Button>
+                <Button colorScheme='orange' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
                 <ListNoteBook user={state.user}/>
         </div>
     )

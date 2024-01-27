@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
-import { Checkbox, Container } from '@mui/material';
+import { Checkbox, Container } from '@chakra-ui/react';
 function Lab() {
     const location = useLocation();
     const state = location.state;

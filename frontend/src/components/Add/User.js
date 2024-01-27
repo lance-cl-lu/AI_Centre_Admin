@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import jwt_decode from "jwt-decode";
+//import jwt_decode from "jwt-decode";
 import './User.css'
 import { Button, Form, FloatingLabel } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
 
 function AddUser() {
     const [lab, setLab] = useState([]);
-    const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
+    //const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
     const group = useLocation().state['group'];
     console.log(group);
-    const state = useLocation().state; 
+    //const state = useLocation().state; 
     useEffect(() => {
         fetch('/api/ldap/lab/list/', {
             method: 'GET',
@@ -26,10 +26,12 @@ function AddUser() {
     }, []);
 
     let handleSubmit = async(e) => {
-        console.log(e.target[8].value);
-        console.log(e.target[9].value);
-        console.log(e.target[10].value);
         e.preventDefault();
+        // first_name, last_name and username cannot be empty and have _ and - in the username
+        if(e.target[0].value==='' || e.target[1].value==='' || e.target[2].value==='' || !/^[a-zA-Z0-9_-]*$/.test(e.target[2].value) || !/^[a-zA-Z0-9_-]*$/.test(e.target[0].value) || !/^[a-zA-Z0-9_-]*$/.test(e.target[1].value)){
+            alert('Please enter the first name, last name and username');
+            return;
+        }
         if(e.target[6].value===e.target[7].value){
             let response = await fetch('/api/ldap/user/add/', {
                 method: 'POST',
@@ -122,7 +124,7 @@ function AddUser() {
                         <Form.Control type="password" placeholder="Enter Password Again" />
                     </Form.Group>
                     <Form.Group>
-                        CPU Usage
+                        CPU Quota
                         <FloatingLabel
                             controlId="floatingSelect"
                             label="CPU Quota"
@@ -132,7 +134,7 @@ function AddUser() {
                         </FloatingLabel>
                     </Form.Group>
                     <Form.Group>
-                        Memory Usage
+                        Memory Quota
                         <FloatingLabel
                             controlId="floatingSelect"
                             label="Memory Quota (GiB)"
@@ -142,7 +144,7 @@ function AddUser() {
                         </FloatingLabel>
                     </Form.Group>
                     <Form.Group>
-                        GPU Usage
+                        GPU Quota
                         <FloatingLabel
                             controlId="floatingSelect"
                             label="GPU Quota"

@@ -12,7 +12,7 @@ function Password() {
     const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
     const state = useLocation().state;
     const [ user ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null)
-    let send_user = permission==='user' ? user : state['user']
+    const send_user = permission ==='user' ? user : state['user']
     const handleSubmit = async () => {
         let password = document.getElementById("inputPassword")
         let comfirm = document.getElementById("inputComfirmPassword")
@@ -55,7 +55,7 @@ function Password() {
                             New Password
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext id="inputPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
+                            <Form.Control type="password" plaintext id="inputPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
                         </Col>
                     </Form.Group>
                     <Form.Group as={Row} className="mb-3" controlId="formnewcomfirmpassword" style={{flexWrap: 'nowrap', paddingTop: '20px'}}>
@@ -63,7 +63,7 @@ function Password() {
                             Comfirm Password
                         </Form.Label>
                         <Col sm="10">
-                            <Form.Control plaintext id="inputComfirmPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
+                            <Form.Control type="password" plaintext id="inputComfirmPassword" style={{border: '1px solid #ced4da', borderRadius: '12px', width: '70%', height: '38px'}} />
                         </Col>
                     </Form.Group>
                     <div style={{display: "inline-flex", width: "100%", justifyContent: "center"}}>

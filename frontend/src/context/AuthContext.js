@@ -40,8 +40,19 @@ export const AuthProvider = ({ children }) => {
         })
         let data = await response.json()
         if(response.status===200){
-            setUser(jwt_decode(data.access))
-            localStorage.setItem('authToken', JSON.stringify(data))
+            // check data.access is not null
+            if(data.access) {
+                setUser(jwt_decode(data.access))
+            } else {
+                alert('Username or password is incorrect')
+                return
+            }
+            if(data) {
+                localStorage.setItem('authToken', JSON.stringify(data))
+            } else {
+                localStorage.removeItem('authToken')
+                return
+            }
             window.location.href = '/'
         } else {
             console.log('error')
