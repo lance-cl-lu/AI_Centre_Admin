@@ -20,6 +20,9 @@ import { useState } from "react"
 import jwt_decode from "jwt-decode"
 import LabImport from './components/Lab/Import';
 import Insert from './components/Insert';
+import Footer from './components/Footer';
+import { Grid } from '@chakra-ui/react';
+import ListNoteBook from './components/ListNoteBook';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -27,7 +30,7 @@ function App() {
   console.log(permission)
   let resultMatch = /.*admin$/.test(permission);
   return (
-    <div className="App">
+    <Grid className="App">
         <head className="App-header">
         <title>CGU AI Center Ldap Management System</title>
         <link rel="icon" href="https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww2.cgu.edu.tw%2Fp%2F404-1000-2060.php%3FLang%3Dzh-tw&psig=AOvVaw3uBQ2YAwmw0WOJCXnj9IVr&ust=1693366686377000&source=images&cd=vfe&opi=89978449&ved=0CBAQjRxqFwoTCLj-rND4gIEDFQAAAAAdAAAAABAZ"type="image/x-icon">
@@ -55,11 +58,13 @@ function App() {
                     <Route path="lab" element={<Lab />} />
                     <Route path="user" element={<User />} />
                     <Route path="/insert" element={<Insert/>}/>
+                    <Route path="/listnotebook" element={<ListNoteBook/>}/>
                     <Route path="*" element={<Home />} />
                   </Routes>
               </div>
           </div>
         </>
+        
         ) : (
         <>
         <Navbar />
@@ -75,13 +80,14 @@ function App() {
           </div>
         </>
         )}  
+        <Footer/>
 
         </>
       :
         <Login/>
       }
-    
-    </div>
+      <br/>
+    </Grid>
   );
 }
 
