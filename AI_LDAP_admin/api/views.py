@@ -22,6 +22,37 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
+def list_notebooks(namespace):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    try:
+        # Create an API client for the CustomResourceDefinition API
+        api = client.CustomObjectsApi()
+
+        # Get the profile
+        all_notebooks = api.list_namespaced_custom_object(group, version,  namespace, "notebooks")
+        all_notebooks = all_notebooks.get['items']            
+        
+        Response = {}
+        for notebook in all_notebooks:
+            name = notebook["metadata"]["name"]
+            cpu = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"]
+            memory = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["memory"]
+            removal = ""
+            try:
+                removal = notebook["metadata"]["labels"]["removal"]
+            except:
+                removal = "non-removal"
+        Response = { "name": name, "cpu": cpu, "memory": memory, "removal": removal}
+        return Response
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    
 def create_profile(username, email, cpu, gpu, memory, manager):
     try:
         config.load_incluster_config()
@@ -431,6 +462,10 @@ def get_user_info(request):
         "gpu_quota" : gpu,
         "permission": get_user_all_permission(user_obj.username),
     }
+
+    notebooks = list_notebooks(user_obj.username)
+    print("notebooks = {}".format(notebooks))
+
     return Response(data, status=200)
 
 @api_view(['POST'])
