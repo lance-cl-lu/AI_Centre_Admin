@@ -22,7 +22,7 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
-def create_profile(username, email, cpu, gpu, memory):
+def create_profile(username, email, cpu, gpu, memory, manager):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -38,7 +38,10 @@ def create_profile(username, email, cpu, gpu, memory):
         "apiVersion": "kubeflow.org/v1",
         "kind": "Profile",
         "metadata": {
-            "name": username
+            "name": username,
+            "annotations": {
+                "manager": manager
+            }
         },
         "spec": {
             "owner": {
@@ -292,6 +295,7 @@ def adduser(request):
     password = data['password']
     labname = data['lab']
     email = data['email']
+    is_lab_manager = data['is_lab_manager']
     cpu_quota = data['cpu_quota']
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
@@ -312,13 +316,15 @@ def adduser(request):
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
     conn.unbind()
+    manager = 'user'
     if data['is_lab_manager'] is False:
         detail_db = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
+        manager = 'manager'
         detail_db = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
     
-    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota)
+    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
     
     return Response(status=200)
 
@@ -412,6 +418,7 @@ def get_user_info(request):
         memory = "0"
         cpu = "0"
         gpu = "0"
+        
     memoryStr = str(float(memory)/1000)    
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     data = {
@@ -535,7 +542,7 @@ def change_user_info(request):
         user.email = email
         user.save()
 
-        # replace_profile(username,cpu_quota,gpu_quota,mem_quota)
+        replace_profile(username,cpu_quota,gpu_quota,mem_quota)
 
         """
         permission : [
