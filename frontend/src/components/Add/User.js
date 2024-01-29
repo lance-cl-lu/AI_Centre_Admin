@@ -130,7 +130,7 @@ function AddUser() {
                             label="CPU Quota"
                             className="mb-3"
                         >
-                        <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="8" defaultValue="0.5" step="0.1" />
+                        <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="16" defaultValue="8" step="0.1" />
                         </FloatingLabel>
                     </Form.Group>
                     <Form.Group>
@@ -140,7 +140,7 @@ function AddUser() {
                             label="Memory Quota (GiB)"
                             className="mb-3"
                         >
-                        <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="1" step="0.1"/>
+                        <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="16" step="0.1"/>
                         </FloatingLabel>
                     </Form.Group>
                     <Form.Group>
@@ -151,9 +151,15 @@ function AddUser() {
                             className="mb-3"
                         >
                             <Form.Select>
-                                <option defaultChecked>0</option>
-                                <option>1</option>
+                                <option>0</option>
+                                <option defaultChecked>1</option>
                                 <option>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                                <option>5</option>
+                                <option>6</option>
+                                <option>7</option>
+                                <option>8</option>
                             </Form.Select>
                         </FloatingLabel>
                     </Form.Group>

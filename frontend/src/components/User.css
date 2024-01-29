@@ -18,3 +18,9 @@
 .row {
     flex-wrap: nowrap;
 }
+label {
+    margin-left: 10px;
+}
+input, select {
+    width: 80%;
+}

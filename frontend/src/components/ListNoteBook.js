@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { Table, Thead, Tbody, Tr, Th, Td, TableContainer, TableCaption } from "@chakra-ui/react"
 

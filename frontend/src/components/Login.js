@@ -4,7 +4,7 @@ import { Icon } from '@chakra-ui/react'
 import { GrView } from "react-icons/gr";
 import ContactEmergencyIcon from '@mui/icons-material/ContactEmergency';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
-import { Grid, Input, Button, InputRightElement, InputGroup, FormControl, Flex, FormLabel, Box } from '@chakra-ui/react';
+import { Input, Button, InputRightElement, InputGroup, FormControl, FormLabel, Box } from '@chakra-ui/react';
 import './Login.css'
 function Login() {
     let {loginUser} = useContext(AuthContext)    

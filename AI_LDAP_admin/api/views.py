@@ -452,6 +452,8 @@ def get_user_info(request):
         
     memoryStr = str(float(memory)/1000)    
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
+    notebooks = list_notebooks(user_obj.username)
+    print("notebooks = {}".format(notebooks))
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
@@ -461,10 +463,10 @@ def get_user_info(request):
         "mem_quota" : memoryStr,
         "gpu_quota" : gpu,
         "permission": get_user_all_permission(user_obj.username),
+        "notebooks": notebooks
     }
 
-    notebooks = list_notebooks(user_obj.username)
-    print("notebooks = {}".format(notebooks))
+
 
     return Response(data, status=200)
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect} from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
 import { Col, Form, ListGroup, Row, FloatingLabel } from 'react-bootstrap';
-import { FormControl, Button } from '@chakra-ui/react';
+import { Button, Card, Box } from '@chakra-ui/react';
 import jwt_decode from "jwt-decode";
 import ListNoteBook from './ListNoteBook';
 
@@ -10,9 +10,9 @@ function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
     const [permissions, setPermissions] = useState({});
-    let cpuUsage = 0;
-    let memoryUsage = 0;
-    let GPUUsage = 0;
+    let cpuQuota = 0;
+    let memoryQuota = 0;
+    let gpuQuota = 0;
     const [ userPermission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
     useEffect(() => {
         getuserinfo();
@@ -35,6 +35,12 @@ function User() {
             console.log('Success:', data);
             setTimeout(() => {
                 setUser(data);
+                cpuQuota = data.cpu_quota;
+                memoryQuota = data.mem_quota;
+                gpuQuota = data.gpu_quota;
+                document.getElementById("cpuQuota").value = cpuQuota;
+                document.getElementById("memQuota").value = memoryQuota;
+                document.getElementById("gpuQuota").value = gpuQuota;
                 setPermissions(data.permission);
                 document.getElementById("editandsave").className = "btn btn-primary";
                 document.getElementById("editandsave").innerHTML = "Edit";
@@ -47,6 +53,10 @@ function User() {
             console.error('Error:', error);
         }
         );
+
+        setTimeout(() => {
+            userPermission && userPermission === "root" ? document.getElementById("showNotebooks").style.display = "block" : document.getElementById("showNotebooks").style.display = "none";
+        }, 400);
     }
 
     const deleteUser = async () => {
@@ -162,14 +172,14 @@ function User() {
 
     function handleShowNotebooks() {
         return () => {
-            document.getElementById("listNotebook").style.display = "block";
+            document.getElementById("listNotebook").style.display === "block" ? document.getElementById("listNotebook").style.display = "none" : document.getElementById("listNotebook").style.display = "block";
         }
     }
     return (
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
                 <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", display:"flex", flexWrap:"wrap"}}>
-                    <Form.Group as={Col} style={{width:"51%"}}>
+                    <Form.Group as={Col} style={{width:"50%"}}>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                             <Form.Label column sm="2">
                                 Username
@@ -194,7 +204,7 @@ function User() {
                                 <Form.Control plaintext readOnly id="inputLastName" style={{width:"50%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.last_name} />
                             </Col>
                         </Form.Group>
-                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
+                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                             <Form.Label column sm="2">
                                 Email
                             </Form.Label>
@@ -202,37 +212,43 @@ function User() {
                                 <Form.Control plaintext readOnly id="inputEmail" style={{width:"52%", border:"ridge 1px", borderRadius:"10px"}} defaultValue={user && user.email} />
                             </Col>
                         </Form.Group>
-                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
-                            CPU Quota
+                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
+                            <Form.Label column sm="2">CPU Quota</Form.Label>
                             <FloatingLabel
                                 controlId="floatingSelect"
                                 label="CPU Quota"
                                 className="mb-3"
                             >
-                                <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="8" defaultValue={cpuUsage} step="0.1" readOnly/>
+                                <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="8" defaultValue={cpuQuota} step="0.1" readOnly/>
                             </FloatingLabel>
                         </Form.Group>
-                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
-                            Memory Quota
+                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
+                            <Form.Label column sm="2">Memory Quota</Form.Label>
                             <FloatingLabel
-                            controlId="floatingSelect"
-                            label="Memory Quota (GiB)"
-                            className="mb-3"
+                                controlId="floatingInput"
+                                label="Memory Quota (GiB)"
+                                className="mb-3"
                             >
-                                <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue={memoryUsage} step="0.1" readOnly/>
+                                <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue={memoryQuota} step="0.1" readOnly/>
                             </FloatingLabel>
                         </Form.Group>
-                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', width:"100%"}}>
-                            GPU Quota
+                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
+                            <Form.Label column sm="2">GPU Quota</Form.Label>
                             <FloatingLabel
-                            controlId="floatingSelect"
-                            label="GPU Quota"
-                            className="mb-3"
+                                controlId="floatingInput"
+                                label="GPU Quota"
+                                className="mb-3"
                             >
-                                <Form.Select aria-label="Floating label select example" id="gpuQuota" defaultValue={GPUUsage} readOnly>
+                                <Form.Select aria-label="Floating label select example" id="gpuQuota" defaultValue={gpuQuota} readOnly>
                                     <option value="0">0</option>
                                     <option value="1">1</option>
                                     <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
                                 </Form.Select>
                             </FloatingLabel>
                         </Form.Group>
@@ -260,21 +276,18 @@ function User() {
                     </Form.Group>
                     </Form.Group>
                 </Form>
-                <Button variant="primary" onClick={editreadonly} id='editandsave' className='buttom-button'>
-                    Edit
-                </Button>
-                <Button colorScheme='red' onClick={deleteUser} className='buttom-button'>
-                    Delete
-                </Button>
-                <Button colorScheme='blackAlpha' className='buttom-button'>
-                    {user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}
-                </Button>
-                <Button colorScheme='yellow' className='buttom-button' onClick={handleShowNotebooks()}>
-                    Notebook
-                </Button>
-                <Button colorScheme='orange' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
-                <ListNoteBook user={state.user}/>
+                <Box style={{display:"flex", alignItems:"center", marginTop:"16px", justifyContent:"center"}}>
+                    <Button variant="blue" onClick={editreadonly} id='editandsave' className='buttom-button'>Edit</Button>
+                    <Button colorScheme='red' onClick={deleteUser} className='buttom-button'>Delete</Button>
+                    <Button colorScheme='blackAlpha' className='buttom-button'>{user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}</Button>
+                    <Button colorScheme='yellow' className='buttom-button' onClick={handleShowNotebooks()} style={{display:"none"}} id="showNotebooks">Notebook</Button>
+                    <Button colorScheme='orange' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
+                </Box>
+                <Card className="card-css" id="listNotebook" style={{display:"none"}}>
+                    <ListNoteBook user={state.user}/>
+                </Card>
         </div>
+
     )
 }
 export default User
