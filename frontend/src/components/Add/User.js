@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import jwt_decode from "jwt-decode";
+//import jwt_decode from "jwt-decode";
 import './User.css'
-import { Button, Form } from 'react-bootstrap';
+import { Button, Form, FloatingLabel } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
+
 function AddUser() {
     const [lab, setLab] = useState([]);
-    const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
+    //const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
     const group = useLocation().state['group'];
     console.log(group);
-    const state = useLocation().state; 
+    //const state = useLocation().state; 
     useEffect(() => {
         fetch('/api/ldap/lab/list/', {
             method: 'GET',
@@ -26,6 +27,11 @@ function AddUser() {
 
     let handleSubmit = async(e) => {
         e.preventDefault();
+        // first_name, last_name and username cannot be empty and have _ and - in the username
+        if(e.target[0].value==='' || e.target[1].value==='' || e.target[2].value==='' || !/^[a-zA-Z0-9_-]*$/.test(e.target[2].value) || !/^[a-zA-Z0-9_-]*$/.test(e.target[0].value) || !/^[a-zA-Z0-9_-]*$/.test(e.target[1].value)){
+            alert('Please enter the first name, last name and username');
+            return;
+        }
         if(e.target[6].value===e.target[7].value){
             let response = await fetch('/api/ldap/user/add/', {
                 method: 'POST',
@@ -40,6 +46,9 @@ function AddUser() {
                     "lab":e.target[4].value,
                     "is_lab_manager": e.target[5].checked,
                     "password":e.target[6].value,
+                    "cpu_quota":e.target[8].value,
+                    "mem_quota":e.target[9].value,
+                    "gpu_quota":e.target[10].value,
                 }),
             });
             if(response.status===200){
@@ -114,6 +123,47 @@ function AddUser() {
                         <Form.Label style={{width:"20%"}}>Confirm Password</Form.Label>
                         <Form.Control type="password" placeholder="Enter Password Again" />
                     </Form.Group>
+                    <Form.Group>
+                        CPU Quota
+                        <FloatingLabel
+                            controlId="floatingSelect"
+                            label="CPU Quota"
+                            className="mb-3"
+                        >
+                        <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="16" defaultValue="8" step="0.1" />
+                        </FloatingLabel>
+                    </Form.Group>
+                    <Form.Group>
+                        Memory Quota
+                        <FloatingLabel
+                            controlId="floatingSelect"
+                            label="Memory Quota (GiB)"
+                            className="mb-3"
+                        >
+                        <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="16" step="0.1"/>
+                        </FloatingLabel>
+                    </Form.Group>
+                    <Form.Group>
+                        GPU Quota
+                        <FloatingLabel
+                            controlId="floatingSelect"
+                            label="GPU Quota"
+                            className="mb-3"
+                        >
+                            <Form.Select>
+                                <option>0</option>
+                                <option defaultChecked>1</option>
+                                <option>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                                <option>5</option>
+                                <option>6</option>
+                                <option>7</option>
+                                <option>8</option>
+                            </Form.Select>
+                        </FloatingLabel>
+                    </Form.Group>
+
                     <Button variant="primary" type="submit" style={{ margin: '1rem' }}>Submit</Button>
                     <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
                 </Form>

@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
-import { Checkbox, Container } from '@mui/material';
+import { Checkbox, Container, Box } from '@chakra-ui/react';
 function Lab() {
     const location = useLocation();
     const state = location.state;
@@ -48,25 +48,7 @@ function Lab() {
             }
         }
     }
-    const handleOnclick = async() => {
-        if(window.confirm("Are you sure to add this user?")){
-            let username = document.getElementById("adduserlab").value;
-            console.log(username);
-            let response = await fetch("/api/ldap/lab/insert/", {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({'lab': state.lab, 'user': username})
-            });
-            if(response.status===200) {
-                alert("Add sucessfully!!")
-                window.location.href='/'
-            } else {
-                alert("error");
-            }
-        }
-    }
+
     const handleOnclick_export = async() => {
         let response = await fetch("/api/ldap/lab/excel/export/", {
             method: "POST",
@@ -245,13 +227,10 @@ function Lab() {
         <div>
                 <h1 style={{fontFamily: "Comic Sans MS"}}>{labinfo ? labinfo.labname : null} Members  <ContactPageIcon fontSize='large'/></h1>
             <br/>
-            <Container style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
-                <span style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</span>
-                <select id="adduserlab" style={{marginLeft: "2vh", borderRadius: "8px"}}>
-                    {outsideuser ? outsideuser.map((user, index) => (
-                        <option value={user}>{user}</option>
-                    )) : null}
-                </select>
+            <Container style={{display: "flex", justifyContent: "space-evenly", alignItems: "center"}}>
+                <Box>
+                    <span style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</span>
+                </Box>
                 <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh"}}><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
                 <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh"}} state={{"group": state.lab}}><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
                 <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
@@ -262,7 +241,7 @@ function Lab() {
             </Container>
             <br/>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>
-                <div style={{ justifyContent: "center"}}>
+                <Box style={{ display: "flex" }}>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} ><input type="checkbox" style={{width:"20px", height:"12px", display: "inline-flex", justifyContent: "center", alignItems: "center", cursor: "pointer"}} id="checkAll" onChange={handleCheckAllChange} /></th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}} >Username</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>permission</th>
@@ -270,7 +249,7 @@ function Lab() {
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Edit</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Delete</th>
                     <th style={{height:"9vh", display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>Change password</th>
-                </div>
+                </Box>
                     { labinfo && labinfo.memberUid ? Object.keys(labinfo.memberUid).map((memberUid, index) => (
                         <tr>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><input type="checkbox" style={{width:"20px", height:"12px"}} name="checkbox" /></td>

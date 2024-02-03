@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Form} from 'react-bootstrap';
-import { List, ListItem } from '@mui/material';
+import { List, ListItem } from '@chakra-ui/react';
 import { useLocation } from 'react-router-dom';
 import Button from 'react-bootstrap/Button';
 function Insert() {
@@ -65,7 +65,6 @@ function Insert() {
     return (
         <div>
             <h1 style={{fontSize:"36px", fontFamily:"Open Sans", fontWeight:"bold"}}>Insert an existed user to {state.group}</h1>
-            <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
             <br/>
             {/* use a inpute text box to re the option and add all user from outsideuser to selection's opsion */}
                 <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px"}}>
@@ -91,6 +90,7 @@ function Insert() {
                         </List></p>
                     </div>                
             </Form>
+            <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
         </div>
     );
 }

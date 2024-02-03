@@ -13,6 +13,182 @@ from .serializers import UserSerializer, GroupSerializer
 from .models import UserDetail
 from . import urls
 
+import yaml
+from kubernetes import client, config
+from kubernetes.config.config_exception import ConfigException
+
+# Define the group, version, and plural for the Profile CRD
+group = 'kubeflow.org'  # CRD 的 Group
+version = 'v1'            # CRD 的 Version
+plural = 'profiles'       # CRD 的 Plural
+
+def change_notebooks_removal(namespace, notebook, removal):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+    profile_data = {
+        "metadata": {
+            "labels": {
+                "removal": removal
+            }
+        },
+    }
+    try:
+        # Create an API client for the CustomResourceDefinition API
+        api = client.CustomObjectsApi()
+
+        # Get the profile
+        notebook = api.patch_namespaced_custom_object(group, version, namespace, "notebooks", notebook, body=profile_data)
+        return notebook
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    
+def list_notebooks(namespace):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    try:
+        # Create an API client for the CustomResourceDefinition API
+        api = client.CustomObjectsApi()
+
+        # Get the profile
+        all_notebooks = api.list_namespaced_custom_object(group, version,  namespace, "notebooks")
+        all_notebooks = all_notebooks.get['items']            
+        
+        Response = {}
+        for notebook in all_notebooks:
+            name = notebook["metadata"]["name"]
+            cpu = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"]
+            memory = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["memory"]
+            removal = ""
+            try:
+                removal = notebook["metadata"]["labels"]["removal"]
+            except:
+                removal = "non-removal"
+        Response = { "name": name, "cpu": cpu, "memory": memory, "removal": removal}
+        return Response
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    
+def create_profile(username, email, cpu, gpu, memory, manager):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    # print("create profile: username = {}, email = {}, cpu = {}, gpu = {}, memory = {}".format(username, email, cpu, gpu, memory))
+
+    # memoryStr = str(int(float(memory)*1000)) + "Mi"
+    memoryStr = str(int(float(memory))) + "Gi"
+    # print(" memoryStr = {}".format(memoryStr))
+    
+    profile_data = {
+        "apiVersion": "kubeflow.org/v1",
+        "kind": "Profile",
+        "metadata": {
+            "name": username,
+            "annotations": {
+                "manager": manager
+            }
+        },
+        "spec": {
+            "owner": {
+                "kind": "User",
+                "name": email
+            },
+            "resourceQuotaSpec": {
+                "hard": {
+                    "requests.cpu": cpu,
+                    "requests.memory": memoryStr,
+                    "requests.nvidia.com/gpu": gpu
+                }
+            }
+        }
+    }
+
+    api_instance = client.CustomObjectsApi()
+
+    api_response = api_instance.create_cluster_custom_object(
+        group=group,
+        version=version,
+        plural=plural,
+        body=profile_data,
+    )
+
+    print(api_response)
+
+def get_profile_content(profile_name):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    try:
+        # Create an API client for the CustomResourceDefinition API
+        api = client.CustomObjectsApi()
+
+        # Get the profile
+        profile = api.get_cluster_custom_object(group, version, plural, profile_name)
+
+        return profile
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    
+def get_all_profiles():
+    # get cluster custom object profile of kubeflow.org
+    api = client.CustomObjectsApi()
+    return api.list_cluster_custom_object(group, version, plural)
+    
+def replace_quota_of_profile(profile,cpu,gpu,memory):
+    # create resourceQuotaSpec object
+    # memoryStr = str(int(float(memory)*1000)) + "Mi"
+    memoryStr = str(int(float(memory))) + "Mi"
+    resourceQuotaSpec = {
+        "hard": {
+            "requests.cpu": str(cpu),
+            "requests.memory": str(memoryStr),
+            "requests.nvidia.com/gpu": str(gpu)
+        }
+    }
+    # update resourceQuotaSpec of profile
+    profile['spec']['resourceQuotaSpec'] = resourceQuotaSpec
+
+    api = client.CustomObjectsApi()
+    # replace the profile 
+    api_response = api.replace_cluster_custom_object(
+        group=group,
+        version=version,
+        plural=plural,
+        name=profile['metadata']['name'],
+        body=profile
+    )
+    print(api_response)
+
+def get_all_profiles():
+    # get cluster custom object profile of kubeflow.org
+    api = client.CustomObjectsApi()
+    return api.list_cluster_custom_object(group, version, plural)
+
+# This is a test function
+def replace_all_profiles():
+    profiles = get_all_profiles()['items']
+    for p in profiles:
+        replace_quota_of_profile(p,cpu='8',gpu=1,memory='16')
+
+def replace_profile(name,cpu,gpu,memory):
+    profiles = get_all_profiles()['items']
+    for p in profiles:
+        if p['metadata']['name'] == name:
+            replace_quota_of_profile(p,cpu,gpu,memory)
+
 def get_gid():
     while True:
         uid = random.randint(10000, 65535)  # Generate a random UID within the range of user IDs
@@ -174,6 +350,11 @@ def adduser(request):
     password = data['password']
     labname = data['lab']
     email = data['email']
+    is_lab_manager = data['is_lab_manager']
+    cpu_quota = data['cpu_quota']
+    mem_quota = data['mem_quota']
+    gpu_quota = data['gpu_quota']
+
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
     password = user.password
@@ -190,11 +371,15 @@ def adduser(request):
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [username])]})
     conn.unbind()
+    manager = 'user'
     if data['is_lab_manager'] is False:
         detail_db = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
+        manager = 'manager'
         detail_db = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
+    
+    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
     
     return Response(status=200)
 
@@ -263,11 +448,44 @@ def get_user_info(request):
     data = json.loads(request.body.decode('utf-8'))
     user_obj = User.objects.get(username=data['username'])
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+    profile = get_profile_content(user_obj.username)
+    memory = ""
+    cpu = ""
+    gpu = ""
+    if profile is not None:
+        print(profile)
+        # add try error control below
+        try:
+            cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+        except:
+            cpu = "0"
+        try:
+            gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+        except:
+           gpu = "0"
+        try:
+            memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+            memory = memory[:-2]
+        except:
+            memory = "0"
+    else:
+        print("Profile not found")
+        memory = "0"
+        cpu = "0"
+        gpu = "0"
+        
+    memoryStr = str(float(memory)/1000)    
+    print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
+    notebooks = list_notebooks(user_obj.username)
+    print("notebooks = {}".format(notebooks))
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
         "last_name": user_obj.last_name,
         "email": user_obj.email,
+        "cpu_quota" : cpu,
+        "mem_quota" : memoryStr,
+        "gpu_quota" : gpu,
         "permission": get_user_all_permission(user_obj.username),
     }
     return Response(data, status=200)
@@ -364,6 +582,10 @@ def change_user_info(request):
     lastname = data['lastname']
     email = data['email']
     permission = data['permission']
+    cpu_quota = data['cpu_quota']
+    mem_quota = data['mem_quota']
+    gpu_quota = data['gpu_quota']
+
     try:
         conn = connectLDAP()
         conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
@@ -376,6 +598,9 @@ def change_user_info(request):
         user.last_name = lastname
         user.email = email
         user.save()
+
+        replace_profile(username,cpu_quota,gpu_quota,mem_quota)
+
         """
         permission : [
             {

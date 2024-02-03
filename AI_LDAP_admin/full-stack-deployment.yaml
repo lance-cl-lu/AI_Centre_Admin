@@ -1,8 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ldap
+
+---  
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend-deployment
-  namespace: kubeflow
+  namespace: ldap
 spec:
   replicas: 1
   selector:
@@ -15,32 +21,31 @@ spec:
     spec:
       containers:
         - name: backend
-          image: twentyfouritaiwan/ldap_backend:0.38
+          image: lms025187/backend_dev:v0.2
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
           volumeMounts:
             - mountPath: /code/db
               name: sqlite-data
-            - name: kubectl-binary
-              mountPath: /usr/bin/kubectl
-              readOnly: true
       #terminationMessagePath: /dev/termination-log
       #terminationMessagePolicy: File
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
+      serviceAccountName: backend-service-account
       terminationGracePeriodSeconds: 30
-      serviceAccountName: jupyter-web-app-service-account
       volumes:
         - name: sqlite-data
           persistentVolumeClaim:
             claimName: pvc-backend-sqlite
+
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: pvc-backend-sqlite
+  namespace: ldap
 spec:
   accessModes:
     - ReadWriteOnce
@@ -48,6 +53,7 @@ spec:
   resources:
     requests:
       storage: 10Gi
+
 ---
 apiVersion: v1
 kind: Service
@@ -63,3 +69,10 @@ spec:
       port: 8000
       nodePort: 31190
       targetPort: 8000
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-service-account
+  namespace: ldap
