@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
-import { Checkbox, Container, Box } from '@chakra-ui/react';
+import { Checkbox, Container, Box, Text } from '@chakra-ui/react';
 function Lab() {
     const location = useLocation();
     const state = location.state;
@@ -229,7 +229,7 @@ function Lab() {
             <br/>
             <Container style={{display: "flex", justifyContent: "space-evenly", alignItems: "center"}}>
                 <Box>
-                    <span style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</span>
+                    <Text style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</Text>
                 </Box>
                 <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh"}}><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
                 <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh"}} state={{"group": state.lab}}><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
@@ -253,9 +253,9 @@ function Lab() {
                     { labinfo && labinfo.memberUid ? Object.keys(labinfo.memberUid).map((memberUid, index) => (
                         <tr>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><input type="checkbox" style={{width:"20px", height:"12px"}} name="checkbox" /></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><Link to="/user" state={{ "user": memberUid }} style={{textDecoration:"none"}}>{memberUid}</Link></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>{labinfo.memberUid[memberUid] === 'admin' ? <span style={{color: "#A020F0"}}>{labinfo.memberUid[memberUid]}</span>: <span>{labinfo.memberUid[memberUid]}</span>}</td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button style={{ backgroundColor: "Gold", color: "#242424"}} onClick={
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><Link to="/user" state={{ "user": memberUid }} style={{textDecoration:"none", border: "none"}}>{memberUid}</Link></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}>{labinfo.memberUid[memberUid] === 'admin' ? <span style={{color: "#A020F0", border: "none"}}>{labinfo.memberUid[memberUid]}</span>: <span>{labinfo.memberUid[memberUid]}</span>}</td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button style={{ backgroundColor: "Gold", color: "#242424"}} onClick={
                                 async() => {
                                     if(window.confirm("Are you sure to remove this user from this lab?")){
                                         let response = await fetch("/api/ldap/lab/remove/", {
@@ -274,8 +274,8 @@ function Lab() {
                                     }
                                 }
                             }>Remove</Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF", height: "100%", width: "100%"}} >Edit</Link></Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="danger" onClick={  
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF", height: "100%", width: "100%"}} >Edit</Link></Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="danger" onClick={  
                                 async() => {
                                     if(window.confirm("Are you sure to delete this user?")){
                                         let response = await fetch("/api/ldap/user/delete/", {
@@ -294,7 +294,7 @@ function Lab() {
                                     }
                                 }
                             } >Delete</Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
                         </tr>
                     )) : null  
                     }

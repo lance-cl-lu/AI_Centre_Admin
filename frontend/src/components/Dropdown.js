@@ -22,7 +22,7 @@ function Dropdown() {
     <div className="dropdown" style={{fontFamily: "Segoe UI"}}>
       <button onClick={handleClick} className="btn btn-secondary dropdown-toggle dropbtn"><TableRowsIcon/></button>
       {click ? (
-      <ul className="dropdown-menu" aria-labelledby="dropdownMenuLink">  
+      <ul className="dropdown-menu" aria-labelledby="dropdownMenuLink">
       { permission !== 'root' ? 
         <li>
           <Link to="/user" className="dropdown-item" state={{"user": user.username}}>
