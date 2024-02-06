@@ -27,6 +27,7 @@ def change_notebooks_removal(namespace, notebook, removal):
         config.load_incluster_config()
     except ConfigException:
         config.load_kube_config()
+
     profile_data = {
         "metadata": {
             "labels": {
@@ -45,7 +46,12 @@ def change_notebooks_removal(namespace, notebook, removal):
         print(f"An error occurred: {e}")
         return None
     
-def list_notebooks(namespace):
+@api_view(['POST'])
+def list_notebooks(request):
+    print("request = {}", request)
+    return None
+
+def list_notebooks_api(namespace):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -57,9 +63,11 @@ def list_notebooks(namespace):
 
         # Get the profile
         all_notebooks = api.list_namespaced_custom_object(group, version,  namespace, "notebooks")
-        all_notebooks = all_notebooks.get['items']            
-        
-        Response = {}
+        # print("all_notebooks = {}", all_notebooks)
+        all_notebooks = all_notebooks['items']            
+        # print("all_notebooks 1 = {}", all_notebooks)
+
+        Response = []
         for notebook in all_notebooks:
             name = notebook["metadata"]["name"]
             cpu = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"]
@@ -69,12 +77,15 @@ def list_notebooks(namespace):
                 removal = notebook["metadata"]["labels"]["removal"]
             except:
                 removal = "non-removal"
-        Response = { "name": name, "cpu": cpu, "memory": memory, "removal": removal}
+            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "removal": removal}
+            Response.append(ResponseOne)
+
+        print("Response = {}", Response)
         return Response
 
     except Exception as e:
         print(f"An error occurred: {e}")
-        return None
+        return []
     
 def create_profile(username, email, cpu, gpu, memory, manager):
     try:
@@ -476,8 +487,8 @@ def get_user_info(request):
         
     memoryStr = str(float(memory)/1000)    
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
-    notebooks = list_notebooks(user_obj.username)
-    print("notebooks = {}".format(notebooks))
+    # notebooks = list_notebooks_api(user_obj.username)
+    # print("notebooks 2 = {}", notebooks)
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
