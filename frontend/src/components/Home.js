@@ -8,6 +8,8 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import jwt_decode from "jwt-decode";
 import { KUBEFLOW_HTTP} from './Urls';
+import CountUp from 'react-countup';
+
 
 function getRandomBlueShade() {
   const blueComponent = Math.floor(Math.random() * 256).toString(16).padStart(2, '0'); // Random blue component
@@ -88,7 +90,7 @@ function Home() {
         >
         <div className="pie">
           <div className="piediv">
-            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of users: {user_num}</h2>
+            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of users: <CountUp end={user_num} duration={5}/></h2>
             <PieChart className="PieStyle"
               data={PieData2}
               labelStyle={{
@@ -98,7 +100,7 @@ function Home() {
             />
           </div>
           <div className="piediv">
-            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of labs: {lab_num}</h2>
+            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of labs: <CountUp end={lab_num} duration={5}/></h2>
             <PieChart className="PieStyle" textAnchor="middle" dominantBaseline="middle"
               data={PieData}
               label={({ dataEntry }) => dataEntry.value}
