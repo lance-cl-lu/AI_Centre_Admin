@@ -487,7 +487,7 @@ def get_user_info(request):
         
     memoryStr = str(float(memory)/1000)    
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
-    # notebooks = list_notebooks_api(user_obj.username)
+    notebooks = list_notebooks_api(user_obj.username)
     # print("notebooks 2 = {}", notebooks)
     data = {
         "username": user_obj.username,
