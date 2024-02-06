@@ -22,6 +22,29 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
+def change_notebooks_removal(namespace, notebook, removal):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+    profile_data = {
+        "metadata": {
+            "labels": {
+                "removal": removal
+            }
+        },
+    }
+    try:
+        # Create an API client for the CustomResourceDefinition API
+        api = client.CustomObjectsApi()
+
+        # Get the profile
+        notebook = api.patch_namespaced_custom_object(group, version, namespace, "notebooks", notebook, body=profile_data)
+        return notebook
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    
 def list_notebooks(namespace):
     try:
         config.load_incluster_config()
@@ -61,8 +84,8 @@ def create_profile(username, email, cpu, gpu, memory, manager):
 
     # print("create profile: username = {}, email = {}, cpu = {}, gpu = {}, memory = {}".format(username, email, cpu, gpu, memory))
 
-    memoryStr = str(int(float(memory)*1000)) + "Mi"
-    
+    # memoryStr = str(int(float(memory)*1000)) + "Mi"
+    memoryStr = str(int(float(memory))) + "Gi"
     # print(" memoryStr = {}".format(memoryStr))
     
     profile_data = {
@@ -126,7 +149,8 @@ def get_all_profiles():
     
 def replace_quota_of_profile(profile,cpu,gpu,memory):
     # create resourceQuotaSpec object
-    memoryStr = str(int(float(memory)*1000)) + "Mi"
+    # memoryStr = str(int(float(memory)*1000)) + "Mi"
+    memoryStr = str(int(float(memory))) + "Mi"
     resourceQuotaSpec = {
         "hard": {
             "requests.cpu": str(cpu),
@@ -157,7 +181,7 @@ def get_all_profiles():
 def replace_all_profiles():
     profiles = get_all_profiles()['items']
     for p in profiles:
-        replace_quota_of_profile(p,cpu='0.5',gpu=1,memory='1i')
+        replace_quota_of_profile(p,cpu='8',gpu=1,memory='16')
 
 def replace_profile(name,cpu,gpu,memory):
     profiles = get_all_profiles()['items']
@@ -463,11 +487,7 @@ def get_user_info(request):
         "mem_quota" : memoryStr,
         "gpu_quota" : gpu,
         "permission": get_user_all_permission(user_obj.username),
-        "notebooks": notebooks
     }
-
-
-
     return Response(data, status=200)
 
 @api_view(['POST'])
