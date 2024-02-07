@@ -42,7 +42,7 @@ urlpatterns = [
     path("password/change/", change_password, name="change_password"),
     path("user/change/", change_user_info, name="change_user_info"),
 
-    path("notebooks/", list_notebooks, name="get_notebooks"),
+    path("notebook/", list_notebooks, name="get_notebooks"),
     
     # danger for deploy
     # path("ldap/danger/", remove_all_entr, name="danger"),
@@ -51,10 +51,10 @@ urlpatterns = [
 # LDAP_IP = '120.126.23.245'
 # LDAP_PORT = '31979'
 
-# LDAP_IP = 'openldap.default.svc.cluster.local'
-# LDAP_PORT = '389'
-LDAP_IP = '192.168.8.109'
-LDAP_PORT = '32029'
+LDAP_IP = 'openldap.default.svc.cluster.local'
+LDAP_PORT = '389'
+#LDAP_IP = '192.168.8.109'
+#LDAP_PORT = '32029'
 
 def get_url():
-    return 'ldap://192.168.8.109:32029'
+    return 'ldap://'+LDAP_IP+':'+LDAP_PORT

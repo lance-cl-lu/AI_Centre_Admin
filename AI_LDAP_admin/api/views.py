@@ -48,8 +48,15 @@ def change_notebooks_removal(namespace, notebook, removal):
     
 @api_view(['POST'])
 def list_notebooks(request):
-    print("request = {}", request)
-    return None
+    data = json.loads(request.body.decode('utf-8'))
+    user = data['user']
+    # check the user is exist or not
+    try:
+        User.objects.get(username=user)
+    except:
+        return Response(status=400)
+    notebooks = list_notebooks_api(user)
+    return Response(notebooks, status=200)
 
 def list_notebooks_api(namespace):
     try:
@@ -246,7 +253,6 @@ def user_list(request):
 
 @api_view(['POST'])
 def get_group_corresponding_user(request):
-    synchronize_db_ldap()
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
     group_list = []
@@ -498,6 +504,7 @@ def get_user_info(request):
         "mem_quota" : memoryStr,
         "gpu_quota" : gpu,
         "permission": get_user_all_permission(user_obj.username),
+        "notebooks": notebooks,
     }
     return Response(data, status=200)
 
