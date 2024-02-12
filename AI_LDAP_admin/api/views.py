@@ -388,7 +388,7 @@ def adduser(request):
         {'cn': username, 'givenName': username, 'sn' : username ,
         'uid': username, 'uidNumber': '2001', 'gidNumber': '1001', "mail": email,
         'homeDirectory': '/home/{}'.format(username), 'loginShell': '/bin/bash',
-        'userPassword': ldap_md5.hash(password), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+        'userPassword': password.split('$')[1], 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
         'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
         'shadowExpire': '99999', 'Description': [labname]})
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
@@ -588,7 +588,6 @@ def change_password(request):
         return Response({'message': 'password is cannot be all number'}, status=400)
     user.set_password(password)
     user.save()
-    user_password = user.password
     # change password in ldap
     conn = connectLDAP()
     conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
