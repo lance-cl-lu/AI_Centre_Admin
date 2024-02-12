@@ -226,7 +226,7 @@ function User() {
                             <Form.Label column sm="2">Memory Quota</Form.Label>
                             <FloatingLabel
                                 controlId="floatingInput"
-                                label="Memory Quota (Mi)"
+                                label="Memory Quota (GiB)"
                                 className="mb-3"
                             >
                                 <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue={memoryQuota} step="0.1" readOnly/>

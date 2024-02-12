@@ -72,7 +72,7 @@ def list_notebooks_api(namespace):
         all_notebooks = api.list_namespaced_custom_object(group, version,  namespace, "notebooks")
         # print("all_notebooks = {}", all_notebooks)
         all_notebooks = all_notebooks['items']            
-        # print("all_notebooks 1 = {}", all_notebooks)
+        print("all_notebooks 1 = {}", all_notebooks)
 
         Response = []
         for notebook in all_notebooks:
@@ -84,7 +84,13 @@ def list_notebooks_api(namespace):
                 removal = notebook["metadata"]["labels"]["removal"]
             except:
                 removal = "non-removal"
-            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "removal": removal}
+                
+            try:
+                gpus = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["nvidia.com/gpu"]
+            except:
+                gpus = "0"
+
+            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "removal": removal}
             Response.append(ResponseOne)
 
         print("Response = {}", Response)

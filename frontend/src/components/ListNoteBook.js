@@ -42,6 +42,7 @@ function ListNoteBook() {
                         <Th>Name</Th>
                         <Th>CPU</Th>
                         <Th>Memory</Th>
+                        <Th>GPU</Th>
                         <Th>Removal</Th>
                     </Tr>
                 </Thead>
@@ -53,6 +54,7 @@ function ListNoteBook() {
                             <Td>{notebook.name}</Td>
                             <Td>{notebook.cpu}</Td>
                             <Td>{notebook.memory}</Td>
+                            <Td>{notebook.gpus}</Td>
                             <Td>{notebook.removal}</Td>
                         </Tr>
                     ))
