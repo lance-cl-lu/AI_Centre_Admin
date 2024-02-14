@@ -44,6 +44,7 @@ function ListNoteBook() {
                         <Th>Memory</Th>
                         <Th>GPU</Th>
                         <Th>Removal</Th>
+                        <Th>Status</Th>
                     </Tr>
                 </Thead>
                 <Tbody>
@@ -56,6 +57,7 @@ function ListNoteBook() {
                             <Td>{notebook.memory}</Td>
                             <Td>{notebook.gpus}</Td>
                             <Td>{notebook.removal}</Td>
+                            <Td>{notebook.status}</Td>
                         </Tr>
                     ))
                 ) : <span><Spinner></Spinner>loading...</span>}

@@ -72,7 +72,7 @@ def list_notebooks_api(namespace):
         all_notebooks = api.list_namespaced_custom_object(group, version,  namespace, "notebooks")
         # print("all_notebooks = {}", all_notebooks)
         all_notebooks = all_notebooks['items']            
-        print("all_notebooks 1 = {}", all_notebooks)
+        # print("all_notebooks 1 = {}", all_notebooks)
 
         Response = []
         for notebook in all_notebooks:
@@ -90,7 +90,12 @@ def list_notebooks_api(namespace):
             except:
                 gpus = "0"
 
-            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "removal": removal}
+            try:
+                status =notebook["status"]["conditions"][0]["status"]
+            except:
+                status = 'none'
+
+            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "removal": removal, "status": status }
             Response.append(ResponseOne)
 
         print("Response = {}", Response)
@@ -100,6 +105,31 @@ def list_notebooks_api(namespace):
         print(f"An error occurred: {e}")
         return []
     
+def get_profile_by_email(email):
+    profiles = get_all_profiles()['items']
+    # pprint(profiles)
+    for p in profiles:
+        if p['spec']['owner']['name'] == email:
+            return p['metadata']['name']
+    return None
+    
+def delete_profile(name):
+    # delete profile
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    api_instance = client.CustomObjectsApi()
+
+    api_response = api_instance.delete_cluster_custom_object(
+        group=group,
+        version=version,
+        plural=plural,
+        name=name
+    )
+    print(api_response)
+
 def create_profile(username, email, cpu, gpu, memory, manager):
     try:
         config.load_incluster_config()
@@ -144,7 +174,6 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         plural=plural,
         body=profile_data,
     )
-
     print(api_response)
 
 def get_profile_content(profile_name):
@@ -165,11 +194,6 @@ def get_profile_content(profile_name):
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
-    
-def get_all_profiles():
-    # get cluster custom object profile of kubeflow.org
-    api = client.CustomObjectsApi()
-    return api.list_cluster_custom_object(group, version, plural)
     
 def replace_quota_of_profile(profile,cpu,gpu,memory):
     # create resourceQuotaSpec object
@@ -198,8 +222,13 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
 
 def get_all_profiles():
     # get cluster custom object profile of kubeflow.org
-    api = client.CustomObjectsApi()
-    return api.list_cluster_custom_object(group, version, plural)
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    api_instance = client.CustomObjectsApi()
+    return api_instance.list_cluster_custom_object(group, version, plural)
 
 # This is a test function
 def replace_all_profiles():
@@ -471,7 +500,8 @@ def get_user_info(request):
     data = json.loads(request.body.decode('utf-8'))
     user_obj = User.objects.get(username=data['username'])
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
-    profile = get_profile_content(user_obj.username)
+    profileName = get_profile_by_email(user_obj.email)
+    profile = get_profile_content(profileName)
     memory = ""
     cpu = ""
     gpu = ""
@@ -497,7 +527,8 @@ def get_user_info(request):
         cpu = "0"
         gpu = "0"
         
-    memoryStr = str(float(memory)/1000)    
+    # memoryStr = str(float(memory)/1000)    
+    memoryStr = memory
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     notebooks = list_notebooks_api(user_obj.username)
     # print("notebooks 2 = {}", notebooks)
@@ -518,6 +549,11 @@ def get_user_info(request):
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     username = data['username']
+
+    user_obj = User.objects.get(username=data['username'])
+    detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+    profileName = get_profile_by_email(user_obj.email)
+
     conn = connectLDAP()
     try:
         conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
@@ -531,6 +567,9 @@ def user_delete(request):
         except:
             pass
     User.objects.get(username=username).delete()
+
+    delete_profile(profileName)
+
     return Response(status=200)
 
 @api_view(['POST'])
@@ -622,7 +661,11 @@ def change_user_info(request):
         user.email = email
         user.save()
 
-        replace_profile(username,cpu_quota,gpu_quota,mem_quota)
+        user_obj = User.objects.get(username=data['username'])
+        detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+        profileName = get_profile_by_email(user_obj.email)
+
+        replace_profile(profileName,cpu_quota,gpu_quota,mem_quota)
 
         """
         permission : [
