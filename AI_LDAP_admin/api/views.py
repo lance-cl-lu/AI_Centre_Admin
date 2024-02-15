@@ -158,13 +158,19 @@ def create_profile(username, email, cpu, gpu, memory, manager):
             },
             "resourceQuotaSpec": {
                 "hard": {
-                    "requests.cpu": cpu,
-                    "requests.memory": memoryStr,
-                    "requests.nvidia.com/gpu": gpu
                 }
             }
         }
     }
+
+    if cpu != '0':
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.cpu"] = cpu
+
+    if memoryStr != '0Gi':
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = memoryStr
+    
+    if gpu != '0':
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
 
     api_instance = client.CustomObjectsApi()
 
@@ -198,14 +204,21 @@ def get_profile_content(profile_name):
 def replace_quota_of_profile(profile,cpu,gpu,memory):
     # create resourceQuotaSpec object
     # memoryStr = str(int(float(memory)*1000)) + "Mi"
-    memoryStr = str(int(float(memory))) + "Mi"
+    memoryStr = str(int(float(memory))) + "Gi"
     resourceQuotaSpec = {
         "hard": {
-            "requests.cpu": str(cpu),
-            "requests.memory": str(memoryStr),
-            "requests.nvidia.com/gpu": str(gpu)
         }
     }
+
+    if str(cpu) != '0':
+        resourceQuotaSpec["hard"]["requests.cpu"] = str(cpu)
+
+    if str(memoryStr) != '0Gi':
+        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryStr)
+    
+    if str(gpu) != '0':
+        resourceQuotaSpec["hard"]["requests.nvidia.com/gpu"] = str(gpu)
+
     # update resourceQuotaSpec of profile
     profile['spec']['resourceQuotaSpec'] = resourceQuotaSpec
 

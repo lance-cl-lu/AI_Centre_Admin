@@ -51,10 +51,10 @@ urlpatterns = [
 # LDAP_IP = '120.126.23.245'
 # LDAP_PORT = '31979'
 
-# LDAP_IP = 'openldap.default.svc.cluster.local'
-# LDAP_PORT = '389'
-LDAP_IP = '192.168.8.109'
-LDAP_PORT = '32029'
+LDAP_IP = 'openldap.default.svc.cluster.local'
+LDAP_PORT = '389'
+# LDAP_IP = '192.168.8.109'
+# LDAP_PORT = '32029'
 
 def get_url():
     return 'ldap://'+LDAP_IP+':'+LDAP_PORT
