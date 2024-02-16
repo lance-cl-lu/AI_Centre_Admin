@@ -62,6 +62,29 @@ function AddUser() {
         }
     }
 
+    let handleCheckEmail = async(e) => {
+        e.preventDefault();
+        if (e.target[3].value===''){
+            alert('Please enter the email');
+            return;
+        }
+        let response = await fetch('/api/ldap/user/check_email/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                "email":e.target[3].value,
+            }),
+        });
+        if(response.status===200){
+            alert('Email is available');
+        } else {
+            alert('Email is not available');
+        }
+    }
+
+
     return (
         <div style={{fontFamily: "Comic Sans MS", display: "flex", flexDirection: "column", alignItems: "center"}}>
             <h1>Add User</h1><br></br>
@@ -102,6 +125,7 @@ function AddUser() {
                         <Form.Label style={{width:"20%"}}>Email</Form.Label>
                         <Form.Control type="text" placeholder="Enter Email" />
                     </Form.Group>
+                    <Button variant="primary" type="button" style={{ margin: '1rem' }} onClick={{handleCheckEmail}}>Check Email</Button>
                     <Form.Group className="mb-3" controlId="formBasicEmail"  style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
                         <Form.Label style={{width:"30%"}}>In which group?</Form.Label>
                         <Form.Control as="select">

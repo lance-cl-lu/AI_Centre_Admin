@@ -86,7 +86,7 @@ function User() {
             document.getElementById("inputEmail").readOnly = false;
             document.getElementById("cpuQuota").readOnly = false;
             document.getElementById("memQuota").readOnly = false;
-            document.getElementById("gpuQuota").readOnly = false;
+            document.getElementById("gpuQuota").disabled = false;
             document.getElementById("inputFirstName").style.backgroundColor = "#b4d9d7";
             document.getElementById("inputLastName").style.backgroundColor = "#b4d9d7";
             document.getElementById("inputEmail").style.backgroundColor = "#b4d9d7";
@@ -110,7 +110,7 @@ function User() {
             document.getElementById("inputEmail").readOnly = true;
             document.getElementById("cpuQuota").readOnly = true;
             document.getElementById("memQuota").readOnly = true;
-            document.getElementById("gpuQuota").readOnly = true;
+            document.getElementById("gpuQuota").disabled = true;
             document.getElementById("inputFirstName").style.backgroundColor = "#fff";
             document.getElementById("inputLastName").style.backgroundColor = "#fff";
             document.getElementById("inputEmail").style.backgroundColor = "#fff";
@@ -239,7 +239,7 @@ function User() {
                                 label="GPU Quota"
                                 className="mb-3"
                             >
-                                <Form.Select aria-label="Floating label select example" id="gpuQuota" defaultValue={gpuQuota} readOnly>
+                                <Form.Select aria-label="Floating label select example" id="gpuQuota" defaultValue={gpuQuota} disabled>
                                     <option value="0">0</option>
                                     <option value="1">1</option>
                                     <option value="2">2</option>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Table, Thead, Tbody, Tr, Th, Td, TableContainer, TableCaption, Spinner } from "@chakra-ui/react"
+import { Table, Thead, Tbody, Tr, Th, Td, TableContainer, TableCaption, Spinner, Checkbox } from "@chakra-ui/react"
 
 function ListNoteBook() {
     // get the user from useLocation
@@ -56,7 +56,7 @@ function ListNoteBook() {
                             <Td>{notebook.cpu}</Td>
                             <Td>{notebook.memory}</Td>
                             <Td>{notebook.gpus}</Td>
-                            <Td>{notebook.removal}</Td>
+                            <Td>{notebook.removal === "non-removal" ? <Checkbox defaultChecked="true" isDisabled="true"></Checkbox> : <Checkbox defaultChecked="false" isDisabled="true"></Checkbox>}</Td>
                             <Td>{notebook.status}</Td>
                         </Tr>
                     ))
