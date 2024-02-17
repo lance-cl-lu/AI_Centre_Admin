@@ -54,6 +54,8 @@ function AddUser() {
             if(response.status===200){
                 alert('User added successfully');
                 window.location.reload();
+            } else if(response.status===500){ 
+                alert('Email is exist');
             } else {
                 alert('User create error');
             }
@@ -125,7 +127,6 @@ function AddUser() {
                         <Form.Label style={{width:"20%"}}>Email</Form.Label>
                         <Form.Control type="text" placeholder="Enter Email" />
                     </Form.Group>
-                    <Button variant="primary" type="button" style={{ margin: '1rem' }} onClick={{handleCheckEmail}}>Check Email</Button>
                     <Form.Group className="mb-3" controlId="formBasicEmail"  style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
                         <Form.Label style={{width:"30%"}}>In which group?</Form.Label>
                         <Form.Control as="select">

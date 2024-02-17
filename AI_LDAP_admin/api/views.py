@@ -113,6 +113,14 @@ def get_profile_by_email(email):
             return p['metadata']['name']
     return None
     
+def check_email(email):
+    profiles = get_all_profiles()['items']
+    # pprint(profiles)
+    for p in profiles:
+        if p['spec']['owner']['name'] == email:
+            return True
+    return False
+    
 def delete_profile(name):
     # delete profile
     try:
@@ -419,6 +427,9 @@ def adduser(request):
     cpu_quota = data['cpu_quota']
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
+
+    if check_email(email):
+        return Response(status=500, data="email is exist")
 
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
