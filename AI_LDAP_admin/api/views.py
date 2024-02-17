@@ -47,17 +47,33 @@ def change_notebooks_removal(namespace, notebook, removal):
         return None
     
 @api_view(['POST'])
+def set_notebook(request):
+    data = json.loads(request.body.decode('utf-8'))
+    user = data['user']
+    notebookName = data['notebookName']
+    removal = data['removal']
+
+    user_obj = User.objects.get(username=data['user'])
+    profileName = get_profile_by_email(user_obj.email)
+
+    change_notebooks_removal(profileName, notebookName, removal)
+    return Response( status=200)
+    
+@api_view(['POST'])
 def list_notebooks(request):
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
+    user_obj = User.objects.get(username=data['user'])
+    profileName = get_profile_by_email(user_obj.email)
+
     # check the user is exist or not
     try:
         User.objects.get(username=user)
     except:
         return Response(status=400)
-    notebooks = list_notebooks_api(user)
+    notebooks = list_notebooks_api(profileName)
     return Response(notebooks, status=200)
-
+    
 def list_notebooks_api(namespace):
     try:
         config.load_incluster_config()
@@ -554,7 +570,7 @@ def get_user_info(request):
     # memoryStr = str(float(memory)/1000)    
     memoryStr = memory
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
-    notebooks = list_notebooks_api(user_obj.username)
+    notebooks = list_notebooks_api(profileName)
     # print("notebooks 2 = {}", notebooks)
     data = {
         "username": user_obj.username,
