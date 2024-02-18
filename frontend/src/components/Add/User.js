@@ -85,7 +85,7 @@ function AddUser() {
             alert('Email is not available');
         }
     }
-
+        
 
     return (
         <div style={{fontFamily: "Comic Sans MS", display: "flex", flexDirection: "column", alignItems: "center"}}>

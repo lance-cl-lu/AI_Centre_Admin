@@ -32,6 +32,27 @@ function ListNoteBook() {
     }
     , [user]);
 
+    let handleOnChange = (name) => (event) => {
+        console.log(event.target.checked);
+        console.log(name);
+        let removal = event.target.checked ? "OK" : "non-removal";
+        fetch('/api/setNotebook/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({user: user, notebookName: name, removal: removal})
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data);
+            setTestData(data);
+        })
+        .catch((error) => {
+            setError(error);
+        });
+    }
+
 
     return (
         <TableContainer className="AddContent">
@@ -56,7 +77,7 @@ function ListNoteBook() {
                             <Td>{notebook.cpu}</Td>
                             <Td>{notebook.memory}</Td>
                             <Td>{notebook.gpus}</Td>
-                            <Td>{notebook.removal === "non-removal" ? <Checkbox defaultChecked="true" isDisabled="true"></Checkbox> : <Checkbox defaultChecked="false" isDisabled="true"></Checkbox>}</Td>
+                            <Td><Checkbox onChange={handleOnChange(notebook.name)} value={notebook.name}></Checkbox></Td>
                             <Td>{notebook.status}</Td>
                         </Tr>
                     ))
