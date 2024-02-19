@@ -77,7 +77,7 @@ function ListNoteBook() {
                             <Td>{notebook.cpu}</Td>
                             <Td>{notebook.memory}</Td>
                             <Td>{notebook.gpus}</Td>
-                            <Td><Checkbox onChange={handleOnChange(notebook.name)} value={notebook.name}></Checkbox></Td>
+                            <Td><Checkbox onChange={handleOnChange(notebook.name)} value={notebook.name} defaultChecked={notebook.removal === "OK" ? true : false}></Checkbox></Td>
                             <Td>{notebook.status}</Td>
                         </Tr>
                     ))
