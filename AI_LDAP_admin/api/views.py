@@ -55,7 +55,7 @@ def set_notebook(request):
 
     user_obj = User.objects.get(username=data['user'])
     profileName = get_profile_by_email(user_obj.email)
-
+    print("profileName = ", profileName)
     change_notebooks_removal(profileName, notebookName, removal)
     return Response( status=200)
     
@@ -65,7 +65,7 @@ def list_notebooks(request):
     user = data['user']
     user_obj = User.objects.get(username=data['user'])
     profileName = get_profile_by_email(user_obj.email)
-
+    
     # check the user is exist or not
     try:
         User.objects.get(username=user)
@@ -278,6 +278,28 @@ def replace_profile(name,cpu,gpu,memory):
     for p in profiles:
         if p['metadata']['name'] == name:
             replace_quota_of_profile(p,cpu,gpu,memory)
+
+def replace_profile_user(name,user):
+    profiles = get_all_profiles()['items']
+    print("name = ", name)
+    for p in profiles:
+        if p['metadata']['name'] == name:
+            userAnnotations = {
+                "manager": user
+            }
+            p['metadata']['annotations'] = userAnnotations
+            print(" p = ", p)
+            api = client.CustomObjectsApi()
+            # replace the profile 
+            api_response = api.replace_cluster_custom_object(
+                group=group,
+                version=version,
+                plural=plural,
+                name=p['metadata']['name'],
+                body=p
+            )
+            print(api_response)
+
 
 def get_gid():
     while True:
@@ -706,7 +728,12 @@ def change_user_info(request):
         profileName = get_profile_by_email(user_obj.email)
 
         replace_profile(profileName,cpu_quota,gpu_quota,mem_quota)
-
+        # manager = 'user'
+        # if data['is_lab_manager'] is True:
+        #    manager = 'manager'
+        # print("manager = ", manager)    
+        # replace_profile_user(profileName, manager)
+        
         """
         permission : [
             {
@@ -730,7 +757,15 @@ def change_user_info(request):
                     detail_obj.permission = 1
                 elif permission_obj['permission'] == 'user':
                     detail_obj.permission = 2
+                print("permission_obj = ", permission_obj['permission'])
                 detail_obj.save()
+            manager = 'user'
+            if permission_obj['permission'] == 'admin':
+                manager = 'manager'
+            elif permission_obj['permission'] == 'user':
+                manager = 'user'
+            print("manager = ", manager)    
+            replace_profile_user(profileName, manager)
         return Response(status=200)
     except:
         return Response(status=500)
