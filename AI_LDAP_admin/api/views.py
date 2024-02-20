@@ -125,7 +125,7 @@ def get_profile_by_email(email):
     profiles = get_all_profiles()['items']
     # pprint(profiles)
     for p in profiles:
-        if p['spec']['owner']['name'] == email:
+        if p['spec']['owner']['name'].lower() == email.lower():
             return p['metadata']['name']
     return None
     
