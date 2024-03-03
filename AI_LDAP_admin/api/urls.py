@@ -37,7 +37,7 @@ urlpatterns = [
     # about excel
     path("ldap/excel/", excel, name="excel"),
     path("ldap/excel/export/", export_ldap, name="export_ldap"),
-
+    path("ldap/excel/template/", template, name="excel_template"),
     # about user page change
     path("password/change/", change_password, name="change_password"),
     path("user/change/", change_user_info, name="change_user_info"),

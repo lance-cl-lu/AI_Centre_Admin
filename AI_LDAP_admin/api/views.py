@@ -467,8 +467,28 @@ def adduser(request):
     gpu_quota = data['gpu_quota']
 
     if check_email(email):
-        return Response(status=500, data="email is exist")
-
+        return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
+    try:
+        # if user is exist, return 500
+        user_exist = User.objects.get(username=username)
+        return Response(status=500, data={"message": "Username is exist from database and the email is {}, username is {}".format(user_exist.email, user_exist.username)})
+    except:
+        pass
+    # email is exist or not
+    try:
+        user_exist = User.objects.get(email=email)
+        return Response(status=500, data={"message": "Email is exist from database and the username is {}, email is {}".format(user_exist.username, user_exist.email)})
+    except:
+        pass
+    # check ldap is exist or not
+    conn = connectLDAP()
+    try:
+        conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+        for entry in conn.entries:
+            return Response(status=500, data={"message": "Username is exist from ldap and the email is {}, username is {}".format(entry.mail.value, entry.cn.value)})
+    except:
+        pass
+        
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
     password = user.password
@@ -487,10 +507,10 @@ def adduser(request):
     conn.unbind()
     manager = 'user'
     if data['is_lab_manager'] is False:
-        detail_db = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
+        UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
         manager = 'manager'
-        detail_db = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+        UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
     
     create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
@@ -733,19 +753,7 @@ def change_user_info(request):
         #    manager = 'manager'
         # print("manager = ", manager)    
         # replace_profile_user(profileName, manager)
-        
-        """
-        permission : [
-            {
-                "groupname": "PUtest",
-                "permission": "admin"
-            },
-            {
-                "groupname": "PUtest2",
-                "permission": "admin"
-            }
-        ]
-        """
+
         for permission_obj in permission:
             # check the permission is same or not
             if permission_obj['permission'] == get_permission(username, permission_obj['groupname']):
@@ -894,11 +902,39 @@ def get_permission(user, group):
 @api_view(['GET'])
 def export_ldap(request):
     user_list = []
-    user_list.append(["Username","Group","password","email", "firstname", "lastname", "permission"])
+    user_list.append(["Username","Group","password","email", "firstname", "lastname", "permission", "cpu_quota", "gpu_quota", "mem_quota"])
     # export the user in the group from database
     for user in User.objects.all():
+        cpuquota = 0
+        gpuquota = 0
+        memquota = 0
+        user_obj = User.objects.get(username=user.username)
+        profileName = get_profile_by_email(user_obj.email)
+        profile = get_profile_content(profileName)
+        if profile is not None:
+            print(profile)
+            # add try error control below
+            try:
+                cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            except:
+                cpu = "0"
+            try:
+                gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            except:
+                gpu = "0"
+            try:
+                memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                memory = memory[:-2]
+            except:
+                memory = "0"
+        else:
+            print("Profile not found")
+            memory = "0"
+            cpu = "0"
+            gpu = "0"
         for group in user.groups.all():
-            user_list.append([user.username, group.name, user.password, user.email, user.first_name, user.last_name, get_permission(user.username, group.name)])
+            
+            user_list.append([user.username, group.name, user.password, user.email, user.first_name, user.last_name, get_permission(user.username, group.name), cpu, gpu, memory])
     # make data to excel
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
@@ -956,10 +992,36 @@ def export_lab_user(request):
     lab = data['lab']
 
     user_list = []
-    user_list.append(["Username","password","email", "firstname", "lastname", "permission"])
+    user_list.append(["Username", "password", "email", "firstname", "lastname", "permission", "cpu_quota", "gpu_quota", "mem_quota"])
     # export the user in the group from database
     for user in User.objects.filter(groups=Group.objects.get(name=lab)):
-        user_list.append([user.username, user.password, user.email, user.first_name, user.last_name, get_permission(user.username, lab)])
+        cpuquota = 0
+        gpuquota = 0
+        memquota = 0
+        profileName = get_profile_by_email(user.email)
+        profile = get_profile_content(profileName)
+        if profile is not None:
+            print(profile)
+            # add try error control below
+            try:
+                cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            except:
+                cpu = "0"
+            try:
+                gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            except:
+                gpu = "0"
+            try:
+                memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                memory = memory[:-2]
+            except:
+                memory = "0"
+        else:
+            print("Profile not found")
+            memory = "0"
+            cpu = "0"
+            gpu = "0"
+        user_list.append([user.username, "", user.email, user.first_name, user.last_name, get_permission(user.username, lab), cpu, gpu, memory])
     # make data to excel
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
@@ -972,92 +1034,217 @@ def export_lab_user(request):
     workbook.save(response)
     return response
 
-import pandas
 @api_view(['POST'])
 def import_lab_user(request):
     group = request.POST['lab']
     print(group)
     if request.FILES.get('file'):
         excel_file = request.FILES['file']
-        conn = connectLDAP()
         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
             for chunk in excel_file.chunks():
                 destination.write(chunk)
         # read and pritn the excel file, attribute ["Username","password","email", "firstname", "lastname", "permission"]
         worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
-        # intialize check all false
-        # check all data is valid or not with database, use pandas
+        # Get all information from the excel file
+        userinfo = []
         for row in worksheet.iter_rows():
             if row[0].value == "Username":
                 continue
-            ## if there is any data is null, return error
-            for item in row:
-                if item.value == None:
-                    return JsonResponse({'message': 'excel format is not valid'}, status=400)
-            if row[5].value != 'admin' and row[5].value != 'user':
-                return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
+            user = {
+                "username": row[0].value,
+                "password": row[1].value,
+                "email": row[2].value,
+                "firstname": row[3].value,
+                "lastname": row[4].value,
+                "permission": row[5].value,
+                "cpu_quota": row[6].value,
+                "gpu_quota": row[7].value,
+                "mem_quota": row[8].value,
+            }
+            userinfo.append(user)
+        # check all data is valid or not with database, use pandas
+        for user in userinfo:
+            if user['permission'] != 'admin' and user['permission'] != 'user':
+                return JsonResponse({'message': 'user {} permission is not valid'.format(user['username'])}, status=400)
             # password is or not valid(all integer)
-            if isinstance(row[1].value, int) is True:
-                return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
-        # add user into django
-        for row in worksheet.iter_rows():
-            if row[0].value == "Username":
+            if isinstance(user['password'], int) is True:
+                return JsonResponse({'message': 'user {} password is not valid'.format(user['username'])}, status=400)
+        # check all data is exist in database, ldap, and kubeflow or not
+        failed_user = []
+        for user in userinfo:
+            # if username is exist in database
+            if User.objects.filter(username=user['username']).exists() is True:
+                failed_user.append(user['username'])
+                continue
+            if User.objects.filter(email=user['email']).exists() is True:
+                failed_user.append(user['username'])
+                continue
+            # if user is exist in ldap
+            try:
+                conn = connectLDAP()
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
+                for entry in conn.entries:
+                    failed_user.append(user['username'])
                     continue
-            # if user is exist and in correct group, skip
-            user_corresponding_group = False
-            if User.objects.filter(username=row[0].value).exists() is True:
-                subuser_obj = User.objects.get(username=row[0].value)
-                if subuser_obj.email != row[2].value:
-                    subuser_obj.email = row[2].value
-                if subuser_obj.first_name != row[3].value:
-                    subuser_obj.first_name = row[3].value
-                if subuser_obj.last_name != row[4].value:
-                    subuser_obj.last_name = row[4].value
-                subuser_obj.save()
+            except:
+                pass
+            # if user is exist in kubeflow
+            if get_profile_by_email(user['email']) is not None:
+                failed_user.append(user['username'])
+                continue
+        # add user into django, ldap, and kubeflow
+        for user in userinfo:
+            try:
+                User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
+                user_obj = User.objects.get(username=user['username'])
+                user_obj.groups.add(Group.objects.get(name=group))
+                if user['permission'] == 'admin':
+                    UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
+                elif user['permission'] == 'user':
+                    UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=group))
+                # add user into kube flow
+                create_profile(username=user['username'], email=user['email'], cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
+                # add user into ldap
+                group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(group)
+                user_dn = 'cn={},ou=users,dc=example,dc=org'.format(user['username']),
+                conn = connectLDAP()
+                conn.add(user_dn, ['inetOrgPerson', 'posixAccount', 'shadowAccount', 'top'],
+                    {'cn': user['username'], 'givenName': user['firstname'], 'sn' : user['lastname'] ,
+                    'uid': user['username'], 'uidNumber': '2001', 'gidNumber': '1001', "mail": user['email'],
+                    'homeDirectory': '/home/{}'.format(user['username']), 'loginShell': '/bin/bash',
+                    'userPassword': user['password'], 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
+                    'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
+                    'shadowExpire': '99999', 'Description': [group]})
+                conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [user['username']])]})
+                conn.unbind()
+            except:
+                pass
+        if len(failed_user) == 0:
+            return JsonResponse({'message': 'all user is added'}, status=200)
+        elif len(failed_user) == len(userinfo):
+            return JsonResponse({'message': 'except user {}, the other users were added'.format(failed_user)}, status=200)
+        else:
+            return JsonResponse({'message': 'all user were not added'.format(failed_user)}, status=500)
+    else:
+        return JsonResponse({'message': 'file is not exist'}, status=400)
+        
+# @api_view(['POST'])
+# def import_lab_user(request):
+#     group = request.POST['lab']
+#     print(group)
+#     if request.FILES.get('file'):
+#         excel_file = request.FILES['file']
+#         conn = connectLDAP()
+#         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
+#             for chunk in excel_file.chunks():
+#                 destination.write(chunk)
+#         # read and pritn the excel file, attribute ["Username","password","email", "firstname", "lastname", "permission"]
+#         worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
+#         # intialize check all false
+#         # check all data is valid or not with database, use pandas
+#         for row in worksheet.iter_rows():
+#             if row[0].value == "Username":
+#                 continue
+#             ## if there is any data is null, return error
+#             for item in row:
+#                 if item.value == None:
+#                     return JsonResponse({'message': 'excel format is not valid'}, status=400)
+#             if row[5].value != 'admin' and row[5].value != 'user':
+#                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
+#             # password is or not valid(all integer)
+#             if isinstance(row[1].value, int) is True:
+#                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
+        
+#         # check all data is exist in database, ldap, and kubeflow or not
+#         failed_user = []
+#         for row in worksheet.iter_rows():
+#             # if username is exist in database
+#             username_excel = row[0].value
+#             if User.objects.filter(username=username_excel).exists() is True:
+#                 failed_user.append(row[0].value)
+#                 # remove the user from excel
+#                 worksheet.remove(row)
+#                 continue
+#             email_excel = row[1].value
+#             if User.objects.filter(email=email_excel).exists() is True:
+#                 failed_user.append(row[0].value)
+#                 worksheet.remove(row)
+#                 continue
+#             # if user is exist in ldap
+#             try:
+#                 conn.search('cn={},ou=users,dc=example,dc=org'.format(username_excel), '(objectclass=posixAccount)', attributes=['*'])
+#                 for entry in conn.entries:
+#                     failed_user.append(row[0].value)
+#                     worksheet.remove(row)
+#                     continue
+#             except:
+#                 pass
+#             # if user is exist in kubeflow
+#             if get_profile_by_email(email_excel) is not None:
+#                 failed_user.append(row[0].value)
+#                 worksheet.remove(row)
+#                 continue
+#         # add user into django
+#         for row in worksheet.iter_rows():
+#             if row[0].value == "Username":
+#                     continue
+#             # if user is exist and in correct group, skip
+#             user_corresponding_group = False
+#             if User.objects.filter(username=row[0].value).exists() is True:
+#                 subuser_obj = User.objects.get(username=row[0].value)
+#                 if subuser_obj.email != row[2].value:
+#                     subuser_obj.email = row[2].value
+#                 if subuser_obj.first_name != row[3].value:
+#                     subuser_obj.first_name = row[3].value
+#                 if subuser_obj.last_name != row[4].value:
+#                     subuser_obj.last_name = row[4].value
+#                 subuser_obj.save()
 
-                for group_obj in User.objects.get(username=row[0].value).groups.all():
-                    if group_obj.name == group:
-                        user_corresponding_group = True
-                        # check password is correct or not
-                        print(User.objects.get(username=row[0].value).check_password(row[1].value), row[1].value)
-                        if User.objects.get(username=row[0].value).check_password(row[1].value) is False:
-                            if User.objects.get(username=row[0].value).password == row[1].value:
-                                print("user {} password is correct".format(row[0].value))
-                                continue
-                            user_obj_password = User.objects.get(username=row[0].value)
-                            print(user_obj_password.set_password(row[1].value))
-                            user_obj_password.save()
-                            print("user {} password is not correct, change password to {}".format(row[0].value, row[1].value))
+#                 for group_obj in User.objects.get(username=row[0].value).groups.all():
+#                     if group_obj.name == group:
+#                         user_corresponding_group = True
+#                         # check password is correct or not
+#                         print(User.objects.get(username=row[0].value).check_password(row[1].value), row[1].value)
+#                         if User.objects.get(username=row[0].value).check_password(row[1].value) is False:
+#                             if User.objects.get(username=row[0].value).password == row[1].value:
+#                                 print("user {} password is correct".format(row[0].value))
+#                                 continue
+#                             user_obj_password = User.objects.get(username=row[0].value)
+#                             print(user_obj_password.set_password(row[1].value))
+#                             user_obj_password.save()
+#                             print("user {} password is not correct, change password to {}".format(row[0].value, row[1].value))
 
-                        if get_permission(row[0].value, group) == row[5].value:
-                            print("user {} permission is correct".format(row[0].value))
-                        else:
-                            UserDetail.objects.get(uid=User.objects.get(username=row[0].value).id, labname=Group.objects.get(name=group)).delete()
-                            if row[5].value == 'admin':
-                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
-                            elif row[5].value == 'user':
-                                UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
-                            print("user {} permission is not correct, change permission to {}".format(row[0].value, row[5].value))
-                        break
-                if user_corresponding_group is True:
-                    continue
-                else:
-                    # add user into corresponding group
-                    User.objects.get(username=row[0].value).groups.add(Group.objects.get(name=group))
-                    if row[5].value == 'admin':
-                        UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
-                    else:
-                        UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
+#                         if get_permission(row[0].value, group) == row[5].value:
+#                             print("user {} permission is correct".format(row[0].value))
+#                         else:
+#                             UserDetail.objects.get(uid=User.objects.get(username=row[0].value).id, labname=Group.objects.get(name=group)).delete()
+#                             if row[5].value == 'admin':
+#                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
+#                             elif row[5].value == 'user':
+#                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
+#                             print("user {} permission is not correct, change permission to {}".format(row[0].value, row[5].value))
+#                         break
+#                 if user_corresponding_group is True:
+#                     continue
+#                 else:
+#                     # add user into corresponding group
+#                     User.objects.get(username=row[0].value).groups.add(Group.objects.get(name=group))
+#                     if row[5].value == 'admin':
+#                         UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
+#                     else:
+#                         UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
                     
             
-            # add new user into django
-            user = User.objects.create_user(username=row[0].value, password=row[1].value, first_name=row[3].value, last_name=row[4].value, email=row[2].value)
-            user.groups.add(Group.objects.get(name=group))
-            if row[5].value == 'admin':
-                UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=group))
-            else:
-                UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=group))
-    return JsonResponse({'message': 'File upload success'}, status=200)
+#             # add new user into django
+#             user = User.objects.create_user(username=row[0].value, password=row[1].value, first_name=row[3].value, last_name=row[4].value, email=row[2].value)
+#             user.groups.add(Group.objects.get(name=group))
+#             if row[5].value == 'admin':
+#                 UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=group))
+#             else:
+#                 UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=group))
+#     if failed_user != []:
+#         return JsonResponse({'message': 'user {} is exist in database, ldap, or kubeflow'.format(failed_user)}, status=400)
+#     return JsonResponse({'message': 'File upload success'}, status=200)
 
 @api_view(['GET'])
 def db_ldap_check(request):
@@ -1175,4 +1362,24 @@ def remove_all_entr(request):
     conn.unbind()
     return Response(status=200)
 
+@api_view(['GET'])
+def template(request):
+    # export excel template for import
+    column = []
+    column.append(["Username", "password", "email", "firstname", "lastname", "permission", "cpu_quota", "gpu_quota", "mem_quota"])
+    
+    # make data to excel
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    for row in column:
+        worksheet.append(row)
+    workbook.save("import_template.xlsx")
+    excel_file_path = 'import_template.xlsx'
+    # return the file
+    response = HttpResponse(content_type="application/ms-excel")
+    response['Content-Disposition'] = 'attachment; filename=import_template.xlsx'
+    workbook.save(response)
+    return response
 
+    
+    

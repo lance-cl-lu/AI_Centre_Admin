@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react'
 import './User.css'
 import { Button, Form, FloatingLabel } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
+import Swal from 'sweetalert2'
+
 
 function AddUser() {
     const [lab, setLab] = useState([]);
@@ -28,10 +30,44 @@ function AddUser() {
     let handleSubmit = async(e) => {
         e.preventDefault();
         // first_name, last_name and username cannot be empty and have _ and - in the username
-        if(e.target[0].value==='' || e.target[1].value==='' || e.target[2].value==='' || !/^[a-zA-Z0-9_-]*$/.test(e.target[2].value) || !/^[a-zA-Z0-9_-]*$/.test(e.target[0].value) || !/^[a-zA-Z0-9_-]*$/.test(e.target[1].value)){
-            alert('Please enter the first name, last name and username');
+        if(e.target[0].value== null){
+            alert('First name cannot be empty');
             return;
         }
+        if(e.target[1].value== null){
+            alert('Last name cannot be empty');
+            return;
+        }
+        // test empty username
+        if(e.target[2].value == null){
+            alert('Username cannot be empty');
+            return;
+        }
+
+        // first_name, last_name and username
+        if(e.target[2].value.includes('_') || e.target[2].value.includes('-') || e.target[2].value.includes(' ')){
+            alert('Username cannot include _ and - and space');
+            return;
+        }
+        if (e.target[6].value===''){
+            Swal.fire({
+                title: 'Password cannot be empty',
+                icon: 'error',
+                timer: 2000,
+                timerProgressBar: true,
+            })
+            return;
+        }
+        if (e.target[7].value===''){
+            Swal.fire({
+                title: 'Confirm Password cannot be empty',
+                icon: 'error',
+                timer: 2000,
+                timerProgressBar: true,
+            })
+            return;
+        }
+        
         if(e.target[6].value===e.target[7].value){
             let response = await fetch('/api/ldap/user/add/', {
                 method: 'POST',
@@ -52,10 +88,28 @@ function AddUser() {
                 }),
             });
             if(response.status===200){
-                alert('User added successfully');
-                window.location.reload();
+                Swal.fire({
+                    title: 'User created successfully',
+                    icon: 'success',
+                    confirmButtonText: 'Cool',
+                    timer: 2000
+                })
+                setTimeout(() => {
+                    // previous page
+                    window.history.back();
+                }, 2000);
             } else if(response.status===500){ 
-                alert('Email is exist');
+                // get message from response
+                let data = await response.json();
+                Swal.fire({
+                    title: data['message'],
+                    icon: 'error',
+                    timer: 10000,
+                    timerProgressBar: true,
+                })
+                // clear the password
+                e.target[6].value = '';
+                e.target[7].value = '';
             } else {
                 alert('User create error');
             }

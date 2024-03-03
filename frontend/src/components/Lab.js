@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
 import { Checkbox, Container, Box, Text } from '@chakra-ui/react';
+import Swal from 'sweetalert2'
+
 function Lab() {
     const location = useLocation();
     const state = location.state;
@@ -34,19 +36,52 @@ function Lab() {
 
     }
     const deleteGroup = async() => {
-        if(window.confirm("It will also delete all user in Lab, are you sure to do it?")){
-            let response = await fetch("/api/ldap/lab/delete/", {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({'lab': state.lab})
-            });
-            if(response.status===200) {
-                alert("Group delete sucessfully!!")
-                window.location.href='/'
+        const swalWithBootstrapButtons = Swal.mixin({
+            customClass: {
+              confirmButton: "btn btn-success alert-btn",
+              cancelButton: "btn btn-danger alert-btn"
+            },
+            buttonsStyling: false
+          });
+          swalWithBootstrapButtons.fire({
+            title: "Are you sure to delete this group?",
+            text: "You won't be able to revert this!",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Yes, delete it!",
+            cancelButtonText: "No, cancel!",
+            reverseButtons: true
+          }).then((result) => {
+            if (result.isConfirmed) {
+                //async()
+                fetch("/api/ldap/lab/delete/", {
+                    method: "POST",
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({'lab': state.lab})
+                }).then((response) => {
+                    if(response.status===200) {
+                        Swal.fire({
+                            title: "Deleted!",
+                            text: "Your group has been deleted.",
+                            icon: "success"
+                        });
+                    } else {
+                        alert("error");
+                    }
+                });
+            } else if (
+              /* Read more about handling dismissals below */
+              result.dismiss === Swal.DismissReason.cancel
+            ) {
+              swalWithBootstrapButtons.fire({
+                title: "Cancelled",
+                text: "Your imaginary file is safe :)",
+                icon: "error"
+              });
             }
-        }
+          });
     }
 
     const handleOnclick_export = async() => {
@@ -203,7 +238,6 @@ function Lab() {
         }
 
     }
-    // if 
     const handleCheckAllChange = (event) => {
         if(event.target.checked) {
             console.log("check all");
@@ -220,9 +254,6 @@ function Lab() {
             }
         }
     }
-
-
-
     return (
         <div>
                 <h1 style={{fontFamily: "Comic Sans MS"}}>{labinfo ? labinfo.labname : null} Members  <ContactPageIcon fontSize='large'/></h1>
@@ -277,21 +308,61 @@ function Lab() {
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="secondary"><Link to="/user" state={{"user": memberUid}} style={{textDecoration: "none", color:"#FFFFFF", height: "100%", width: "100%"}} >Edit</Link></Button></div></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="danger" onClick={  
                                 async() => {
-                                    if(window.confirm("Are you sure to delete this user?")){
-                                        let response = await fetch("/api/ldap/user/delete/", {
-                                            method: "POST",
-                                            headers: {
-                                                'Content-Type': 'application/json',
-                                            },
-                                            body: JSON.stringify({'username': memberUid})
-                                        });
-                                        if(response.status===200) {
-                                            alert("Delete sucessfully!!")
-                                            window.location.href='/'
-                                        } else {
-                                            alert("error");
+                                    const swalWithBootstrapButtons = Swal.mixin({
+                                        customClass: {
+                                          confirmButton: "btn btn-danger alert-btn",
+                                          cancelButton: "btn btn-warning alert-btn"
+                                        },
+                                        buttonsStyling: false
+                                      });
+                                      swalWithBootstrapButtons.fire({
+                                        title: "Are you sure to delete this user?",
+                                        text: "You won't be able to revert this! All the user's data(including Notebooks, images...etc.) will be deleted",
+                                        icon: "warning",
+                                        showCancelButton: true,
+                                        confirmButtonText: "Yes, delete it!",
+                                        cancelButtonText: "No, cancel!",
+                                        reverseButtons: true
+                                      }).then((result) => {
+                                        if (result.isConfirmed) {
+                                            fetch("/api/ldap/user/delete/", {
+                                                method: "POST",
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                },
+                                                body: JSON.stringify({'username': memberUid})
+                                            }).then((response) => {
+                                                if(response.status===200) {
+                                                    Swal.fire({
+                                                        title: "Deleted!",
+                                                        text: "Your user has been deleted.",
+                                                        timer: 2000,
+                                                        timerProgressBar: true,
+                                                        icon: "success"
+                                                    });
+
+                                                } else {
+                                                    Swal.fire({
+                                                        title: "Error!",
+                                                        text: "Something wrong",
+                                                        icon: "error"
+                                                    });
+                                                }
+                                                setTimeout(() => {
+                                                    window.location.reload();
+                                                }, 1000);
+                                            });
+                                        } else if (
+                                          /* Read more about handling dismissals below */
+                                          result.dismiss === Swal.DismissReason.cancel
+                                        ) {
+                                          swalWithBootstrapButtons.fire({
+                                            title: "Cancelled",
+                                            text: "Your imaginary file is safe :)",
+                                            icon: "error"
+                                          });
                                         }
-                                    }
+                                      });
                                 }
                             } >Delete</Button></div></td>
                             <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>

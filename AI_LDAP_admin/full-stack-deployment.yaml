@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: lms025187/backend_dev:v0.2
+          image: cguaicadmin/backend_dev:v0.2
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

@@ -24,3 +24,6 @@ label {
 input, select {
     width: 80%;
 }
+.alert-btn {
+    margin: 10px;
+}

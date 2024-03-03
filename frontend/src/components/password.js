@@ -7,6 +7,7 @@ import { useState } from 'react';
 import jwt_decode from "jwt-decode";
 import Card from 'react-bootstrap/Card';
 import { KUBEFLOW_HTTP} from './Urls';
+import Swal from 'sweetalert2';
 
 function Password() {
     const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -33,10 +34,25 @@ function Password() {
                     }),
                 })
                 if(response.status===200) {
-                    alert('Password change successfully');
+                    Swal.fire({
+                        title: 'Password has been changed',
+                        timer: 2000,
+                        icon: 'success',
+                        showConfirmButton: false
+                    }).then(() => {
+                        window.history.back()
+                    })
                 } else {
-                    alert("Password is Invalid!!")
+                    Swal.fire({
+                        title: 'Password change failed',
+                        timer: 2000,
+                        icon: 'error',
+                        showConfirmButton: false
+                    })
+                    password.value = "" 
+                    comfirm.value = ""
                 }
+
             }
         } else {
             alert("Please enter the password.")

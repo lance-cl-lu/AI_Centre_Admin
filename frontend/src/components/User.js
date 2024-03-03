@@ -5,6 +5,7 @@ import { Col, Form, ListGroup, Row, FloatingLabel } from 'react-bootstrap';
 import { Button, Card, Box } from '@chakra-ui/react';
 import jwt_decode from "jwt-decode";
 import ListNoteBook from './ListNoteBook';
+import Swal from 'sweetalert2';
 
 function User() {
     let state = useLocation().state;
@@ -71,11 +72,22 @@ function User() {
             }),
         })
         if(response.status===200){
-            alert('User deleted successfully');
-            window.location.href = '/';
-        }
-        else {
-            console.log('error');
+            Swal.fire({
+                title: 'User deleted successfully',
+                icon: 'success',
+                timer: 2000,
+                timerProgressBar: true,
+            }).then(() => {
+                // back to the previous page
+                window.history.back();
+            }
+        )} else {
+            Swal.fire({
+                title: 'Something wrong!!!',
+                icon: 'error',
+                timer: 2000,
+                timerProgressBar: true,
+            })
         }
     }
 
@@ -161,10 +173,22 @@ function User() {
                 }),
             });
             if (response.status===200) {
-                alert('User information change successfully');
-                window.location.href='/'
+                Swal.fire({
+                    title: 'User updated successfully',
+                    icon: 'success',
+                    timer: 2000,
+                    timerProgressBar: true,
+                })
+                setTimeout(() => {
+                    window.history.back();
+                }, 2000);
             } else {
-                alert('Something wrong!!!')
+                Swal.fire({
+                    title: 'Something wrong!!!',
+                    icon: 'error',
+                    timer: 2000,
+                    timerProgressBar: true,
+                })
             }
 
         }
