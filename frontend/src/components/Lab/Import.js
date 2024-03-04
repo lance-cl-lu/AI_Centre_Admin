@@ -86,8 +86,9 @@ function LabImport() {
                 <Form.Label>Excel File</Form.Label>
                 <Form.Control type="file" accept=".xlsx" />
             </Form.Group>
-            <Button variant="secondary" type="button" onClick={handletemplate}>Download Template</Button>
-            <Button variant="primary" type="submit">Submit</Button>
+
+            <Button variant="secondary" type="button" onClick={handletemplate} style={{ margin: '1rem' }}>Download Template</Button>
+            <Button variant="primary" type="submit" style={{ margin: '1rem' }}>Submit</Button>
             <Button variant="warning" type="button" onClick={handeCancel} style={{ margin: '1rem' }}>Cancel and Back</Button>
         </Form>
 

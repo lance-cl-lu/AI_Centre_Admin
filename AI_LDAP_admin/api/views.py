@@ -461,6 +461,8 @@ def adduser(request):
     password = data['password']
     labname = data['lab']
     email = data['email']
+    # email lowercase
+    email = email.lower()
     is_lab_manager = data['is_lab_manager']
     cpu_quota = data['cpu_quota']
     mem_quota = data['mem_quota']

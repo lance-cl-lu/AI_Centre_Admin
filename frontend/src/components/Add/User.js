@@ -216,7 +216,7 @@ function AddUser() {
                         Memory Quota
                         <FloatingLabel
                             controlId="floatingSelect"
-                            label="Memory Quota (Mi)"
+                            label="Memory Quota (Gi)"
                             className="mb-3"
                         >
                         <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="16" step="0.1"/>
