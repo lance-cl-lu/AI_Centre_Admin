@@ -469,7 +469,8 @@ def adduser(request):
     gpu_quota = data['gpu_quota']
 
     if check_email(email):
-        return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
+        profilename = get_profile_by_email(email)
+        return Response(status=500, data={"message": "Email is exist from kubeflow profile, profile is {}".format(profilename)})
     try:
         # if user is exist, return 500
         user_exist = User.objects.get(username=username)
