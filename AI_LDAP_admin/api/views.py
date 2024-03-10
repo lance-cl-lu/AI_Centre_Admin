@@ -133,7 +133,7 @@ def check_email(email):
     profiles = get_all_profiles()['items']
     # pprint(profiles)
     for p in profiles:
-        if p['spec']['owner']['name'] == email:
+        if p['spec']['owner']['name'] == email.lower():
             return True
     return False
     
@@ -150,7 +150,7 @@ def delete_profile(name):
         group=group,
         version=version,
         plural=plural,
-        name=name
+        name=name.lower()
     )
     print(api_response)
 
@@ -170,7 +170,7 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         "apiVersion": "kubeflow.org/v1",
         "kind": "Profile",
         "metadata": {
-            "name": username,
+            "name": username.lower(),
             "annotations": {
                 "manager": manager
             }
@@ -178,7 +178,7 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         "spec": {
             "owner": {
                 "kind": "User",
-                "name": email
+                "name": email.lower()
             },
             "resourceQuotaSpec": {
                 "hard": {
