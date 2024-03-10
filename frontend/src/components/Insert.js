@@ -3,6 +3,9 @@ import { Form} from 'react-bootstrap';
 import { List, ListItem } from '@chakra-ui/react';
 import { useLocation } from 'react-router-dom';
 import Button from 'react-bootstrap/Button';
+
+// sweetalert2
+import Swal from 'sweetalert2';
 function Insert() {
     const state = useLocation().state;
     let [outsideuser, setOutsideuser] = useState([]);
@@ -54,10 +57,23 @@ function Insert() {
             body: JSON.stringify({'lab': state.group, 'user': username, 'admin': document.getElementById("admin").checked})
         });
         if(response.status===200) {
-            alert("Add sucessfully!!")
-            window.location.href = "/";
+            Swal.fire({
+                title: 'Add success',
+                text: 'The user has been added to the group',
+                icon: 'success',
+                timer: 2000,
+            });
+            // privious page
+            setTimeout(() => {
+                window.history.back();
+            }, 2000);
         } else {
-            alert("Add fail!!")
+            Swal.fire({
+                title: 'Add fail',
+                text: 'The user has been added to the group',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
         }
     }
 
@@ -82,11 +98,16 @@ function Insert() {
                     </Form.Group>
                     <div>
                         <p>User Filter: <List>
-                            {reg_user.map((user, index) => (
+                            {reg_user.length > 10 ? reg_user.slice(0, 10).map((user, index) => (
+                                <ListItem key={index}>
+                                    {user}
+                                </ListItem>
+                            )) : reg_user.map((user, index) => (
                                 <ListItem key={index}>
                                     {user}
                                 </ListItem>
                             ))}
+                            {reg_user.length > 10 ? <ListItem>...</ListItem> : null}
                         </List></p>
                     </div>                
             </Form>

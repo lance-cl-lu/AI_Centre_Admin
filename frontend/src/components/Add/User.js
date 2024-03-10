@@ -4,7 +4,8 @@ import './User.css'
 import { Button, Form, FloatingLabel } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2'
-
+import Toast from 'react-bootstrap/Toast';
+import WarningIcon from '@mui/icons-material/Warning';
 
 function AddUser() {
     const [lab, setLab] = useState([]);
@@ -144,6 +145,10 @@ function AddUser() {
     return (
         <div style={{fontFamily: "Comic Sans MS", display: "flex", flexDirection: "column", alignItems: "center"}}>
             <h1>Add User</h1><br></br>
+            <Toast style={{position: "absolute", top: "11vh", right: "12vw"}} bg={'warning'}>
+                <Toast.Body><WarningIcon/>
+                {' '}Warning!! Email and username will be converted to lowercase.</Toast.Body>
+            </Toast>
             {/*<form onSubmit={handleSubmit} className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", width: "75%"}}>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>First Name:   </label><input type="text" placeholder="Please enter the first name" style={{width: "70%"}} /></div><br/>
                 <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Last Name:   </label><input type="text" placeholder="Please enter the last name" style={{width: "71%"}} /></div><br/>

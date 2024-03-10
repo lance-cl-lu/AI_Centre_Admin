@@ -150,7 +150,7 @@ def delete_profile(name):
         group=group,
         version=version,
         plural=plural,
-        name=name.lower()
+        name=name.lower(),
     )
     print(api_response)
 
@@ -329,19 +329,11 @@ def lab_list(request):
 def user_list(request):
     User_object = User.objects.all()
     user_list = []
-    root_list = []
     for user in User_object:
         user_list.append(user.username)
-    # remote permission is 0
-    for user in UserDetail.objects.filter(permission=0):
-        root_list.append(user.uid.username)
-    # remove root user
-    for user in root_list:
-        user_list.remove(user)
-    for user in User_object:
-        # if user exit in user_list, remove it
-        if user.username in user_list:
-            user_list.remove(user.username)
+    # remove the root user
+    for detail in UserDetail.objects.filter(permission=0):
+        user_list.remove(detail.uid.username)
     return Response(user_list, status=200)
 
 
@@ -455,22 +447,18 @@ def addlab(request):
 @api_view(['POST'])
 def adduser(request):
     data = json.loads(request.body.decode('utf-8'))
-    username = data['username']
+    username = data['username'].lower()
     firstname = data['first_name']
     lastname = data['last_name']
     password = data['password']
     labname = data['lab']
-    email = data['email']
-    # email lowercase
-    email = email.lower()
-    is_lab_manager = data['is_lab_manager']
+    email = data['email'].lower()
     cpu_quota = data['cpu_quota']
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
 
     if check_email(email):
-        profilename = get_profile_by_email(email)
-        return Response(status=500, data={"message": "Email is exist from kubeflow profile, profile is {}".format(profilename)})
+        return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
     try:
         # if user is exist, return 500
         user_exist = User.objects.get(username=username)
@@ -630,15 +618,9 @@ def get_user_info(request):
     }
     return Response(data, status=200)
 
-@api_view(['POST'])
-def user_delete(request):
-    data = json.loads(request.body.decode('utf-8'))
-    username = data['username']
-
-    user_obj = User.objects.get(username=data['username'])
-    detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+def deleteUserModel(username):
+    user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
-
     conn = connectLDAP()
     try:
         conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
@@ -652,9 +634,12 @@ def user_delete(request):
         except:
             pass
     User.objects.get(username=username).delete()
-
     delete_profile(profileName)
 
+@api_view(['POST'])
+def user_delete(request):
+    data = json.loads(request.body.decode('utf-8'))
+    deleteUserModel(data['username'])
     return Response(status=200)
 
 @api_view(['POST'])
@@ -814,6 +799,10 @@ def excel(request):
         for row in worksheet.iter_rows():
             if row[0].value == "Username":
                 continue
+            if row[0] is None:
+                continue
+            row[0].value = row[0].value.lower()
+            row[3].value = row[3].value.lower()
             if Group.objects.filter(name=row[1].value).exists() is False:
                 group = Group.objects.create(name=row[1].value)
                 print("add lab {} success".format(row[1].value))
@@ -1024,7 +1013,7 @@ def export_lab_user(request):
             memory = "0"
             cpu = "0"
             gpu = "0"
-        user_list.append([user.username, "", user.email, user.first_name, user.last_name, get_permission(user.username, lab), cpu, gpu, memory])
+        user_list.append([user.username, user.password ,user.email, user.first_name, user.last_name, get_permission(user.username, lab), cpu, gpu, memory])
     # make data to excel
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
@@ -1051,12 +1040,15 @@ def import_lab_user(request):
         # Get all information from the excel file
         userinfo = []
         for row in worksheet.iter_rows():
-            if row[0].value == "Username":
+            if row[0].value == "Username" or row[0].value is None:
                 continue
+            print(row[0])
+            Excelemail = row[2].value.lower() if row[2].value is not None else None 
             user = {
-                "username": row[0].value,
+                "username": row[0].value.lower(),
                 "password": row[1].value,
-                "email": row[2].value,
+                # lowercase email
+                "email": Excelemail,
                 "firstname": row[3].value,
                 "lastname": row[4].value,
                 "permission": row[5].value,
@@ -1065,6 +1057,7 @@ def import_lab_user(request):
                 "mem_quota": row[8].value,
             }
             userinfo.append(user)
+            print(user)
         # check all data is valid or not with database, use pandas
         for user in userinfo:
             if user['permission'] != 'admin' and user['permission'] != 'user':
@@ -1077,23 +1070,24 @@ def import_lab_user(request):
         for user in userinfo:
             # if username is exist in database
             if User.objects.filter(username=user['username']).exists() is True:
-                failed_user.append(user['username'])
+                failed_user.append({user['username']: "username is exist in database"})
                 continue
             if User.objects.filter(email=user['email']).exists() is True:
-                failed_user.append(user['username'])
+                # "username":"reason"
+                failed_user.append({user['username']: "email is exist in database"})
                 continue
             # if user is exist in ldap
             try:
                 conn = connectLDAP()
                 conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
                 for entry in conn.entries:
-                    failed_user.append(user['username'])
+                    failed_user.append({user['username']: "username is exist in ldap"})
                     continue
             except:
                 pass
             # if user is exist in kubeflow
             if get_profile_by_email(user['email']) is not None:
-                failed_user.append(user['username'])
+                failed_user.append({user['username']: "email is exist in kubeflow"})
                 continue
         # add user into django, ldap, and kubeflow
         for user in userinfo:
@@ -1105,9 +1099,18 @@ def import_lab_user(request):
                     UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
                 elif user['permission'] == 'user':
                     UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=group))
+            except:
+                failed_user.append({user['username']: "user add into database failed"})
+                continue
+            
+            try:
                 # add user into kube flow
-                create_profile(username=user['username'], email=user['email'], cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
+                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
+            except:
+                failed_user.append({user['username']: "user add into kubeflow failed"})
+                continue
                 # add user into ldap
+            try:
                 group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(group)
                 user_dn = 'cn={},ou=users,dc=example,dc=org'.format(user['username']),
                 conn = connectLDAP()
@@ -1121,13 +1124,15 @@ def import_lab_user(request):
                 conn.modify(group_dn, {'memberUid': [(MODIFY_ADD, [user['username']])]})
                 conn.unbind()
             except:
-                pass
+                failed_user.append({user['username']: "user add into ldap failed"})
+                continue
+        print(failed_user)
         if len(failed_user) == 0:
             return JsonResponse({'message': 'all user is added'}, status=200)
         elif len(failed_user) == len(userinfo):
-            return JsonResponse({'message': 'except user {}, the other users were added'.format(failed_user)}, status=200)
+            return JsonResponse({'message': 'except user {}, the other users were added'.format(failed_user)}, status=400)
         else:
-            return JsonResponse({'message': 'all user were not added'.format(failed_user)}, status=500)
+            return JsonResponse({'message': '{} users are not added'.format(failed_user)}, status=400)
     else:
         return JsonResponse({'message': 'file is not exist'}, status=400)
         
@@ -1319,17 +1324,19 @@ def synchronize_db_ldap():
 def multiple_user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
-    conn = connectLDAP()
     for user in users:
-        User.objects.get(username=user).delete()
-        conn.delete('cn={},ou=users,dc=example,dc=org'.format(user))
-        # remove from group entry
-        conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
-        for entry in conn.entries:
-            try:
-                conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [user])]})
-            except:
-                pass
+        deleteUserModel(User.objects.get(username=user).username)
+        # delete_profile(get_profile_by_email(User.objects.get(username=user).email))
+        # conn.delete('cn={},ou=users,dc=example,dc=org'.format(user))
+        # # remove from group entry
+        # conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+        # for entry in conn.entries:
+        #     try:
+        #         conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [user])]})
+        #     except:
+        #         pass
+        # User.objects.get(username=user).delete()
+        # remove user from kube flow
     return Response(status=200)
 
 @api_view(['POST'])

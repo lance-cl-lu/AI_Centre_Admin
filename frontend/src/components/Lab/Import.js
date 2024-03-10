@@ -2,6 +2,9 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import jwt_decode from "jwt-decode";
 import { Button, Form } from "react-bootstrap";
+import WarningIcon from '@mui/icons-material/Warning';
+import { Toast } from "react-bootstrap";
+import Swal from "sweetalert2";
 function LabImport() {
     const lab = useLocation().state['lab'];
     const user = localStorage.getItem('authToken')
@@ -32,8 +35,15 @@ function LabImport() {
         });
 
         if (response.status === 200) {
-            alert('Excel added successfully');
-            window.location.href = '/';
+            Swal.fire({
+                title: 'Excel added successfully',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false,
+            });
+            setTimeout(() => {
+                window.history.back();
+            }, 2000);
         } else {
             // alert error message
             let data = await response.json();
@@ -83,10 +93,15 @@ function LabImport() {
           <h1>Add Excel for {lab}</h1>
           <Form onSubmit={handleSubmit}>
             <Form.Group controlId="file">
-                <Form.Label>Excel File</Form.Label>
+                <Form.Label>
+                  Excel File
+                </Form.Label>
                 <Form.Control type="file" accept=".xlsx" />
             </Form.Group>
-
+            <Toast style={{position: "absolute", top: "11vh", right: "5vw"}} bg={'warning'}>
+                <Toast.Body><WarningIcon/>
+                {' '}Warning!! Email and username will be converted to lowercase.</Toast.Body>
+            </Toast>
             <Button variant="secondary" type="button" onClick={handletemplate} style={{ margin: '1rem' }}>Download Template</Button>
             <Button variant="primary" type="submit" style={{ margin: '1rem' }}>Submit</Button>
             <Button variant="warning" type="button" onClick={handeCancel} style={{ margin: '1rem' }}>Cancel and Back</Button>

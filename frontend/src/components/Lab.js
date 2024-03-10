@@ -10,7 +10,6 @@ function Lab() {
     const location = useLocation();
     const state = location.state;
     const [labinfo, setLabinfo] = useState([]);
-    const [outsideuser, setOutsideuser] = useState([]);
     const [sortIncline, setSortinliece] = useState(true);
     const [CheckAll, setCheckAll] = useState(false);
     useEffect(() => {
@@ -111,21 +110,7 @@ function Lab() {
             alert("something wrong");
         }
     }
-    const handleOnclick_import = async() => {
-        let response = await fetch("/api/ldap/lab/import/", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({'lab': state.lab})
-        });
-        if(response.status===200) {
-            alert("Import sucessfully!!")
-            window.location.href='/'
-        } else {
-            alert("error");
-        }
-    }
+
     const handleSort = async() => {
         // sort the memberUid
         if(sortIncline) {
@@ -196,8 +181,15 @@ function Lab() {
                 body: JSON.stringify({"users": usernames})
             });
             if(response.status===200) {
-                alert("Delete sucessfully!!")
-                window.location.href='/'
+                Swal.fire({
+                    title: 'Delete success',
+                    text: 'These users have been deleted',
+                    icon: 'success',
+                    timer: 2000,
+                });
+                setTimeout(() => {
+                    window.history.back();
+                }, 2000);
             } else {
                 // alert the respone error message
                 let data = await response.json();
@@ -228,11 +220,24 @@ function Lab() {
                 body: JSON.stringify({"group": state.lab, "users": usernames})
             });
             if(response.status===200) {
-                alert("Remove sucessfully!!")
-                window.location.href='/'
+                Swal.fire({
+                    title: 'Remove success',
+                    text: 'These users have been removed from the group',
+                    icon: 'success',
+                    timer: 2000,
+                });
+                // privious page
+                setTimeout(() => {
+                    window.history.back();
+                }, 2000);
             } else {
                 let respone = await response.json();
-                alert(respone.message);
+                Swal.fire({
+                    title: 'Remove fail',
+                    text: respone.message,
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
             }
 
         }
@@ -267,7 +272,7 @@ function Lab() {
                 <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
                 <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
                 <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
-                <Link to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" >Import Group</Button></Link>
+                <Link to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" color='rgb(255, 255, 255);' >Import Group</Button></Link>
                 <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort with ascending</Button>
             </Container>
             <br/>
@@ -365,7 +370,7 @@ function Lab() {
                                       });
                                 }
                             } >Delete</Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none", display: "grid"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
                         </tr>
                     )) : null  
                     }

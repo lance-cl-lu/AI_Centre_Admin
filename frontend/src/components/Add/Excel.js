@@ -1,6 +1,8 @@
 import React from 'react';
 import jwt_decode from 'jwt-decode';
 import { Button, Form } from 'react-bootstrap';
+import WarningIcon from '@mui/icons-material/Warning';
+import { Toast } from 'react-bootstrap';
 
 function AddExcel() {
   const user = localStorage.getItem('authToken')
@@ -49,6 +51,10 @@ function AddExcel() {
   return (
     <div>
       <h1>Add Excel</h1>
+      <Toast style={{position: "absolute", top: "11vh", right: "12vw"}} bg={'warning'}>
+                <Toast.Body><WarningIcon/>
+                {' '}Warning!! Email and username will be converted to lowercase.</Toast.Body>
+      </Toast>
       <Form onSubmit={handleSubmit}>
         <Form.Group controlId="file">
           <Form.Label>Excel File</Form.Label>

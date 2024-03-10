@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "dependencies": {
+    "@canvas-fonts/helvetica": "^1.0.4",
     "@chakra-ui/react": "^2.8.2",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
@@ -12,6 +13,7 @@
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
+    "@visx/wordcloud": "^3.3.0",
     "bootstrap": "^5.3.3",
     "framer-motion": "^10.18.0",
     "jwt-decode": "^3.1.2",

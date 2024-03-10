@@ -37,7 +37,7 @@ function Add() {
 
     return (
         <div className="AddContent">
-            { permission==='root' ? <Card className="AddType"><Card.Body><Link to="/add/lab" className="LinkStyle"><span>Add Labatory    <GroupsIcon fontSize='large'/></span></Link></Card.Body></Card> : null }
+            { permission==='root' ? <Card className="AddType"><Card.Body><Link to="/add/lab" className="LinkStyle"><span>Add Group    <GroupsIcon fontSize='large'/></span></Link></Card.Body></Card> : null }
             { matchedResult || permission==='root' ? <> <Card className="AddType"><Card.Body><Link to="/add/user" className="LinkStyle" state={{"group":"null"}}><span>Add User    <AssignmentIndIcon fontSize='large'/></span></Link></Card.Body></Card> </>:
             null }
             { permission==='root' ? 

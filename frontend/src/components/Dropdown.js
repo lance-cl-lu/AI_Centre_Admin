@@ -34,11 +34,11 @@ function Dropdown() {
         <li>
           <Link to="https://shorturl.at/jrLU7" className="dropdown-item">User usage</Link>
         </li>
-        <li>
+        {/* <li>
           { permission === 'admin' || permission === 'root' ? <Link to="https://changgunguniversity-my.sharepoint.com/:p:/g/personal/d000017445_cgu_edu_tw/EdyWh_bI4NpNhyUV5Qx0Ik4Be9H0rpI-WunMMy4mkhnv0g?e=fsASwD" className="dropdown-item">Help</Link> :
           null
           }
-        </li>
+        </li> */}
         <li>
           <Link to="/" className="dropdown-item" onClick={logoutUser}>
             Logout
