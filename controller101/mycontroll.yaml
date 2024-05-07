@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: your-controller
+  namespace: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: your-controller
+  template:
+    metadata:
+      labels:
+        app: your-controller
+    spec:
+      serviceAccountName: your-controller-sa  # Specify the service account here
+      containers:
+      - name: your-controller
+        image: lms025187/mycontroller:latest
+        imagePullPolicy: Always

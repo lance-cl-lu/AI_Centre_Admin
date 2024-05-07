@@ -1,0 +1,328 @@
+Pod: activator-7c5cd78566-rwqn2 in Namespace: knative-serving
+Container: activator	 CPU Usage: 891300n	 Memory Usage: 21936Ki
+Pod: activator-7c5cd78566-rwqn2 in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 1685348n	 Memory Usage: 83288Ki
+Pod: admission-webhook-deployment-79d6f8c8fb-8hd56 in Namespace: kubeflow
+Container: admission-webhook	 CPU Usage: 31903n	 Memory Usage: 19268Ki
+Pod: alertmanager-kube-prometheus-stack-alertmanager-0 in Namespace: monitoring
+Container: config-reloader	 CPU Usage: 0	 Memory Usage: 19424Ki
+Pod: alertmanager-kube-prometheus-stack-alertmanager-0 in Namespace: monitoring
+Container: alertmanager	 CPU Usage: 1028396n	 Memory Usage: 25400Ki
+Pod: argocd-application-controller-0 in Namespace: argocd
+Container: argocd-application-controller	 CPU Usage: 8739661n	 Memory Usage: 461812Ki
+Pod: argocd-applicationset-controller-5b7b777d7d-r487m in Namespace: argocd
+Container: argocd-applicationset-controller	 CPU Usage: 215582n	 Memory Usage: 29340Ki
+Pod: argocd-dex-server-5fb6bf4f98-rsm6g in Namespace: argocd
+Container: dex	 CPU Usage: 34039n	 Memory Usage: 22156Ki
+Pod: argocd-notifications-controller-66f497d998-5lrmp in Namespace: argocd
+Container: argocd-notifications-controller	 CPU Usage: 101469n	 Memory Usage: 22376Ki
+Pod: argocd-redis-697f8cbc6d-n2v4z in Namespace: argocd
+Container: redis	 CPU Usage: 1109854n	 Memory Usage: 7132Ki
+Pod: argocd-repo-server-6578b85df6-qxdst in Namespace: argocd
+Container: argocd-repo-server	 CPU Usage: 87839n	 Memory Usage: 94060Ki
+Pod: argocd-server-58578796-znqxx in Namespace: argocd
+Container: argocd-server	 CPU Usage: 461817n	 Memory Usage: 61300Ki
+Pod: authservice-0 in Namespace: istio-system
+Container: authservice	 CPU Usage: 25809n	 Memory Usage: 9764Ki
+Pod: autoscaler-98487645d-lp8h6 in Namespace: knative-serving
+Container: autoscaler	 CPU Usage: 2905104n	 Memory Usage: 24936Ki
+Pod: autoscaler-98487645d-lp8h6 in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 2084325n	 Memory Usage: 72744Ki
+Pod: backend-deployment-c6d8454cd-sfzxk in Namespace: ldap
+Container: backend	 CPU Usage: 24019288n	 Memory Usage: 165412Ki
+Pod: cache-server-86477d5fbd-26ppt in Namespace: kubeflow
+Container: server	 CPU Usage: 31907n	 Memory Usage: 16216Ki
+Pod: cache-server-86477d5fbd-26ppt in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1277270n	 Memory Usage: 70512Ki
+Pod: calico-kube-controllers-5d4b78db86-6rmn9 in Namespace: kube-system
+Container: calico-kube-controllers	 CPU Usage: 3531689n	 Memory Usage: 61996Ki
+Pod: calico-node-gnvcw in Namespace: kube-system
+Container: calico-node	 CPU Usage: 22308620n	 Memory Usage: 127764Ki
+Pod: calico-node-wdznz in Namespace: kube-system
+Container: calico-node	 CPU Usage: 35364081n	 Memory Usage: 165956Ki
+Pod: cdi-apiserver-fd84965fb-8c29w in Namespace: cdi
+Container: cdi-apiserver	 CPU Usage: 688768n	 Memory Usage: 9288Ki
+Pod: cdi-deployment-d7647949f-btxh5 in Namespace: cdi
+Container: cdi-controller	 CPU Usage: 2348723n	 Memory Usage: 93100Ki
+Pod: cdi-operator-6f7f5b9654-d94qb in Namespace: cdi
+Container: cdi-operator	 CPU Usage: 1286354n	 Memory Usage: 125812Ki
+Pod: cdi-uploadproxy-bc9d55ff-c58lg in Namespace: cdi
+Container: cdi-uploadproxy	 CPU Usage: 642075n	 Memory Usage: 8816Ki
+Pod: centraldashboard-85d4c8644f-vcf9m in Namespace: kubeflow
+Container: centraldashboard	 CPU Usage: 40762n	 Memory Usage: 99280Ki
+Pod: centraldashboard-85d4c8644f-vcf9m in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1276891n	 Memory Usage: 74500Ki
+Pod: cert-manager-7b8c77d4bd-246mv in Namespace: cert-manager
+Container: cert-manager	 CPU Usage: 381342n	 Memory Usage: 55120Ki
+Pod: cert-manager-cainjector-7c744f57b5-t8vqt in Namespace: cert-manager
+Container: cert-manager	 CPU Usage: 1501585n	 Memory Usage: 175540Ki
+Pod: cert-manager-webhook-fcd445bc4-jthn4 in Namespace: cert-manager
+Container: cert-manager	 CPU Usage: 525661n	 Memory Usage: 22684Ki
+Pod: cguaicadmin-remote-desktop-c29f5 in Namespace: default
+Container: prepull-container-two	 CPU Usage: 0	 Memory Usage: 584Ki
+Pod: cguaicadmin-remote-desktop-c29f5 in Namespace: default
+Container: prepull-container-one	 CPU Usage: 0	 Memory Usage: 632Ki
+Pod: cguaicadmin-remote-desktop-c29f5 in Namespace: default
+Container: prepull-container-four	 CPU Usage: 0	 Memory Usage: 576Ki
+Pod: cguaicadmin-remote-desktop-c29f5 in Namespace: default
+Container: prepull-container-three	 CPU Usage: 0	 Memory Usage: 624Ki
+Pod: cguaicadmin-remote-desktop-q9cht in Namespace: default
+Container: prepull-container-one	 CPU Usage: 0	 Memory Usage: 456Ki
+Pod: cguaicadmin-remote-desktop-q9cht in Namespace: default
+Container: prepull-container-three	 CPU Usage: 0	 Memory Usage: 608Ki
+Pod: cguaicadmin-remote-desktop-q9cht in Namespace: default
+Container: prepull-container-two	 CPU Usage: 0	 Memory Usage: 596Ki
+Pod: cguaicadmin-remote-desktop-q9cht in Namespace: default
+Container: prepull-container-four	 CPU Usage: 0	 Memory Usage: 524Ki
+Pod: cluster-local-gateway-55ff4696f4-fhqqs in Namespace: istio-system
+Container: istio-proxy	 CPU Usage: 4754349n	 Memory Usage: 81936Ki
+Pod: competition-867d9c9dd6-8987j in Namespace: competition
+Container: my-container	 CPU Usage: 85812n	 Memory Usage: 1666996Ki
+Pod: controller-7546f544b7-srmc7 in Namespace: knative-serving
+Container: controller	 CPU Usage: 1707055n	 Memory Usage: 39260Ki
+Pod: controller-7546f544b7-srmc7 in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 2258089n	 Memory Usage: 73412Ki
+Pod: coredns-558bd4d5db-278p9 in Namespace: kube-system
+Container: coredns	 CPU Usage: 5164855n	 Memory Usage: 22960Ki
+Pod: coredns-558bd4d5db-g4l2d in Namespace: kube-system
+Container: coredns	 CPU Usage: 3599980n	 Memory Usage: 21792Ki
+Pod: demo-supabase-db-9b6fc48c5-lsxrz in Namespace: supabase
+Container: supabase-db	 CPU Usage: 519321n	 Memory Usage: 96048Ki
+Pod: demo-supabase-kong-76b49d8b8-8dbnr in Namespace: supabase
+Container: supabase-kong	 CPU Usage: 1143730n	 Memory Usage: 1977352Ki
+Pod: demo-supabase-meta-75c85bd7c4-w968t in Namespace: supabase
+Container: supabase-meta	 CPU Usage: 1384209n	 Memory Usage: 74716Ki
+Pod: demo-supabase-rest-667bf46b5f-v9q6c in Namespace: supabase
+Container: supabase-rest	 CPU Usage: 315446n	 Memory Usage: 32936Ki
+Pod: demo-supabase-studio-7d4db7c587-m6nsz in Namespace: supabase
+Container: supabase-studio	 CPU Usage: 0	 Memory Usage: 107136Ki
+Pod: dex-5d6f6c75bb-w6h48 in Namespace: auth
+Container: dex	 CPU Usage: 96199n	 Memory Usage: 14528Ki
+Pod: domain-mapping-5d56bfc7d-rzlzb in Namespace: knative-serving
+Container: domain-mapping	 CPU Usage: 550755n	 Memory Usage: 18792Ki
+Pod: domain-mapping-5d56bfc7d-rzlzb in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 1347957n	 Memory Usage: 70924Ki
+Pod: domainmapping-webhook-696559d49c-528n6 in Namespace: knative-serving
+Container: domainmapping-webhook	 CPU Usage: 2041717n	 Memory Usage: 27124Ki
+Pod: domainmapping-webhook-696559d49c-528n6 in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 4654828n	 Memory Usage: 79616Ki
+Pod: etcd-master-dev in Namespace: kube-system
+Container: etcd	 CPU Usage: 70870288n	 Memory Usage: 105284Ki
+Pod: eventing-controller-8457bd9747-f2rcp in Namespace: knative-eventing
+Container: eventing-controller	 CPU Usage: 4598896n	 Memory Usage: 116656Ki
+Pod: eventing-webhook-69986cfb5d-v4nz2 in Namespace: knative-eventing
+Container: eventing-webhook	 CPU Usage: 2957684n	 Memory Usage: 127984Ki
+Pod: gpu-feature-discovery-2fkht in Namespace: gpu
+Container: gpu-feature-discovery	 CPU Usage: 0	 Memory Usage: 25012Ki
+Pod: gpu-operator-1697443883-node-feature-discovery-master-8596vdklx in Namespace: gpu
+Container: master	 CPU Usage: 5312802n	 Memory Usage: 52848Ki
+Pod: gpu-operator-1697443883-node-feature-discovery-worker-5dbb7 in Namespace: gpu
+Container: worker	 CPU Usage: 0	 Memory Usage: 29856Ki
+Pod: gpu-operator-1697443883-node-feature-discovery-worker-jbsnr in Namespace: gpu
+Container: worker	 CPU Usage: 9014999n	 Memory Usage: 23276Ki
+Pod: gpu-operator-7fc6ffb89-zkcsc in Namespace: gpu
+Container: gpu-operator	 CPU Usage: 7354701n	 Memory Usage: 161304Ki
+Pod: istio-ingressgateway-6668f9548d-cc8w7 in Namespace: istio-system
+Container: istio-proxy	 CPU Usage: 4982659n	 Memory Usage: 126212Ki
+Pod: istiod-6678f9548b-72zw7 in Namespace: istio-system
+Container: discovery	 CPU Usage: 2533583n	 Memory Usage: 230076Ki
+Pod: jupyter-web-app-deployment-747f4f59f-qqbpj in Namespace: kubeflow
+Container: jupyter-web-app	 CPU Usage: 104437n	 Memory Usage: 171228Ki
+Pod: katib-controller-75b988dccc-sdb8x in Namespace: kubeflow
+Container: katib-controller	 CPU Usage: 832026n	 Memory Usage: 42092Ki
+Pod: katib-db-manager-5d46869758-9nkhf in Namespace: kubeflow
+Container: katib-db-manager	 CPU Usage: 13743n	 Memory Usage: 15744Ki
+Pod: katib-mysql-5bf95ddfcc-dxd5g in Namespace: kubeflow
+Container: katib-mysql	 CPU Usage: 5564875n	 Memory Usage: 362580Ki
+Pod: katib-ui-766d5dc8ff-wn8nt in Namespace: kubeflow
+Container: katib-ui	 CPU Usage: 0	 Memory Usage: 10088Ki
+Pod: kserve-controller-manager-0 in Namespace: kubeflow
+Container: kube-rbac-proxy	 CPU Usage: 16509n	 Memory Usage: 7104Ki
+Pod: kserve-controller-manager-0 in Namespace: kubeflow
+Container: manager	 CPU Usage: 242563n	 Memory Usage: 23532Ki
+Pod: kserve-models-web-app-5878544ffd-bvczf in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1529892n	 Memory Usage: 70768Ki
+Pod: kserve-models-web-app-5878544ffd-bvczf in Namespace: kubeflow
+Container: kserve-models-web-app	 CPU Usage: 433873n	 Memory Usage: 186772Ki
+Pod: kube-apiserver-master-dev in Namespace: kube-system
+Container: kube-apiserver	 CPU Usage: 215703020n	 Memory Usage: 2454272Ki
+Pod: kube-controller-manager-master-dev in Namespace: kube-system
+Container: kube-controller-manager	 CPU Usage: 26958517n	 Memory Usage: 198084Ki
+Pod: kube-prometheus-stack-grafana-9696478df-xvtxj in Namespace: monitoring
+Container: grafana-sc-dashboard	 CPU Usage: 8629n	 Memory Usage: 78744Ki
+Pod: kube-prometheus-stack-grafana-9696478df-xvtxj in Namespace: monitoring
+Container: grafana	 CPU Usage: 3406811n	 Memory Usage: 147328Ki
+Pod: kube-prometheus-stack-grafana-9696478df-xvtxj in Namespace: monitoring
+Container: grafana-sc-datasources	 CPU Usage: 7283n	 Memory Usage: 75052Ki
+Pod: kube-prometheus-stack-kube-state-metrics-6cd8b4c859-xdblt in Namespace: monitoring
+Container: kube-state-metrics	 CPU Usage: 2632505n	 Memory Usage: 44372Ki
+Pod: kube-prometheus-stack-operator-77f65fbc8b-zl4sh in Namespace: monitoring
+Container: kube-prometheus-stack	 CPU Usage: 352508n	 Memory Usage: 49796Ki
+Pod: kube-prometheus-stack-prometheus-node-exporter-26bdn in Namespace: monitoring
+Container: node-exporter	 CPU Usage: 64182n	 Memory Usage: 16620Ki
+Pod: kube-prometheus-stack-prometheus-node-exporter-ctmq8 in Namespace: monitoring
+Container: node-exporter	 CPU Usage: 7460270n	 Memory Usage: 19640Ki
+Pod: kube-proxy-hs2sb in Namespace: kube-system
+Container: kube-proxy	 CPU Usage: 215409n	 Memory Usage: 40312Ki
+Pod: kube-proxy-tkz6z in Namespace: kube-system
+Container: kube-proxy	 CPU Usage: 279933n	 Memory Usage: 30796Ki
+Pod: kube-scheduler-master-dev in Namespace: kube-system
+Container: kube-scheduler	 CPU Usage: 1811560n	 Memory Usage: 47884Ki
+Pod: kubeflow-pipelines-profile-controller-5d98fd7b4f-fwnhw in Namespace: kubeflow
+Container: profile-controller	 CPU Usage: 105644n	 Memory Usage: 12020Ki
+Pod: metacontroller-0 in Namespace: kubeflow
+Container: metacontroller	 CPU Usage: 1739754n	 Memory Usage: 74440Ki
+Pod: metadata-envoy-deployment-5648f897fc-82p47 in Namespace: kubeflow
+Container: container	 CPU Usage: 4221968n	 Memory Usage: 16144Ki
+Pod: metadata-grpc-deployment-f8d68f687-2gcdc in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1350101n	 Memory Usage: 70636Ki
+Pod: metadata-grpc-deployment-f8d68f687-2gcdc in Namespace: kubeflow
+Container: container	 CPU Usage: 129667n	 Memory Usage: 10Mi
+Pod: metadata-writer-8bd8b7b66-v689v in Namespace: kubeflow
+Container: main	 CPU Usage: 61655n	 Memory Usage: 52232Ki
+Pod: metadata-writer-8bd8b7b66-v689v in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1254253n	 Memory Usage: 71016Ki
+Pod: metrics-metrics-server-5447fd956d-p9fd6 in Namespace: kube-system
+Container: metrics-server	 CPU Usage: 1561576n	 Memory Usage: 41892Ki
+Pod: minio-5b65df66c9-qxl4p in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1343158n	 Memory Usage: 69984Ki
+Pod: minio-5b65df66c9-qxl4p in Namespace: kubeflow
+Container: minio	 CPU Usage: 97481n	 Memory Usage: 13404Ki
+Pod: ml-pipeline-577699b8c8-v6q9f in Namespace: kubeflow
+Container: ml-pipeline-api-server	 CPU Usage: 2813093n	 Memory Usage: 49536Ki
+Pod: ml-pipeline-577699b8c8-v6q9f in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1568659n	 Memory Usage: 74920Ki
+Pod: ml-pipeline-persistenceagent-655b45bf96-pzk5q in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1302796n	 Memory Usage: 70556Ki
+Pod: ml-pipeline-persistenceagent-655b45bf96-pzk5q in Namespace: kubeflow
+Container: ml-pipeline-persistenceagent	 CPU Usage: 37215n	 Memory Usage: 15844Ki
+Pod: ml-pipeline-scheduledworkflow-8579759bc-82pr2 in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1344780n	 Memory Usage: 70596Ki
+Pod: ml-pipeline-scheduledworkflow-8579759bc-82pr2 in Namespace: kubeflow
+Container: ml-pipeline-scheduledworkflow	 CPU Usage: 33803n	 Memory Usage: 16020Ki
+Pod: ml-pipeline-ui-56bf8b69b4-kn5n5 in Namespace: kubeflow
+Container: ml-pipeline-ui	 CPU Usage: 2354478n	 Memory Usage: 62256Ki
+Pod: ml-pipeline-ui-56bf8b69b4-kn5n5 in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 2493643n	 Memory Usage: 72020Ki
+Pod: ml-pipeline-viewer-crd-5d7c9fcc9d-s4msc in Namespace: kubeflow
+Container: ml-pipeline-viewer-crd	 CPU Usage: 195317n	 Memory Usage: 21260Ki
+Pod: ml-pipeline-viewer-crd-5d7c9fcc9d-s4msc in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1265537n	 Memory Usage: 70196Ki
+Pod: ml-pipeline-visualizationserver-969df884f-pm8z9 in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1335223n	 Memory Usage: 70024Ki
+Pod: ml-pipeline-visualizationserver-969df884f-pm8z9 in Namespace: kubeflow
+Container: ml-pipeline-visualizationserver	 CPU Usage: 2855469n	 Memory Usage: 93256Ki
+Pod: mysql-5c7f79f986-c49sm in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1302989n	 Memory Usage: 70720Ki
+Pod: mysql-5c7f79f986-c49sm in Namespace: kubeflow
+Container: mysql	 CPU Usage: 361230n	 Memory Usage: 215692Ki
+Pod: net-istio-controller-c4d469c-292br in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 1496329n	 Memory Usage: 74096Ki
+Pod: net-istio-controller-c4d469c-292br in Namespace: knative-serving
+Container: controller	 CPU Usage: 1026660n	 Memory Usage: 43788Ki
+Pod: net-istio-webhook-855bcb6747-7hkrs in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 1391237n	 Memory Usage: 71876Ki
+Pod: net-istio-webhook-855bcb6747-7hkrs in Namespace: knative-serving
+Container: webhook	 CPU Usage: 698059n	 Memory Usage: 21968Ki
+Pod: nfs-subdir-external-provisioner-55945847d7-jh7mz in Namespace: pv
+Container: nfs-subdir-external-provisioner	 CPU Usage: 788842n	 Memory Usage: 19808Ki
+Pod: node-resource-monitor-6c4d7d5f9b-whfmv in Namespace: cgu
+Container: node-resource-monitor	 CPU Usage: 203156n	 Memory Usage: 90796Ki
+Pod: notebook-controller-deployment-bc7cc9d77-cq2kn in Namespace: kubeflow
+Container: manager	 CPU Usage: 607124n	 Memory Usage: 43560Ki
+Pod: notebook-controller-deployment-bc7cc9d77-cq2kn in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 2090288n	 Memory Usage: 74184Ki
+Pod: nvidia-dcgm-exporter-pq64m in Namespace: gpu
+Container: nvidia-dcgm-exporter	 CPU Usage: 353802n	 Memory Usage: 332620Ki
+Pod: nvidia-device-plugin-daemonset-ckm8q in Namespace: gpu
+Container: nvidia-device-plugin	 CPU Usage: 10818n	 Memory Usage: 14856Ki
+Pod: nvidia-device-plugin-daemonset-qft9l in Namespace: kube-system
+Container: nvidia-device-plugin-ctr	 CPU Usage: 11562n	 Memory Usage: 7052Ki
+Pod: nvidia-operator-validator-z69fc in Namespace: gpu
+Container: nvidia-operator-validator	 CPU Usage: 0	 Memory Usage: 1140Ki
+Pod: openldap-0 in Namespace: default
+Container: openldap-stack-ha	 CPU Usage: 58273n	 Memory Usage: 5616Ki
+Pod: openldap-1 in Namespace: default
+Container: openldap-stack-ha	 CPU Usage: 64966n	 Memory Usage: 5772Ki
+Pod: openldap-2 in Namespace: default
+Container: openldap-stack-ha	 CPU Usage: 34942n	 Memory Usage: 5824Ki
+Pod: openldap-ltb-passwd-6f6bd6856f-tslh6 in Namespace: default
+Container: ltb-passwd	 CPU Usage: 606140n	 Memory Usage: 80548Ki
+Pod: openldap-phpldapadmin-6bc84dbccc-wcj7d in Namespace: default
+Container: phpldapadmin	 CPU Usage: 419617n	 Memory Usage: 118564Ki
+Pod: prepull-jupyterlab-tensorflow-pc4v9 in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 508Ki
+Pod: prepull-jupyterlab-tensorflow-wjl78 in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 620Ki
+Pod: prepull-old-monai-9pssh in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 556Ki
+Pod: prepull-old-monai-sw6dh in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 668Ki
+Pod: prepull-remote-desktop-eng-2ccx6 in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 580Ki
+Pod: prepull-remote-desktop-eng-8l52p in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 540Ki
+Pod: prepull-remote-desktop-qdpmw in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 552Ki
+Pod: prepull-remote-desktop-qsn4x in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 672Ki
+Pod: prepull-remote-desktop-ros-6922t in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 656Ki
+Pod: prepull-remote-desktop-ros-eng-lbrc9 in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 584Ki
+Pod: prepull-remote-desktop-ros-eng-qbqlq in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 636Ki
+Pod: prepull-remote-desktop-ros-fvrf5 in Namespace: default
+Container: prepull-container	 CPU Usage: 0	 Memory Usage: 476Ki
+Pod: profiles-deployment-79d49b8648-dnmhk in Namespace: kubeflow
+Container: kfam	 CPU Usage: 901527n	 Memory Usage: 16092Ki
+Pod: profiles-deployment-79d49b8648-dnmhk in Namespace: kubeflow
+Container: manager	 CPU Usage: 265694n	 Memory Usage: 30924Ki
+Pod: profiles-deployment-79d49b8648-dnmhk in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 1462869n	 Memory Usage: 72536Ki
+Pod: prometheus-kube-prometheus-stack-prometheus-0 in Namespace: monitoring
+Container: config-reloader	 CPU Usage: 1186734n	 Memory Usage: 23436Ki
+Pod: prometheus-kube-prometheus-stack-prometheus-0 in Namespace: monitoring
+Container: prometheus	 CPU Usage: 24022176n	 Memory Usage: 1146868Ki
+Pod: tensorboard-controller-deployment-5dc648487f-2cpkz in Namespace: kubeflow
+Container: manager	 CPU Usage: 215525n	 Memory Usage: 31212Ki
+Pod: tensorboard-controller-deployment-5dc648487f-2cpkz in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 2091930n	 Memory Usage: 70628Ki
+Pod: tensorboard-controller-deployment-5dc648487f-2cpkz in Namespace: kubeflow
+Container: kube-rbac-proxy	 CPU Usage: 17465n	 Memory Usage: 7880Ki
+Pod: tensorboards-web-app-deployment-6849d8c9bc-9vz9x in Namespace: kubeflow
+Container: tensorboards-web-app	 CPU Usage: 128061n	 Memory Usage: 157856Ki
+Pod: virt-api-7f78d8fb8-5f7zz in Namespace: kubevirt
+Container: virt-api	 CPU Usage: 1127211n	 Memory Usage: 148584Ki
+Pod: virt-api-7f78d8fb8-6sf7h in Namespace: kubevirt
+Container: virt-api	 CPU Usage: 6280249n	 Memory Usage: 153268Ki
+Pod: virt-controller-64fbc668cc-sxh79 in Namespace: kubevirt
+Container: virt-controller	 CPU Usage: 1035944n	 Memory Usage: 77180Ki
+Pod: virt-controller-64fbc668cc-wgjht in Namespace: kubevirt
+Container: virt-controller	 CPU Usage: 2472528n	 Memory Usage: 98052Ki
+Pod: virt-handler-bb7pk in Namespace: kubevirt
+Container: virt-handler	 CPU Usage: 1050532n	 Memory Usage: 89464Ki
+Pod: virt-launcher-testvm-hnxdk in Namespace: default
+Container: volumecontainerdisk	 CPU Usage: 42301n	 Memory Usage: 228Ki
+Pod: virt-launcher-testvm-hnxdk in Namespace: default
+Container: compute	 CPU Usage: 572019n	 Memory Usage: 108676Ki
+Pod: virt-launcher-testvm-hnxdk in Namespace: default
+Container: guest-console-log	 CPU Usage: 1189n	 Memory Usage: 3596Ki
+Pod: virt-launcher-win10-test-jsmz5 in Namespace: default
+Container: compute	 CPU Usage: 610391n	 Memory Usage: 5464Ki
+Pod: virt-operator-76f4b6c68-56gz4 in Namespace: kubevirt
+Container: virt-operator	 CPU Usage: 1240613n	 Memory Usage: 169020Ki
+Pod: virt-operator-76f4b6c68-fmp7p in Namespace: kubevirt
+Container: virt-operator	 CPU Usage: 2301233n	 Memory Usage: 199216Ki
+Pod: virtvnc-5b48f698ff-2f9h5 in Namespace: kubevirt
+Container: virtvnc	 CPU Usage: 74930n	 Memory Usage: 8448Ki
+Pod: volumes-web-app-deployment-5f56dd78-wzdt6 in Namespace: kubeflow
+Container: volumes-web-app	 CPU Usage: 98173n	 Memory Usage: 165068Ki
+Pod: webhook-59f9fdd446-ld7fs in Namespace: knative-serving
+Container: webhook	 CPU Usage: 2517904n	 Memory Usage: 34076Ki
+Pod: webhook-59f9fdd446-ld7fs in Namespace: knative-serving
+Container: istio-proxy	 CPU Usage: 4373683n	 Memory Usage: 76968Ki
+Pod: workflow-controller-6b9b6c5b46-8xmcr in Namespace: kubeflow
+Container: workflow-controller	 CPU Usage: 2826455n	 Memory Usage: 35608Ki
+Pod: workflow-controller-6b9b6c5b46-8xmcr in Namespace: kubeflow
+Container: istio-proxy	 CPU Usage: 2040244n	 Memory Usage: 71856Ki
