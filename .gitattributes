@@ -5,3 +5,4 @@
 *.css linguist-language=CSS
 *.json linguist-language=JSON
 *.md linguist-language=Markdown
+*.go linguist-language=Golang
