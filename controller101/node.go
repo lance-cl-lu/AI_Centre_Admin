@@ -16,6 +16,12 @@ import (
 	"k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
+// macro to define cpu and memory threshold
+const (
+	cpuThreshold    = 100
+	memoryThreshold = 10000
+)
+
 // string array to store the profile list
 var profileNames = make([]string, 0) // Renamed to avoid confusion
 
@@ -27,15 +33,14 @@ type Notebooks struct {
 	memoryUsage       int64
 }
 
-func containsNotebook(slice []Notebooks, val string) bool {
+func containsNotebook(slice []Notebooks, val string, val2 string) bool {
 	for _, item := range slice {
-		if item.notebookName == val {
+		if item.notebookName == val && item.notebookNamepsace == val2 {
 			return true
 		}
 	}
 	return false
 }
-
 func contains(slice []string, val string) bool {
 	for _, item := range slice {
 		if item == val {
@@ -49,13 +54,13 @@ func contains(slice []string, val string) bool {
 func updateNotebookList(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 	// if in slice but not in slice2, remove from slice
 	for i, item := range slice {
-		if !containsNotebook(slice2, item.notebookName) {
+		if !containsNotebook(slice2, item.notebookName, item.notebookNamepsace) {
 			slice = append(slice[:i], slice[i+1:]...)
 		}
 	}
 	// if in slice2 but not in slice, append to slice
 	for _, item := range slice2 {
-		if !containsNotebook(slice, item.notebookName) {
+		if !containsNotebook(slice, item.notebookName, item.notebookNamepsace) {
 			slice = append(slice, item)
 		}
 	}
@@ -65,12 +70,17 @@ func updateNotebookList(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 // Method to compare the memory usage of the notebooks
 func compairMemoryUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 	memoryThreshold := int64(10000)
-	for i, item := range slice {
+	// remove notebook list
+	removeList := make([]Notebooks, 0)
+
+	for _, item := range slice {
 		for _, item2 := range slice2 {
-			if item.notebookName == item2.notebookName {
+			if item.notebookName == item2.notebookName && item.notebookNamepsace == item2.notebookNamepsace {
 				if item2.memoryUsage > memoryThreshold {
-					slice[i].memoryUsage = item2.memoryUsage
+					removeList = append(removeList, item)
+					continue
 				}
+				item.memoryUsage = item2.memoryUsage
 			}
 		}
 	}
@@ -80,12 +90,15 @@ func compairMemoryUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 // Method to compare the CPU usage of the notebooks
 func compairCPUUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 	cpuThreshold := int64(100)
-	for i, item := range slice {
+	removeList := make([]Notebooks, 0)
+	for _, item := range slice {
 		for _, item2 := range slice2 {
-			if item.notebookName == item2.notebookName {
+			if item.notebookName == item2.notebookName && item.notebookNamepsace == item2.notebookNamepsace {
 				if item2.cpuUsage > cpuThreshold {
-					slice[i].cpuUsage = item2.cpuUsage
+					removeList = append(removeList, item)
+					continue
 				}
+				item.cpuUsage = item2.cpuUsage
 			}
 		}
 	}
@@ -119,12 +132,9 @@ func updateProfileNames() {
 		return
 	}
 
+	// Extract the profile names from the response
 	for _, item := range res.Items {
-		// if in profileNames then skip, else append to profileNames
-		if contains(profileNames, item.GetName()) {
-			continue
-		}
-		profileNames = append(profileNames, item.GetName()) // Populate global slice
+		profileNames = append(profileNames, item.GetName())
 	}
 }
 
@@ -159,39 +169,42 @@ func main() {
 	sort.Slice(podMetricsList.Items, func(i, j int) bool {
 		return podMetricsList.Items[i].Name < podMetricsList.Items[j].Name
 	})
-	updateProfileNames()
-	// 輸出所有Pod的CPU和內存使用情況
-	for _, p := range podMetricsList.Items {
-		for _, c := range p.Containers {
-			// list related profile's containers in Namespace
-			if contains(profileNames, p.Namespace) {
-				// if notebook is in listNotebooks and its user is same, update the CPU and Memory usage
-				for i, notebook := range listNotebooks {
-					if notebook.notebookName == c.Name && notebook.notebookNamepsace == p.Namespace {
-						listNotebooks[i].cpuUsage = c.Usage.Cpu().Value()
-						listNotebooks[i].memoryUsage = c.Usage.Memory().Value()
-					}
-				}
+	// while loop
 
-				if containsNotebook(listNotebooks, p.Namespace) {
-					continue
-				} else {
-					listNotebooks = append(listNotebooks, Notebooks{
-						notebookNamepsace: p.Namespace,
-						notebookName:      c.Name,
-						time:              time.Now(),
-						cpuUsage:          c.Usage.Cpu().Value(),
-						memoryUsage:       c.Usage.Memory().Value(),
-					})
+	times := 0
+	for {
+		updateProfileNames()
+		newlistNotebooks := make([]Notebooks, 0)
+		// 輸出所有Pod的CPU和內存使用情況
+		for _, podMetrics := range podMetricsList.Items {
+			for _, container := range podMetrics.Containers {
+				fmt.Printf("Namespace: %s, Pod: %s, Container: %s, CPU Usage: %d, Memory Usage: %d\n",
+					podMetrics.Namespace, podMetrics.Name, container.Name, container.Usage.Cpu().MilliValue(), container.Usage.Memory().Value())
+				// add the notebook to the new list
+				if contains(profileNames, podMetrics.Namespace) {
+					newlistNotebooks = append(newlistNotebooks, Notebooks{notebookNamepsace: podMetrics.Namespace, notebookName: podMetrics.Name, time: time.Now(), cpuUsage: container.Usage.Cpu().MilliValue(), memoryUsage: container.Usage.Memory().Value()})
 				}
 			}
 		}
+		// update the notebook list, if in newlistNotebooks but not in listNotebooks, append to listNotebooks
+		listNotebooks = updateNotebookList(listNotebooks, newlistNotebooks)
+
+		//compare the memory usage of the notebooks
+		listNotebooks = compairMemoryUsage(listNotebooks, newlistNotebooks)
+		//compare the CPU usage of the notebooks
+		listNotebooks = compairCPUUsage(listNotebooks, newlistNotebooks)
+
+		// compare the memory usage of the notebooks
+		for _, notebook := range listNotebooks {
+			fmt.Printf("Notebook %s from user %s, CPU Usage: %d, Memory Usage: %d, Time: %s\n", notebook.notebookName, notebook.notebookNamepsace, notebook.cpuUsage, notebook.memoryUsage, notebook.time)
+		}
+		fmt.Println("Length of listNotebooks: ", len(listNotebooks))
+		// print time and sleep
+		fmt.Println("Time: ", times)
+		times++
+
+		time.Sleep(1 * time.Second)
 	}
-	for _, notebook := range listNotebooks {
-		fmt.Printf("Notebook %s from user %s, CPU Usage: %d, Memory Usage: %d, Time: %s\n", notebook.notebookName, notebook.notebookNamepsace, notebook.cpuUsage, notebook.memoryUsage, notebook.time)
-	}
-	fmt.Println("Length of listNotebooks: ", len(listNotebooks))
-	time.Sleep(2 * time.Second)
 }
 
 func homeDir() string {
