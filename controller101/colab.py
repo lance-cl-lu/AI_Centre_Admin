@@ -54,6 +54,7 @@ def check_pod(p,profiles):
     if p[2].find('ml-pipeline') != -1: return
     
     update_state(p)
+    print(p)
     if check_static(p): return
     if int(p[3][:-1]) < 300:
         if check_live(p):
@@ -91,4 +92,4 @@ def poll():
 
 while True:
     poll()
-    time.sleep(5)
+    time.sleep(1)

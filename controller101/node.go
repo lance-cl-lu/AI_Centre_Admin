@@ -12,35 +12,28 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 // macro to define cpu and memory threshold
 const (
-	cpuThreshold    = 100
-	memoryThreshold = 10000
+	cpuThreshold    = 1
+	memoryThreshold = 100
 )
 
 // string array to store the profile list
 var profileNames = make([]string, 0) // Renamed to avoid confusion
 
 type Notebooks struct {
-	notebookNamepsace string
+	notebookNamespace string
 	notebookName      string
 	time              time.Time
 	cpuUsage          int64
 	memoryUsage       int64
 }
 
-func containsNotebook(slice []Notebooks, val string, val2 string) bool {
-	for _, item := range slice {
-		if item.notebookName == val && item.notebookNamepsace == val2 {
-			return true
-		}
-	}
-	return false
-}
 func contains(slice []string, val string) bool {
 	for _, item := range slice {
 		if item == val {
@@ -52,19 +45,47 @@ func contains(slice []string, val string) bool {
 
 // Method to update the notebook list
 func updateNotebookList(slice []Notebooks, slice2 []Notebooks) []Notebooks {
-	// if in slice but not in slice2, remove from slice
-	for i, item := range slice {
-		if !containsNotebook(slice2, item.notebookName, item.notebookNamepsace) {
-			slice = append(slice[:i], slice[i+1:]...)
-		}
-	}
-	// if in slice2 but not in slice, append to slice
+	// Create a map to track items in slice2 for quick lookup
+	slice2Map := make(map[string]Notebooks)
 	for _, item := range slice2 {
-		if !containsNotebook(slice, item.notebookName, item.notebookNamepsace) {
-			slice = append(slice, item)
+		key := item.notebookName + item.notebookNamespace
+		slice2Map[key] = item
+	}
+
+	// Remove items from slice that are not in slice2
+	var updatedSlice []Notebooks
+	for _, item := range slice {
+		key := item.notebookName + item.notebookNamespace
+		if _, exists := slice2Map[key]; exists {
+			updatedSlice = append(updatedSlice, item)
 		}
 	}
-	return slice
+
+	// Add items from slice2 that are not in updatedSlice
+	updatedSliceMap := make(map[string]Notebooks)
+	for _, item := range updatedSlice {
+		key := item.notebookName + item.notebookNamespace
+		updatedSliceMap[key] = item
+	}
+
+	for _, item := range slice2 {
+		key := item.notebookName + item.notebookNamespace
+		if _, exists := updatedSliceMap[key]; !exists {
+			updatedSlice = append(updatedSlice, item)
+		}
+	}
+
+	return updatedSlice
+}
+
+// Helper function to check if a notebook is in the slice
+func containsNotebook(slice []Notebooks, name string, namespace string) bool {
+	for _, item := range slice {
+		if item.notebookName == name && item.notebookNamespace == namespace {
+			return true
+		}
+	}
+	return false
 }
 
 // Method to compare the memory usage of the notebooks
@@ -75,8 +96,8 @@ func compairMemoryUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 
 	for _, item := range slice {
 		for _, item2 := range slice2 {
-			if item.notebookName == item2.notebookName && item.notebookNamepsace == item2.notebookNamepsace {
-				if item2.memoryUsage > memoryThreshold {
+			if item.notebookName == item2.notebookName && item.notebookNamespace == item2.notebookNamespace {
+				if item2.memoryUsage < memoryThreshold {
 					removeList = append(removeList, item)
 					continue
 				}
@@ -84,7 +105,7 @@ func compairMemoryUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 			}
 		}
 	}
-	return slice
+	return removeList
 }
 
 // Method to compare the CPU usage of the notebooks
@@ -93,8 +114,8 @@ func compairCPUUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 	removeList := make([]Notebooks, 0)
 	for _, item := range slice {
 		for _, item2 := range slice2 {
-			if item.notebookName == item2.notebookName && item.notebookNamepsace == item2.notebookNamepsace {
-				if item2.cpuUsage > cpuThreshold {
+			if item.notebookName == item2.notebookName && item.notebookNamespace == item2.notebookNamespace {
+				if item2.cpuUsage < cpuThreshold {
 					removeList = append(removeList, item)
 					continue
 				}
@@ -102,9 +123,23 @@ func compairCPUUsage(slice []Notebooks, slice2 []Notebooks) []Notebooks {
 			}
 		}
 	}
-	return slice
+	return removeList
 }
+func handleRemoveList(removeList []Notebooks, clientset *kubernetes.Clientset) {
+	// shot down the notebook from the removeList
 
+	deletePolicy := metav1.DeletePropagationForeground
+	for _, item := range removeList {
+		namespace := item.notebookNamespace
+		podName := item.notebookName
+		if err := clientset.CoreV1().Pods(namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{
+			PropagationPolicy: &deletePolicy,
+		}); err != nil {
+			log.Fatalf("Failed to delete pod: %v", err)
+		}
+	}
+
+}
 func updateProfileNames() {
 	// Load the kubeconfig file to connect to the Kubernetes cluster
 	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), nil)
@@ -132,78 +167,86 @@ func updateProfileNames() {
 		return
 	}
 
-	// Extract the profile names from the response
+	// Get the profile names
 	for _, item := range res.Items {
-		profileNames = append(profileNames, item.GetName())
+		profileName := item.GetName()
+		if !contains(profileNames, profileName) {
+			profileNames = append(profileNames, profileName)
+		}
 	}
+
 }
 
 func main() {
 	// 使用kubeconfig建立配置
-	kubeconfig := filepath.Join(homeDir(), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		log.Fatalf("Error building kubeconfig: %s", err)
-	}
-
-	// 建立Kubernetes客戶端
-	//clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("Error building Kubernetes clientset: %s", err)
-	}
-
-	// 建立Metrics客戶端
-	metricsClient, err := versioned.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("Error building Metrics clientset: %s", err)
-	}
-	//times := 0
-	listNotebooks := make([]Notebooks, 0)
-
-	// 獲取所有Namespaces中的Pod度量信息
-	podMetricsList, err := metricsClient.MetricsV1beta1().PodMetricses(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		log.Fatalf("Error fetching pod metrics: %s", err)
-	}
-	// sort the pods by name
-	sort.Slice(podMetricsList.Items, func(i, j int) bool {
-		return podMetricsList.Items[i].Name < podMetricsList.Items[j].Name
-	})
-	// while loop
-
 	times := 0
+
 	for {
+		kubeconfig := filepath.Join(homeDir(), ".kube", "config")
+		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			log.Fatalf("Error building kubeconfig: %s", err)
+		}
+
+		// 建立Kubernetes客戶端
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Fatalf("Error building Kubernetes clientset: %s", err)
+		}
+
+		// 建立Metrics客戶端
+		metricsClient, err := versioned.NewForConfig(config)
+		if err != nil {
+			log.Fatalf("Error building Metrics clientset: %s", err)
+		}
+		//times := 0
+		listNotebooks := make([]Notebooks, 0)
+
+		// 獲取所有Namespaces中的Pod度量信息
+		podMetricsList, err := metricsClient.MetricsV1beta1().PodMetricses(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			log.Fatalf("Error fetching pod metrics: %s", err)
+		}
+		// sort the pods by name
+		sort.Slice(podMetricsList.Items, func(i, j int) bool {
+			return podMetricsList.Items[i].Name < podMetricsList.Items[j].Name
+		})
 		updateProfileNames()
 		newlistNotebooks := make([]Notebooks, 0)
 		// 輸出所有Pod的CPU和內存使用情況
 		for _, podMetrics := range podMetricsList.Items {
 			for _, container := range podMetrics.Containers {
-				fmt.Printf("Namespace: %s, Pod: %s, Container: %s, CPU Usage: %d, Memory Usage: %d\n",
-					podMetrics.Namespace, podMetrics.Name, container.Name, container.Usage.Cpu().MilliValue(), container.Usage.Memory().Value())
-				// add the notebook to the new list
 				if contains(profileNames, podMetrics.Namespace) {
-					newlistNotebooks = append(newlistNotebooks, Notebooks{notebookNamepsace: podMetrics.Namespace, notebookName: podMetrics.Name, time: time.Now(), cpuUsage: container.Usage.Cpu().MilliValue(), memoryUsage: container.Usage.Memory().Value()})
+					notebook := Notebooks{
+						notebookNamespace: podMetrics.Namespace,
+						notebookName:      podMetrics.Name,
+						time:              time.Now(),
+						cpuUsage:          container.Usage.Cpu().MilliValue(),
+						memoryUsage:       container.Usage.Memory().Value(),
+					}
+					newlistNotebooks = append(newlistNotebooks, notebook)
 				}
 			}
 		}
 		// update the notebook list, if in newlistNotebooks but not in listNotebooks, append to listNotebooks
 		listNotebooks = updateNotebookList(listNotebooks, newlistNotebooks)
-
+		removeList := make([]Notebooks, 0)
 		//compare the memory usage of the notebooks
-		listNotebooks = compairMemoryUsage(listNotebooks, newlistNotebooks)
+		removeList = compairMemoryUsage(listNotebooks, newlistNotebooks)
 		//compare the CPU usage of the notebooks
-		listNotebooks = compairCPUUsage(listNotebooks, newlistNotebooks)
+		removeList = compairCPUUsage(listNotebooks, newlistNotebooks)
 
-		// compare the memory usage of the notebooks
-		for _, notebook := range listNotebooks {
-			fmt.Printf("Notebook %s from user %s, CPU Usage: %d, Memory Usage: %d, Time: %s\n", notebook.notebookName, notebook.notebookNamepsace, notebook.cpuUsage, notebook.memoryUsage, notebook.time)
+		// handle removeList
+		handleRemoveList(removeList, clientset)
+		for _, notebook := range newlistNotebooks {
+			fmt.Printf("Namespace: %s, Pod: %s, Time: %s, CPU Usage: %d, Memory Usage: %d\n",
+				notebook.notebookNamespace, notebook.notebookName, notebook.time, notebook.cpuUsage, notebook.memoryUsage)
 		}
-		fmt.Println("Length of listNotebooks: ", len(listNotebooks))
-		// print time and sleep
+		fmt.Println("notebook list length: ", len(listNotebooks))
 		fmt.Println("Time: ", times)
 		times++
-
 		time.Sleep(1 * time.Second)
+		newlistNotebooks = make([]Notebooks, 0)
 	}
 }
 
