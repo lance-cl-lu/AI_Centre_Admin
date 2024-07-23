@@ -43,3 +43,17 @@ class PasslibLDAPMD5PasswordHasher(BasePasswordHasher):
         }
     def set_password(self, password):
         self.password = ldap_md5.hash(password)
+        
+class GroupDefaultQuota(models.Model):
+    labname = models.ForeignKey(Group, on_delete=models.CASCADE)
+    cpu_quota = models.IntegerField(default=8)
+    mem_quota = models.IntegerField(default=16)
+    gpu_quota = models.IntegerField(default=1)
+    
+    class Meta:
+        unique_together = ('labname',)
+        
+    def __str__(self):
+        return self.labname.name
+        
+        

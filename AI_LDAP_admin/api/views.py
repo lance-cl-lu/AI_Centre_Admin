@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
-from .models import UserDetail
+from .models import UserDetail, GroupDefaultQuota
 from . import urls
 
 import yaml
@@ -422,27 +422,30 @@ def get_lab_info(request):
         "gidNumber": group.id,
         "memberUid": get_all_user_permission(user_list, labname)
     }
-    """
-            data = {
-                "cn": entry.cn.value,
-                "gidNumber": entry.gidNumber.value,
-                "memberUid": get_all_user_permission(entry.memberUid.values, labname)
-            }
-    """
     return Response(data, status=200)
 
 @api_view(['POST'])
 def addlab(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
+    cpuQuota = data['cpu_quota']
+    memQuota = data['mem_quota']
+    gpuQuota = data['gpu_quota']
+    
     try:
         Group.objects.get(name=labname)
         return Response(status=500, data="lab is exist")
     except:
         pass
     group = Group.objects.create(name=labname)
-    print("add lab {} success".format(labname))
-    return Response(status=200)
+    try:
+        cpuQuota = int(cpuQuota)
+        memQuota = int(memQuota)
+        gpuQuota = int(gpuQuota)
+    except: 
+        return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")    
+    GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota)
+    return Response(status=200, data={"message": "add lab {} success".format(labname)})
 
 @api_view(['POST'])
 def adduser(request):
