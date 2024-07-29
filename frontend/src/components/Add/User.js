@@ -9,7 +9,6 @@ import WarningIcon from '@mui/icons-material/Warning';
 
 function AddUser() {
     const [lab, setLab] = useState([]);
-    //const [user] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null);
     const group = useLocation().state['group'];
     console.log(group);
     //const state = useLocation().state; 
@@ -68,6 +67,23 @@ function AddUser() {
             })
             return;
         }
+        // test cpu, mem and gpu quota and gpu vendor
+        if(e.target[8].value===''){
+            alert('CPU Quota cannot be empty');
+            return;
+        }
+        if(e.target[9].value===''){
+            alert('Memory Quota cannot be empty');
+            return;
+        }
+        if(e.target[10].value===''){
+            alert('GPU Quota cannot be empty');
+            return;
+        }
+        if(e.target[11].value===''){
+            alert('GPU Vendor cannot be empty');
+            return;
+        }
         
         if(e.target[6].value===e.target[7].value){
             let response = await fetch('/api/ldap/user/add/', {
@@ -86,6 +102,7 @@ function AddUser() {
                     "cpu_quota":e.target[8].value,
                     "mem_quota":e.target[9].value,
                     "gpu_quota":e.target[10].value,
+                    "gpu_vendor":e.target[11].value,
                 }),
             });
             if(response.status===200){
@@ -149,25 +166,6 @@ function AddUser() {
                 <Toast.Body><WarningIcon/>
                 {' '}Warning!! Email and username will be converted to lowercase.</Toast.Body>
             </Toast>
-            {/*<form onSubmit={handleSubmit} className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", width: "75%"}}>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>First Name:   </label><input type="text" placeholder="Please enter the first name" style={{width: "70%"}} /></div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Last Name:   </label><input type="text" placeholder="Please enter the last name" style={{width: "71%"}} /></div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Username:   </label><input type="text" placeholder="Please enter the username" style={{width: "72%"}} /></div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>Email: </label><input type="text" placeholder="Please enter the email" style={{width: "76%"}} /></div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start", width:"100%"}}><label className='form-label'>In which labatory:   </label>{lab && <select>
-                    { group !=='null' ? <option value={group}>{group}</option> : <option value="null">Please select the labatory</option>}
-                    {lab.map((lab, index) => {
-                        return <option key={index} value={lab}>{lab}</option>
-                    })}
-
-                </select>}</div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Is Lab Manager:   <input type="checkbox"/></label></div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Password:   </label><input type="text" placeholder="Please enter the password" style={{width: "73%"}} /></div><br/>
-                <div className='form-div' style={{display:"flex", alignItems:"center", justifyContent:"flex-start"}}><label className='form-label'>Confirm Password:   </label><input type="text" placeholder="Please enter the password again" style={{width: "66%"}} /></div><br/>
-            	<Button type="submit" variant="primary" style={{ margin: '1rem' }}>Submit</Button>
-                <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
-                </form>
-            */}
             {
                 <Form onSubmit={handleSubmit} className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "12px", borderRadius: "12px", width: "75%"}}>
                     <Form.Group className="mb-3" controlId="formBasicEmail" style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
@@ -188,7 +186,7 @@ function AddUser() {
                     </Form.Group>
                     <Form.Group className="mb-3" controlId="formBasicEmail"  style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
                         <Form.Label style={{width:"30%"}}>In which group?</Form.Label>
-                        <Form.Control as="select">
+                        <Form.Control as="select" id="addUserGroup" style={{width:"50%"}}>
                             { group !=='null' ? <option value={group}>{group}</option> : <option value="null">Please select the group</option>}
                             {lab.map((lab, index) => {
                                 return <option key={index} value={lab}>{lab}</option>
@@ -206,6 +204,34 @@ function AddUser() {
                     <Form.Group className="mb-3" controlId="formBasicPassword"  style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
                         <Form.Label style={{width:"20%"}}>Confirm Password</Form.Label>
                         <Form.Control type="password" placeholder="Enter Password Again" />
+                    </Form.Group>
+                    <Form.Group className="mb-3" controlId="formBasicCheckbox" style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
+                        <Form.Check type="checkbox" label="Group Default Values" onClick={(e) => {
+                            if(e.target.checked){
+                                // get group default values
+                                fetch('/api/ldap/lab/default_values/', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        "labname": document.getElementById('addUserGroup').value,
+                                    }),
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    document.getElementById('cpuQuota').value = data['cpu_quota'];
+                                    document.getElementById('memQuota').value = data['mem_quota'];
+                                    // change the selected value in GPUQuota and GPUVendor
+                                    document.getElementById('GPUQuota').value = data['gpu_quota'];
+                                    document.getElementById('GPUVendor').value = data['gpu_vendor'];
+                                })
+                                .catch((error) => {
+                                    console.error('Error:', error);
+                                }
+                                );
+                            }
+                        }}/>
                     </Form.Group>
                     <Form.Group>
                         CPU Quota
@@ -230,24 +256,35 @@ function AddUser() {
                     <Form.Group>
                         GPU Quota
                         <FloatingLabel
-                            controlId="floatingSelect"
+                            controlId="GPUQuota"
                             label="GPU Quota"
                             className="mb-3"
                         >
-                            <Form.Select>
-                                <option>0</option>
-                                <option selected>1</option>
-                                <option>2</option>
-                                <option>3</option>
-                                <option>4</option>
-                                <option>5</option>
-                                <option>6</option>
-                                <option>7</option>
-                                <option>8</option>
-                            </Form.Select>
+                            <Form.Control as="select" id="GPUQuota">
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                            </Form.Control>
                         </FloatingLabel>
                     </Form.Group>
-
+                    <Form.Group>
+                        GPU Vendor
+                        <FloatingLabel
+                            label="GPU Vendor"
+                            className="mb-3"
+                        >
+                            <Form.Control as="select" id="GPUVendor">
+                                <option value="NVIDIA">NVIDIA</option>
+                                <option value="AMD">AMD</option>
+                            </Form.Control>
+                        </FloatingLabel>
+                    </Form.Group>
                     <Button variant="primary" type="submit" style={{ margin: '1rem' }}>Submit</Button>
                     <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>
                 </Form>

@@ -10,12 +10,12 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
-from .models import UserDetail, GroupDefaultQuota
+from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
 from . import urls
 
-import yaml
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
+
 
 # Define the group, version, and plural for the Profile CRD
 group = 'kubeflow.org'  # CRD 的 Group
@@ -227,19 +227,15 @@ def get_profile_content(profile_name):
     
 def replace_quota_of_profile(profile,cpu,gpu,memory):
     # create resourceQuotaSpec object
-    # memoryStr = str(int(float(memory)*1000)) + "Mi"
     memoryStr = str(int(float(memory))) + "Gi"
     resourceQuotaSpec = {
         "hard": {
         }
     }
-
     if str(cpu) != '0':
         resourceQuotaSpec["hard"]["requests.cpu"] = str(cpu)
-
     if str(memoryStr) != '0Gi':
         resourceQuotaSpec["hard"]["requests.memory"] = str(memoryStr)
-    
     if str(gpu) != '0':
         resourceQuotaSpec["hard"]["requests.nvidia.com/gpu"] = str(gpu)
 
@@ -416,10 +412,26 @@ def get_lab_info(request):
     user_list = []
     for user in User.objects.filter(groups=group):
         user_list.append(user.username)
-    ### get the user permission from database
+        # get group default quota and gpu vendor
+    try:
+        cpuQuota = GroupDefaultQuota.objects.get(labname=group).cpu_quota
+        memQuota = GroupDefaultQuota.objects.get(labname=group).mem_quota
+        gpuQuota = GroupDefaultQuota.objects.get(labname=group).gpu_quota
+        gpuVendor = GroupDefaultQuota.objects.get(labname=group).gpu_vendor
+    except:
+        cpuQuota = 0
+        memQuota = 0
+        gpuQuota = 0
+        gpuVendor = "NVIDIA"
+    
+    # get the user permission from database
     data = {
         "labname": labname,
         "gidNumber": group.id,
+        "cpuQuota": cpuQuota,
+        "memQuota": memQuota,
+        "gpuQuota": gpuQuota,
+        "gpuVendor": gpuVendor,
         "memberUid": get_all_user_permission(user_list, labname)
     }
     return Response(data, status=200)
@@ -431,21 +443,80 @@ def addlab(request):
     cpuQuota = data['cpu_quota']
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
+    gpuVendor = data['gpu_vendor']    
     
+    # check Group is exist or not
     try:
         Group.objects.get(name=labname)
         return Response(status=500, data="lab is exist")
     except:
         pass
-    group = Group.objects.create(name=labname)
+
+    
+    # check the cpuQuota, memQuota, gpuQuota is valid or not
     try:
         cpuQuota = int(cpuQuota)
         memQuota = int(memQuota)
         gpuQuota = int(gpuQuota)
     except: 
-        return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")    
-    GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota)
+        return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")
+    
+    # gpu type error handle
+    if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
+        return Response(status=500, data="gpuVendor is not valid")
+    
+    group = Group.objects.create(name=labname)
+    GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
     return Response(status=200, data={"message": "add lab {} success".format(labname)})
+
+@api_view(['POST'])
+def editlab(request):
+    data = json.loads(request.body.decode('utf-8'))
+    labname = data['lab']
+    cpuQuota = data['cpu_quota']
+    memQuota = data['mem_quota']
+    gpuQuota = data['gpu_quota']
+    gpuVendor = data['gpu_vendor']
+    try:
+        cpuQuota = int(cpuQuota)
+        memQuota = int(memQuota)
+        gpuQuota = int(gpuQuota)
+    except:
+        return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")
+    if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
+        return Response(status=500, data="gpuVendor is not valid")
+    group = Group.objects.get(name=labname)
+    if group is None:
+        return Response(status=500, data="lab is not exist")
+    
+    # if GroupDefaultQuota is exist, update the default quota, else create the default quota
+    if GroupDefaultQuota.objects.filter(labname=group).exists():
+        groupDefaultQuota = GroupDefaultQuota.objects.get(labname=group)
+        groupDefaultQuota.cpu_quota = cpuQuota
+        groupDefaultQuota.mem_quota = memQuota
+        groupDefaultQuota.gpu_quota = gpuQuota
+        groupDefaultQuota.gpu_vendor = gpuVendor
+        groupDefaultQuota.save()
+    else:
+        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+    return Response(status=200, data={"message": "edit lab {} success".format(labname)})
+
+@api_view(['POST'])
+def get_default_values(request):
+    data = json.loads(request.body.decode('utf-8'))
+    labname = data['labname']
+    try:
+        groupDefaultQuota = GroupDefaultQuota.objects.get(labname=Group.objects.get(name=labname))
+        cpuQuota = groupDefaultQuota.cpu_quota
+        memQuota = groupDefaultQuota.mem_quota
+        gpuQuota = groupDefaultQuota.gpu_quota
+        gpuVendor = groupDefaultQuota.gpu_vendor
+    except:
+        cpuQuota = 0
+        memQuota = 0
+        gpuQuota = 0
+        gpuVendor = "NVIDIA"
+    return Response({"cpu_quota": cpuQuota, "mem_quota": memQuota, "gpu_quota": gpuQuota, "gpu_vendor": gpuVendor}, status=200)
 
 @api_view(['POST'])
 def adduser(request):
@@ -459,6 +530,7 @@ def adduser(request):
     cpu_quota = data['cpu_quota']
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
+    gpu_vendor = data['gpu_vendor']
 
     if check_email(email):
         return Response(status=500, data={"message": "Email is exist from kubeflow profile"})

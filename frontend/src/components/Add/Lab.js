@@ -7,7 +7,7 @@ function AddLab() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({"lab":e.target[0].value}),
+            body: JSON.stringify({"lab":e.target[0].value, "cpu_quota":e.target[1].value, "mem_quota":e.target[2].value, "gpu_quota":e.target[3].value, "gpu_vendor":e.target[4].value}),
         });
         let data = await response.json();
         if(response.status===200){
@@ -41,11 +41,22 @@ function AddLab() {
                 <Form.Group controlId="formBasicEmail" className="col">
                     <Form.Label>GPU Quota</Form.Label>
                     <Form.Control as="select" id="gpu_quota" defaultValue={1}>
-                        <option>0</option>
-                        <option>1</option>
-                        <option>2</option>
-                        <option>4</option>
-                        <option>8</option>
+                        <option value={0}>0</option>
+                        <option value={1}>1</option>
+                        <option>value={2}>2</option>
+                        <option value={3}>3</option>
+                        <option value={4}>4</option>
+                        <option value={5}>5</option>
+                        <option value={6}>6</option>
+                        <option value={7}>7</option>
+                        <option value={8}>8</option>
+                    </Form.Control>
+                </Form.Group>
+                <Form.Group controlId="formBasicEmail" className="col">
+                    <Form.Label>GPU Vendor</Form.Label>
+                    <Form.Control as="select" id="gpu_vendor" defaultValue={"nvidia"}>
+                        <option value="NVIDIA">nvidia</option>
+                        <option value="AMD">amd</option>
                     </Form.Control>
                 </Form.Group>
                 </div>
@@ -55,4 +66,5 @@ function AddLab() {
         </div>
     )
 }
-export default AddLab
+
+export default AddLab;

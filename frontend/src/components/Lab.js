@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Button, Table } from 'react-bootstrap';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
-import { Checkbox, Container, Box, Text } from '@chakra-ui/react';
+import { Container, Box, Text } from '@chakra-ui/react';
 import Swal from 'sweetalert2'
 
 function Lab() {
@@ -274,6 +274,7 @@ function Lab() {
                 <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
                 <Link to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" color='rgb(255, 255, 255);' >Import Group</Button></Link>
                 <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort with ascending</Button>
+                <Link to="/edit/group" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="warning">Edit Group</Button></Link>
             </Container>
             <br/>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>

@@ -2,11 +2,10 @@ import React, {useState, useEffect} from "react";
 import { useContext } from "react";
 import AuthContext from "../context/AuthContext";
 import { PieChart } from 'react-minimal-pie-chart';
-import { Card, Toast } from 'react-bootstrap';
+import { Card } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import jwt_decode from "jwt-decode";
 import { KUBEFLOW_HTTP} from './Urls';
 import CountUp from 'react-countup';
 
@@ -56,7 +55,8 @@ function Home() {
     }
     );
   }, [user]);
-  const permission = jwt_decode(localStorage.getItem('authToken'))['permission']
+
+
   const [ unsych_list, setUnsych_list ] = useState([]);
   useEffect(() => {
     fetch('/api/check/syschronize/', {

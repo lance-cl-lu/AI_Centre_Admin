@@ -27,13 +27,9 @@ COPY static /static
 # RUN rm -rf /code/static
 # COPY static /
 
-# FROM bitnami/kubectl:1.20.9 as kubectl
-# COPY --from=kubectl /opt/bitnami/kubectl/bin/kubectl /usr/local/bin/
-
 # Expose the port on which the Django app will run (change as needed)
 EXPOSE 8000
 
-# migrate the database and run the server
-
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+## check makemigrations and migrate and then runserver
+CMD ["sh", "-c", "python manage.py makemigrations && python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
 

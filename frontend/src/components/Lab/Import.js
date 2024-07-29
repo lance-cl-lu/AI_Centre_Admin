@@ -98,7 +98,7 @@ function LabImport() {
                 </Form.Label>
                 <Form.Control type="file" accept=".xlsx" />
             </Form.Group>
-            <Toast style={{position: "absolute", top: "11vh", right: "5vw"}} bg={'warning'}>
+            <Toast style={{position: "absolute", top: "11vh", right: "5d vw"}} bg={'warning'}>
                 <Toast.Body><WarningIcon/>
                 {' '}Warning!! Email and username will be converted to lowercase.</Toast.Body>
             </Toast>

@@ -15,6 +15,8 @@ urlpatterns = [
     
     # lab url
     path("ldap/lab/", get_lab_info, name="get_lab_info"),
+    path("ldap/lab/edit/", editlab, name="editlab"),
+    path("ldap/lab/default_values/", get_default_values, name="get_default_values"),
     path("ldap/lab/list/", lab_list, name="lab_list"),
     path("ldap/lab/add/", addlab, name="addlab"),
     path("ldap/lab/delete/", lab_delete, name="lab_delete"),

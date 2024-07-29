@@ -23,12 +23,14 @@ import Insert from './components/Insert';
 import Footer from './components/Footer';
 import { Grid } from '@chakra-ui/react';
 import ListNoteBook from './components/ListNoteBook';
+import EditGroup from './components/editgroup';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
   const [ username ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['username'] : null)
   console.log(permission)
   let resultMatch = /.*admin$/.test(permission);
+  console.log(process.env)
   return (
     <Grid className="App">
         <head className="App-header">
@@ -59,6 +61,7 @@ function App() {
                     <Route path="user" element={<User />} />
                     <Route path="/insert" element={<Insert/>}/>
                     <Route path="/listnotebook" element={<ListNoteBook/>}/>
+                    <Route path="/edit/group" element={<EditGroup/>}/>
                     <Route path="*" element={<Home />} />
                   </Routes>
               </div>

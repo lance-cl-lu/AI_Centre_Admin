@@ -49,6 +49,7 @@ class GroupDefaultQuota(models.Model):
     cpu_quota = models.IntegerField(default=8)
     mem_quota = models.IntegerField(default=16)
     gpu_quota = models.IntegerField(default=1)
+    gpu_vendor = models.CharField(max_length=100, default='NVIDIA', null=True)
     
     class Meta:
         unique_together = ('labname',)
@@ -56,4 +57,13 @@ class GroupDefaultQuota(models.Model):
     def __str__(self):
         return self.labname.name
         
-        
+class UserGPUQuotaType(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    gpuType = models.CharField(max_length=100, default='NVIDIA', null=True)
+    
+    class Meta:
+        unique_together = ('user',)
+    
+    def __str__(self):
+        return self.user.username + '\t' + self.gpuType
+    
