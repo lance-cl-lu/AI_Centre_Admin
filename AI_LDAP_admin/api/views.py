@@ -16,6 +16,26 @@ from . import urls
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
 
+<<<<<<< HEAD
+=======
+import smtplib, ssl
+from email.mime.text import MIMEText
+
+
+def send_email_gmail(subject, message, destination):
+    # First assemble the message
+    msg = MIMEText(message, 'plain')
+    msg['Subject'] = subject
+
+    # Login and send the message
+    port = 465
+    my_mail = 'support01@twentyfouri.com'
+    my_password = 'czyq oonp vyxd inor'
+    context = ssl.create_default_context() 
+    with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+        server.login(my_mail, my_password)
+        server.sendmail(my_mail, destination, msg.as_string())
+>>>>>>> 39434ac72e31f7ed3304ead924903a5b19f94e72
 
 # Define the group, version, and plural for the Profile CRD
 group = 'kubeflow.org'  # CRD 的 Group
@@ -581,6 +601,8 @@ def adduser(request):
     
     create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
     
+    send_email_gmail('Introduction', 'Account Created', email)
+
     return Response(status=200)
 
 @api_view(['POST'])
