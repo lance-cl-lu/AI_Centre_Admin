@@ -16,8 +16,6 @@ from . import urls
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
 
-<<<<<<< HEAD
-=======
 import smtplib, ssl
 from email.mime.text import MIMEText
 
@@ -35,7 +33,6 @@ def send_email_gmail(subject, message, destination):
     with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
         server.login(my_mail, my_password)
         server.sendmail(my_mail, destination, msg.as_string())
->>>>>>> 39434ac72e31f7ed3304ead924903a5b19f94e72
 
 # Define the group, version, and plural for the Profile CRD
 group = 'kubeflow.org'  # CRD 的 Group
@@ -598,7 +595,8 @@ def adduser(request):
         manager = 'manager'
         UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
     user.save()
-    
+    # add gpu vendor
+    UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
     create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
     
     send_email_gmail('Introduction', 'Account Created', email)
@@ -749,7 +747,6 @@ def lab_delete(request):
     # delete the group from ldap
     conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
     conn.unbind()
-    
     return Response(status=200)
 
     
