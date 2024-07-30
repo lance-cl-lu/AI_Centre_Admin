@@ -66,8 +66,15 @@ function Lab() {
                             text: "Your group has been deleted.",
                             icon: "success"
                         });
+                        setTimeout(() => {
+                            window.location.href='/'
+                        }, 1000);   
                     } else {
-                        alert("error");
+                        Swal.fire({
+                            title: "Error!",
+                            text: "Something wrong",
+                            icon: "error"
+                        });
                     }
                 });
             } else if (
@@ -158,6 +165,7 @@ function Lab() {
             document.getElementById("buttonSort").innerHTML = "Sort with ascending";
         }
     }
+
     const handleOnclick_mutiple_delete = async() => {
         if(window.confirm("Are you sure to delete these users?")){
             let checkboxes = document.getElementsByName('checkbox');
@@ -188,12 +196,17 @@ function Lab() {
                     timer: 2000,
                 });
                 setTimeout(() => {
-                    window.history.back();
+                    window.location.href='/'
                 }, 2000);
             } else {
                 // alert the respone error message
                 let data = await response.json();
-                alert(data.message);
+                Swal.fire({
+                    title: 'Delete fail',
+                    text: data.message,
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
             }
         }
     }
@@ -264,17 +277,19 @@ function Lab() {
                 <h1 style={{fontFamily: "Comic Sans MS"}}>{labinfo ? labinfo.labname : null} Members  <ContactPageIcon fontSize='large'/></h1>
             <br/>
             <Container style={{display: "flex", justifyContent: "space-evenly", alignItems: "center"}}>
-                <Box>
+                <div style={{ flex: "0 0 20%", padding: "10px" }}>
                     <Text style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</Text>
-                </Box>
-                <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh"}}><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
-                <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh"}} state={{"group": state.lab}}><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
-                <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
-                <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
-                <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
-                <Link to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" color='rgb(255, 255, 255);' >Import Group</Button></Link>
-                <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort with ascending</Button>
-                <Link to="/edit/group" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="warning">Edit Group</Button></Link>
+                </div>
+                <div style={{ flex: "0 0 80%", padding: "10px", display: "flex" }}>
+                    <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh", backgroundColor: "navy",}} class="btn btn-primary"><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
+                    <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh", backgroundColor: "purple"}} state={{"group": state.lab}} class="btn btn-primary"><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
+                    <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
+                    <Button variant="danger" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_delete}>Mutiple Delete</Button> 
+                    <Button variant="secondary" style={{marginLeft: "2vh"}} onClick={handleOnclick_export}>Export Group</Button>
+                    <Link class="btn btn-info" to="import" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}}><Button variant="info" color='rgb(255, 255, 255);' >Import Group</Button></Link>
+                    <Button variant='success' style={{marginLeft: "2vh"}} onClick={handleSort} id="buttonSort">Sort with ascending</Button>
+                    <Link to="/edit/group" state={{'lab': state.lab}} style={{marginLeft: "2vh", textDecoration: 'none', color: "#FFFFFF"}} class="btn btn-warning"><Button variant="warning">Edit Group</Button></Link>
+                </div>
             </Container>
             <br/>
             <Table striped bordered hover style={{borderWidth:"20px", boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px", borderRadius: "20px"}}>
