@@ -1,12 +1,11 @@
-import React, {useState, useEffect} from "react"; 
-import { useContext } from "react";
+import React, {useState, useEffect, useContext} from "react";
 import AuthContext from "../context/AuthContext";
 import { PieChart } from 'react-minimal-pie-chart';
 import { Card } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { KUBEFLOW_HTTP} from './Urls';
+import { KUBEFLOW_HTTP } from './Urls';
 import CountUp from 'react-countup';
 
 

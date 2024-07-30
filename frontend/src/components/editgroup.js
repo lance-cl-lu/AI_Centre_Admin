@@ -1,6 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from "react";
 import { useLocation } from 'react-router-dom';
-import { useState } from 'react';
 import ContactPageIcon from '@mui/icons-material/ContactPage';
 import Swal from 'sweetalert2'
 import { Button, Form } from "react-bootstrap";
@@ -42,7 +41,6 @@ function EditGroup() {
                 'gpu_vendor': document.getElementById('gpu_vendor').value
             }),
         });
-        let data = await response.json();
         if(response.status===200){
             Swal.fire({
                 title: 'Success',

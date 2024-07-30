@@ -136,29 +136,6 @@ function AddUser() {
         }
     }
 
-    let handleCheckEmail = async(e) => {
-        e.preventDefault();
-        if (e.target[3].value===''){
-            alert('Please enter the email');
-            return;
-        }
-        let response = await fetch('/api/ldap/user/check_email/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                "email":e.target[3].value,
-            }),
-        });
-        if(response.status===200){
-            alert('Email is available');
-        } else {
-            alert('Email is not available');
-        }
-    }
-        
-
     return (
         <div style={{fontFamily: "Comic Sans MS", display: "flex", flexDirection: "column", alignItems: "center"}}>
             <h1>Add User</h1><br></br>
