@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -14,24 +16,27 @@ import (
 
 // Notebook represents the structure of a notebook in the JSON response
 type Notebook struct {
-	APIVersion string `json:"apiVersion"`
-	Items      []struct {
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	CPUUsage    string `json:"cpuUsage"`
+	MemUsage    string `json:"memUsage"`
+	IdleCounter int    `json:"idleCounter"`
+}
+
+// PodMetricsList represents the structure of the JSON response from the metrics API
+type PodMetricsList struct {
+	Items []struct {
 		Metadata struct {
 			Name      string `json:"name"`
 			Namespace string `json:"namespace"`
 		} `json:"metadata"`
-		Spec struct {
-			Template struct {
-				Spec struct {
-					Containers []struct {
-						Image string `json:"image"`
-					} `json:"containers"`
-				} `json:"spec"`
-			} `json:"template"`
-		} `json:"spec"`
-		Status struct {
-			ReadyReplicas int `json:"readyReplicas"`
-		} `json:"status"`
+		Containers []struct {
+			Name  string `json:"name"`
+			Usage struct {
+				CPU    string `json:"cpu"`
+				Memory string `json:"memory"`
+			} `json:"usage"`
+		} `json:"containers"`
 	} `json:"items"`
 }
 
@@ -53,7 +58,7 @@ func main() {
 
 	// Context for API request
 	ctx := context.Background()
-
+	notebooks := []Notebook{}
 	// Replace "notebooks" with the appropriate resource name
 	notebooksData, err := clientset.RESTClient().
 		Get().
@@ -63,24 +68,104 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
+	// add each notebook's name and namespace to the list of notebooks
+	var data map[string]interface{}
+	if err := json.Unmarshal(notebooksData, &data); err != nil {
+		panic("Error unmarshalling JSON: " + err.Error())
+	}
+	for _, item := range data["items"].([]interface{}) {
+		metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+		notebooks = append(notebooks, Notebook{
+			Name:      metadata["name"].(string),
+			Namespace: metadata["namespace"].(string),
+		})
+	}
 
 	ctx = context.TODO()
-
-	var notebooks Notebook
-	err = json.Unmarshal(notebooksData, &notebooks)
+	// using k8s API to get the list of notebook's resources restful API
+	metricsData, err := clientset.RESTClient().
+		Get().
+		AbsPath("/apis/metrics.k8s.io/v1beta1").
+		Resource("pods").
+		DoRaw(ctx)
 	if err != nil {
 		panic(err.Error())
 	}
-	sort.Slice(notebooks.Items, func(i, j int) bool {
-		return notebooks.Items[i].Metadata.Name < notebooks.Items[j].Metadata.Name
+	var podMetricsList PodMetricsList
+	if err := json.Unmarshal(metricsData, &podMetricsList); err != nil {
+		panic("Error unmarshalling JSON: " + err.Error())
+	}
+
+	// write the pod metrics data to a file
+	file, err := os.Create("podMetrics.json")
+	if err != nil {
+		panic(err.Error())
+	}
+	defer file.Close()
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(podMetricsList); err != nil {
+		panic(err.Error())
+	}
+	// sort notebooks by name
+	sort.Slice(notebooks, func(i, j int) bool {
+		return notebooks[i].Name < notebooks[j].Name
+	})
+	//sort the podMetricsList by name
+	sort.Slice(podMetricsList.Items, func(i, j int) bool {
+		return podMetricsList.Items[i].Metadata.Name < podMetricsList.Items[j].Metadata.Name
 	})
 
-	metricsClient, err := metrics.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
+	// print resources of each notebook
+	for _, item := range podMetricsList.Items {
+		// if pods has name {name}-{replica} at the end, remove it
+		// split the name by "-" at the end of the nam
+		strings.Split(item.Metadata.Name, "-")
+		// if the length of the split name is greater than 1, remove the last element
+		if len(strings.Split(item.Metadata.Name, "-")) > 1 {
+			item.Metadata.Name = strings.Join(strings.Split(item.Metadata.Name, "-")[:len(strings.Split(item.Metadata.Name, "-"))-1], "-")
+		}
+
+		for _, container := range item.Containers {
+			for i, notebook := range notebooks {
+				if item.Metadata.Name == notebook.Name && item.Metadata.Namespace == notebook.Namespace {
+					// print cpu and memory usage of each notebook
+					notebooks[i].CPUUsage = container.Usage.CPU
+					notebooks[i].MemUsage = container.Usage.Memory
+					fmt.Println("Name: ", notebook.Name, "Namespace: ", notebook.Namespace, "CPU Usage: ", container.Usage.CPU, "Memory Usage: ", container.Usage.Memory)
+				}
+			}
+		}
 	}
-	// using k8s API to get the list of notebook's resources
-	nodeMetricsList, err := notebooks.GetNotebookList()
+
+	// sort notebooks by name
+	sort.Slice(notebooks, func(i, j int) bool {
+		return notebooks[i].Name < notebooks[j].Name
+	})
+
+	// assign CPU and memory usage to corresponding notebook according to name and namespace
+	// for _, item := range data["items"].([]interface{}) {
+	// 	metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+
+	// 	for i, notebook := range notebooks {
+	// 	}
+	// }
+
+	//print all notebooks with their CPU and memory usage
+	// for _, notebook := range notebooks {
+	// 	fmt.Printf("Name: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, notebook.CPUUsage, notebook.MemUsage)
+	// }
+	//write the Notebooks data to a file
+	//file, err := os.Create("notebooks.json")
+	// if err != nil {
+	// 	panic(err.Error())
+	// }
+	// defer file.Close()
+	// encoder := json.NewEncoder(file)
+	// encoder.SetIndent("", "  ")
+	// if err := encoder.Encode(notebooks); err != nil {
+	// 	panic(err.Error())
+	// }
 
 }
 
