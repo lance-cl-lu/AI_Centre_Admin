@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -128,45 +129,70 @@ func main() {
 
 		for _, container := range item.Containers {
 			for i, notebook := range notebooks {
-				if item.Metadata.Name == notebook.Name && item.Metadata.Namespace == notebook.Namespace {
-					// print cpu and memory usage of each notebook
+				if container.Name == notebook.Name && item.Metadata.Namespace == notebook.Namespace {
 					notebooks[i].CPUUsage = container.Usage.CPU
 					notebooks[i].MemUsage = container.Usage.Memory
-					fmt.Println("Name: ", notebook.Name, "Namespace: ", notebook.Namespace, "CPU Usage: ", container.Usage.CPU, "Memory Usage: ", container.Usage.Memory)
+					notebooks[i].IdleCounter = 0
+					fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory)
+					fmt.Printf("Counter: %d\n", notebooks[i].IdleCounter)
 				}
 			}
 		}
 	}
-
 	// sort notebooks by name
 	sort.Slice(notebooks, func(i, j int) bool {
 		return notebooks[i].Name < notebooks[j].Name
 	})
 
-	// assign CPU and memory usage to corresponding notebook according to name and namespace
-	// for _, item := range data["items"].([]interface{}) {
-	// 	metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+	// get the resources of each notebook and print the each second
+	for {
+		time.Sleep(60 * time.Second)
+		// get resources of each notebook's pod by calling the API
+		metricsData, err := clientset.RESTClient().
+			Get().
+			AbsPath("/apis/metrics.k8s.io/v1beta1").
+			Resource("pods").
+			DoRaw(ctx)
+		if err != nil {
+			panic(err.Error())
+		}
+		var podMetricsList PodMetricsList
+		if err := json.Unmarshal(metricsData, &podMetricsList); err != nil {
+			panic("Error unmarshalling JSON: " + err.Error())
+		}
+		// sort the podMetricsList by name
+		sort.Slice(podMetricsList.Items, func(i, j int) bool {
+			return podMetricsList.Items[i].Metadata.Name < podMetricsList.Items[j].Metadata.Name
+		})
+		// print resources of each notebook
+		for _, item := range podMetricsList.Items {
+			// if pods has name {name}-{replica} at the end, remove it
+			// split the name by "-" at the end of the nam
+			strings.Split(item.Metadata.Name, "-")
+			// if the length of the split name is greater than 1, remove the last element
+			if len(strings.Split(item.Metadata.Name, "-")) > 1 {
+				item.Metadata.Name = strings.Join(strings.Split(item.Metadata.Name, "-")[:len(strings.Split(item.Metadata.Name, "-"))-1], "-")
+			}
 
-	// 	for i, notebook := range notebooks {
-	// 	}
-	// }
+			for _, container := range item.Containers {
+				for i, notebook := range notebooks {
+					if container.Name == notebook.Name && item.Metadata.Namespace == notebook.Namespace {
+						notebooks[i].CPUUsage = container.Usage.CPU
+						notebooks[i].MemUsage = container.Usage.Memory
+						notebooks[i].IdleCounter += 1
+						fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory)
+						fmt.Printf("Counter: %d\n", notebooks[i].IdleCounter)
+					}
+				}
+			}
+		}
+		// sort notebooks by name
+		sort.Slice(notebooks, func(i, j int) bool {
+			return notebooks[i].Name < notebooks[j].Name
+		})
+		// increment the idle counter of each notebook
 
-	//print all notebooks with their CPU and memory usage
-	// for _, notebook := range notebooks {
-	// 	fmt.Printf("Name: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, notebook.CPUUsage, notebook.MemUsage)
-	// }
-	//write the Notebooks data to a file
-	//file, err := os.Create("notebooks.json")
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
-	// defer file.Close()
-	// encoder := json.NewEncoder(file)
-	// encoder.SetIndent("", "  ")
-	// if err := encoder.Encode(notebooks); err != nil {
-	// 	panic(err.Error())
-	// }
-
+	}
 }
 
 func homeDir() string {
