@@ -15,6 +15,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// remove a notebook pod's policyv
+var leastCPUUsage = 10000
+var leastMemUsage = 10000
+
 // Notebook represents the structure of a notebook in the JSON response
 type Notebook struct {
 	Name        string `json:"name"`
@@ -22,6 +26,7 @@ type Notebook struct {
 	CPUUsage    string `json:"cpuUsage"`
 	MemUsage    string `json:"memUsage"`
 	IdleCounter int    `json:"idleCounter"`
+	removalTag  bool   `json:"removalTag"`
 }
 
 // PodMetricsList represents the structure of the JSON response from the metrics API
@@ -146,6 +151,56 @@ func main() {
 
 	// get the resources of each notebook and print the each second
 	for {
+		// get all notebook's resources every 60 seconds and check if the notebook still in use, if not remove from the list
+		tmpNotebooksData, err := clientset.RESTClient().
+			Get().
+			AbsPath("/apis/kubeflow.org/v1").
+			Resource("notebooks").
+			DoRaw(ctx)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		// parse the response
+		var tmpData map[string]interface{}
+		if err := json.Unmarshal(tmpNotebooksData, &tmpData); err != nil {
+			panic("Error unmarshalling JSON: " + err.Error())
+		}
+		// add new notebooks to the list and delete the notebooks that are not in use
+		for _, item := range tmpData["items"].([]interface{}) {
+			metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+			// check if the notebook is already in the list
+			found := false
+			for _, notebook := range notebooks {
+				if metadata["name"].(string) == notebook.Name && metadata["namespace"].(string) == notebook.Namespace {
+					found = true
+					break
+				}
+			}
+			// if the notebook is not in the list, add it to the list
+			if !found {
+				notebooks = append(notebooks, Notebook{
+					Name:      metadata["name"].(string),
+					Namespace: metadata["namespace"].(string),
+				})
+			}
+		}
+		// check if the notebook is still in use
+		for i, notebook := range notebooks {
+			found := false
+			for _, item := range tmpData["items"].([]interface{}) {
+				metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+				if metadata["name"].(string) == notebook.Name && metadata["namespace"].(string) == notebook.Namespace {
+					found = true
+					break
+				}
+			}
+			// if the notebook is not in use, remove it from the list
+			if !found {
+				notebooks = append(notebooks[:i], notebooks[i+1:]...)
+			}
+		}
+		// sleep for 60 seconds
 		time.Sleep(60 * time.Second)
 		// get resources of each notebook's pod by calling the API
 		metricsData, err := clientset.RESTClient().
