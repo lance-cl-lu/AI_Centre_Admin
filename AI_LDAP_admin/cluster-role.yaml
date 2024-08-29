@@ -32,6 +32,17 @@ rules:
   - patch
   - update
 - apiGroups:
+  - kubeflow.org
+  resources:
+  - profiles
+  verbs:
+  - get
+  - list
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
   - ""
   resources:
   - persistentvolumeclaims
