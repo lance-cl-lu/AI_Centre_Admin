@@ -99,10 +99,10 @@ function AddUser() {
                     "lab":e.target[4].value,
                     "is_lab_manager": e.target[5].checked,
                     "password":e.target[6].value,
-                    "cpu_quota":e.target[8].value,
-                    "mem_quota":e.target[9].value,
-                    "gpu_quota":e.target[10].value,
-                    "gpu_vendor":e.target[11].value,
+                    "cpu_quota":e.target[9].value,
+                    "mem_quota":e.target[10].value,
+                    "gpu_quota":e.target[11].value,
+                    "gpu_vendor":e.target[12].value,
                 }),
             });
             if(response.status===200){
