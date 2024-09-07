@@ -8,16 +8,19 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // remove a notebook pod's policyv
-var leastCPUUsage = 10000
-var leastMemUsage = 10000
+var leastCPUUsage = 7890289
+var leastMemUsage = 380000
 
 // Notebook represents the structure of a notebook in the JSON response
 type Notebook struct {
@@ -140,6 +143,9 @@ func main() {
 					notebooks[i].IdleCounter = 0
 					fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory)
 					fmt.Printf("Counter: %d\n", notebooks[i].IdleCounter)
+					// print time
+					t := time.Now()
+					fmt.Printf("Time: %s\n", t.Format("2006-01-02 15:04:05"))
 				}
 			}
 		}
@@ -151,6 +157,7 @@ func main() {
 
 	// get the resources of each notebook and print the each second
 	for {
+
 		// get all notebook's resources every 60 seconds and check if the notebook still in use, if not remove from the list
 		tmpNotebooksData, err := clientset.RESTClient().
 			Get().
@@ -201,7 +208,7 @@ func main() {
 			}
 		}
 		// sleep for 60 seconds
-		time.Sleep(60 * time.Second)
+		time.Sleep(1 * time.Second)
 		// get resources of each notebook's pod by calling the API
 		metricsData, err := clientset.RESTClient().
 			Get().
@@ -237,6 +244,55 @@ func main() {
 						notebooks[i].IdleCounter += 1
 						fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory)
 						fmt.Printf("Counter: %d\n", notebooks[i].IdleCounter)
+
+						// if the notebook is not in use for 5 minutes, delete it's pod
+						cpuUsageStr := strings.Replace(container.Usage.CPU, "n", "", -1)
+						memUsageStr := strings.Replace(container.Usage.Memory, "Ki", "", -1)
+						cpuUsage, err := strconv.Atoi(cpuUsageStr)
+						if err != nil {
+							panic(err.Error())
+						}
+						memUsage, err := strconv.Atoi(memUsageStr)
+						if err != nil {
+							panic(err.Error())
+						}
+						fmt.Printf("CPU Usage: %d, Memory Usage: %d\n", cpuUsage, memUsage)
+						if cpuUsage < leastCPUUsage && notebooks[i].IdleCounter > 5 && memUsage < leastMemUsage {
+							// delete the pod
+							fmt.Printf("Deleting all pods of notebook %s in namespace %s\n", notebook.Name, notebook.Namespace)
+							// try delete all pods of the notebook
+							pods, err := clientset.CoreV1().Pods(notebook.Namespace).List(ctx, metav1.ListOptions{})
+							if err != nil {
+								panic(err.Error())
+							}
+							for _, pod := range pods.Items {
+								if strings.Contains(pod.Name, notebook.Name) {
+									err := clientset.CoreV1().Pods(notebook.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+									if err != nil {
+										panic(err.Error())
+									}
+								}
+							}
+							// using k8s API to delete the notebook
+							result := clientset.RESTClient().
+								Delete().
+								AbsPath("/apis/kubeflow.org/v1").
+								Resource("notebooks").
+								Namespace(notebook.Namespace).
+								Name(notebook.Name).
+								Do(ctx)
+							notebookerr := result.Error()
+							if notebookerr != nil {
+								panic(notebookerr.Error())
+							}
+
+							// remove the notebook from the list
+							notebooks = append(notebooks[:i], notebooks[i+1:]...)
+
+						}
+						if cpuUsage > leastCPUUsage || memUsage > leastMemUsage {
+							notebooks[i].IdleCounter = 0
+						}
 					}
 				}
 			}
@@ -245,7 +301,8 @@ func main() {
 		sort.Slice(notebooks, func(i, j int) bool {
 			return notebooks[i].Name < notebooks[j].Name
 		})
-		// increment the idle counter of each notebook
+		t := time.Now()
+		fmt.Printf("Time: %s\n", t.Format("2006-01-02 15:04:05"))
 
 	}
 }
