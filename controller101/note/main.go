@@ -20,7 +20,6 @@ import (
 
 // remove a notebook pod's policyv
 var leastCPUUsage = 7890289
-var leastMemUsage = 380000
 
 // Notebook represents the structure of a notebook in the JSON response
 type Notebook struct {
@@ -247,17 +246,14 @@ func main() {
 
 						// if the notebook is not in use for 5 minutes, delete it's pod
 						cpuUsageStr := strings.Replace(container.Usage.CPU, "n", "", -1)
-						memUsageStr := strings.Replace(container.Usage.Memory, "Ki", "", -1)
+
 						cpuUsage, err := strconv.Atoi(cpuUsageStr)
 						if err != nil {
 							panic(err.Error())
 						}
-						memUsage, err := strconv.Atoi(memUsageStr)
-						if err != nil {
-							panic(err.Error())
-						}
-						fmt.Printf("CPU Usage: %d, Memory Usage: %d\n", cpuUsage, memUsage)
-						if cpuUsage < leastCPUUsage && notebooks[i].IdleCounter > 5 && memUsage < leastMemUsage {
+
+						fmt.Printf("CPU Usage: %d\n", cpuUsage)
+						if cpuUsage < leastCPUUsage && notebooks[i].IdleCounter > 5 {
 							// delete the pod
 							fmt.Printf("Deleting all pods of notebook %s in namespace %s\n", notebook.Name, notebook.Namespace)
 							// try delete all pods of the notebook
@@ -290,7 +286,7 @@ func main() {
 							notebooks = append(notebooks[:i], notebooks[i+1:]...)
 
 						}
-						if cpuUsage > leastCPUUsage || memUsage > leastMemUsage {
+						if cpuUsage > leastCPUUsage {
 							notebooks[i].IdleCounter = 0
 						}
 					}
