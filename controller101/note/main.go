@@ -19,7 +19,7 @@ import (
 )
 
 // remove a notebook pod's policyv
-var leastCPUUsage = 7890289
+var leastCPUUsage = 5000000
 
 // Notebook represents the structure of a notebook in the JSON response
 type Notebook struct {
@@ -28,7 +28,7 @@ type Notebook struct {
 	CPUUsage    string `json:"cpuUsage"`
 	MemUsage    string `json:"memUsage"`
 	IdleCounter int    `json:"idleCounter"`
-	removalTag  bool   `json:"removalTag"`
+	removalTag  bool
 }
 
 // PodMetricsList represents the structure of the JSON response from the metrics API
@@ -81,11 +81,23 @@ func main() {
 	if err := json.Unmarshal(notebooksData, &data); err != nil {
 		panic("Error unmarshalling JSON: " + err.Error())
 	}
+
 	for _, item := range data["items"].([]interface{}) {
 		metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+		// print labels
+		labels := metadata["labels"].(map[string]interface{})
+		//Labels: map[app:sfmsdkfmdskflsdlfmds removal:OK]
+		removalTag, err := labels["removal"].(string)
+		if err != true {
+			removalTag = "false"
+		}
+		tmpRemovalTag := bool(removalTag == "OK")
+
 		notebooks = append(notebooks, Notebook{
-			Name:      metadata["name"].(string),
-			Namespace: metadata["namespace"].(string),
+			Name:       metadata["name"].(string),
+			Namespace:  metadata["namespace"].(string),
+			removalTag: tmpRemovalTag,
+			// in Labels, there is a key called removalTag
 		})
 	}
 
@@ -140,15 +152,14 @@ func main() {
 					notebooks[i].CPUUsage = container.Usage.CPU
 					notebooks[i].MemUsage = container.Usage.Memory
 					notebooks[i].IdleCounter = 0
-					fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory)
-					fmt.Printf("Counter: %d\n", notebooks[i].IdleCounter)
-					// print time
-					t := time.Now()
-					fmt.Printf("Time: %s\n", t.Format("2006-01-02 15:04:05"))
+					fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s, Counter: %d, Removal Tag: %t\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory, notebooks[i].IdleCounter, notebook.removalTag)
+
 				}
 			}
 		}
 	}
+	t := time.Now()
+	fmt.Printf("Time: %s\n", t.Format("2006-01-02 15:04:05"))
 	// sort notebooks by name
 	sort.Slice(notebooks, func(i, j int) bool {
 		return notebooks[i].Name < notebooks[j].Name
@@ -206,8 +217,8 @@ func main() {
 				notebooks = append(notebooks[:i], notebooks[i+1:]...)
 			}
 		}
-		// sleep for 60 seconds
-		time.Sleep(1 * time.Second)
+		// sleep for 1 minute
+		time.Sleep(60 * time.Second)
 		// get resources of each notebook's pod by calling the API
 		metricsData, err := clientset.RESTClient().
 			Get().
@@ -241,19 +252,24 @@ func main() {
 						notebooks[i].CPUUsage = container.Usage.CPU
 						notebooks[i].MemUsage = container.Usage.Memory
 						notebooks[i].IdleCounter += 1
-						fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory)
-						fmt.Printf("Counter: %d\n", notebooks[i].IdleCounter)
-
+						fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s, Counter: %d, Removal Tag: %t\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory, notebooks[i].IdleCounter, notebook.removalTag)
 						// if the notebook is not in use for 5 minutes, delete it's pod
-						cpuUsageStr := strings.Replace(container.Usage.CPU, "n", "", -1)
+						cpuUsageStr := ""
+						if strings.Contains(container.Usage.CPU, "n") {
+							cpuUsageStr = strings.Replace(container.Usage.CPU, "n", "", -1)
+						} else if strings.Contains(container.Usage.CPU, "m") {
+							cpuUsageStr = strings.Replace(container.Usage.CPU, "m", "", -1)
+						} else if strings.Contains(container.Usage.CPU, "u") {
+							cpuUsageStr = strings.Replace(container.Usage.CPU, "u", "", -1)
+						} else {
+							cpuUsageStr = container.Usage.CPU
+						}
 
 						cpuUsage, err := strconv.Atoi(cpuUsageStr)
 						if err != nil {
 							panic(err.Error())
 						}
-
-						fmt.Printf("CPU Usage: %d\n", cpuUsage)
-						if cpuUsage < leastCPUUsage && notebooks[i].IdleCounter > 5 {
+						if cpuUsage < leastCPUUsage && notebooks[i].IdleCounter > 60 && notebooks[i].removalTag == true {
 							// delete the pod
 							fmt.Printf("Deleting all pods of notebook %s in namespace %s\n", notebook.Name, notebook.Namespace)
 							// try delete all pods of the notebook
