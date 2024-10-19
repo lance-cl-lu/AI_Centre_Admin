@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: cguaicadmin/backend_dev:v0.3
+          image: docker.io/twentyfouritaiwan/ldap_backend:v0.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
