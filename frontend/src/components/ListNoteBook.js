@@ -35,13 +35,13 @@ function ListNoteBook() {
     let handleOnChange = (name) => (event) => {
         console.log(event.target.checked);
         console.log(name);
-        let removal = event.target.checked ? "OK" : "non-removal";
+        let persisitent = event.target.checked ? "true" : "false";
         fetch('/api/setNotebook/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({user: user, notebookName: name, removal: removal})
+            body: JSON.stringify({user: user, notebookName: name, persisitent: persisitent})
         })
         .then(response => response.json())
         .then(data => {
@@ -64,7 +64,7 @@ function ListNoteBook() {
                         <Th>CPU</Th>
                         <Th>Memory</Th>
                         <Th>GPU</Th>
-                        <Th>Removal</Th>
+                        <Th>persisitent</Th>
                         <Th>Status</Th>
                     </Tr>
                 </Thead>
@@ -77,7 +77,7 @@ function ListNoteBook() {
                             <Td>{notebook.cpu}</Td>
                             <Td>{notebook.memory}</Td>
                             <Td>{notebook.gpus}</Td>
-                            <Td><Checkbox onChange={handleOnChange(notebook.name)} value={notebook.name} defaultChecked={notebook.removal === "OK" ? true : false}></Checkbox></Td>
+                            <Td><Checkbox onChange={handleOnChange(notebook.name)} value={notebook.name} defaultChecked={notebook.persisitent === "true" ? true : false}></Checkbox></Td>
                             <Td>{notebook.status}</Td>
                         </Tr>
                     ))

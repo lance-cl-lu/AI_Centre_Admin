@@ -39,7 +39,7 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
-def change_notebooks_removal(namespace, notebook, removal):
+def change_notebooks_persisitent(namespace, notebook, persisitent):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -48,7 +48,7 @@ def change_notebooks_removal(namespace, notebook, removal):
     profile_data = {
         "metadata": {
             "labels": {
-                "removal": removal
+                "persisitent": persisitent
             }
         },
     }
@@ -68,12 +68,12 @@ def set_notebook(request):
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
     notebookName = data['notebookName']
-    removal = data['removal']
+    persisitent = data['persisitent']
 
     user_obj = User.objects.get(username=data['user'])
     profileName = get_profile_by_email(user_obj.email)
     print("profileName = ", profileName)
-    change_notebooks_removal(profileName, notebookName, removal)
+    change_notebooks_persisitent(profileName, notebookName, persisitent)
     return Response( status=200)
     
 @api_view(['POST'])
@@ -112,11 +112,11 @@ def list_notebooks_api(namespace):
             name = notebook["metadata"]["name"]
             cpu = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"]
             memory = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["memory"]
-            removal = ""
+            persisitent = ""
             try:
-                removal = notebook["metadata"]["labels"]["removal"]
+                persisitent = notebook["metadata"]["labels"]["persisitent"]
             except:
-                removal = "non-removal"
+                persisitent = "false"
                 
             try:
                 gpus = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["nvidia.com/gpu"]
@@ -128,7 +128,7 @@ def list_notebooks_api(namespace):
             except:
                 status = 'none'
 
-            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "removal": removal, "status": status }
+            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "persisitent": persisitent, "status": status }
             Response.append(ResponseOne)
 
         print("Response = {}", Response)
