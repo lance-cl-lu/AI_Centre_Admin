@@ -220,7 +220,7 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         memorydecimal = memorydecimal/10
         memoryinteger = float(memoryIntStr)
         memoryfinal = memorydecimal+memoryinteger
-        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal) + 'Gi'
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
     
     if gpu != '0':
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
@@ -274,7 +274,7 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
         memorydecimal = memorydecimal/10
         memoryinteger = float(memoryIntStr)
         memoryfinal = memorydecimal+memoryinteger
-        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryfinal) + 'Gi'
+        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
         
     if str(gpu) != '0':
         resourceQuotaSpec["hard"]["requests.nvidia.com/gpu"] = str(gpu)
@@ -315,13 +315,16 @@ def replace_profile(name,cpu,gpu,memory):
         if p['metadata']['name'] == name:
             replace_quota_of_profile(p,cpu,gpu,memory)
 
-def replace_profile_user(name,user):
+def replace_profile_user(name,user,cpu,gpu,memory):
     profiles = get_all_profiles()['items']
     print("name = ", name)
     for p in profiles:
         if p['metadata']['name'] == name:
             userAnnotations = {
-                "manager": user
+                "manager": user,
+                "cpu" : cpu,
+                "gpu" : gpu,
+                "memory" : memory
             }
             p['metadata']['annotations'] = userAnnotations
             print(" p = ", p)
@@ -878,7 +881,7 @@ def change_user_info(request):
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
             print("manager = ", manager)    
-            replace_profile_user(profileName, manager)
+            replace_profile_user(profileName, manager,cpu_quota,gpu_quota,mem_quota)
         return Response(status=200)
     except:
         return Response(status=500)
