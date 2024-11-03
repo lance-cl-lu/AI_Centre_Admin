@@ -68,19 +68,19 @@ function AddUser() {
             return;
         }
         // test cpu, mem and gpu quota and gpu vendor
-        if(e.target[8].value===''){
+        if(e.target[9].value===''){
             alert('CPU Quota cannot be empty');
             return;
         }
-        if(e.target[9].value===''){
+        if(e.target[10].value===''){
             alert('Memory Quota cannot be empty');
             return;
         }
-        if(e.target[10].value===''){
+        if(e.target[11].value===''){
             alert('GPU Quota cannot be empty');
             return;
         }
-        if(e.target[11].value===''){
+        if(e.target[12].value===''){
             alert('GPU Vendor cannot be empty');
             return;
         }
@@ -99,10 +99,11 @@ function AddUser() {
                     "lab":e.target[4].value,
                     "is_lab_manager": e.target[5].checked,
                     "password":e.target[6].value,
-                    "cpu_quota":e.target[8].value,
-                    "mem_quota":e.target[9].value,
-                    "gpu_quota":e.target[10].value,
-                    "gpu_vendor":e.target[11].value,
+                    "labdefault": e.target[8].value,
+                    "cpu_quota":e.target[9].value,
+                    "mem_quota":e.target[10].value,
+                    "gpu_quota":e.target[11].value,
+                    "gpu_vendor":e.target[12].value,
                 }),
             });
             if(response.status===200){

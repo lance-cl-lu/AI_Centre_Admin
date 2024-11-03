@@ -189,7 +189,10 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         "metadata": {
             "name": username.lower(),
             "annotations": {
-                "manager": manager
+                "manager": manager,
+                "cpu" : cpu,
+                "gpu" : gpu,
+                "memory" : memory
             }
         },
         "spec": {
@@ -205,10 +208,19 @@ def create_profile(username, email, cpu, gpu, memory, manager):
     }
 
     if cpu != '0':
-        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.cpu"] = cpu
+        cpudecimal = float(cpu)
+        cpudecimal = cpudecimal/10
+        cpupinteger = float(cpu)
+        cpufinal = cpupinteger+cpudecimal
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.cpu"] = str(cpufinal)
 
     if memoryStr != '0Gi':
-        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = memoryStr
+        memoryIntStr = memoryStr[:-2]
+        memorydecimal = float(memoryIntStr)
+        memorydecimal = memorydecimal/10
+        memoryinteger = float(memoryIntStr)
+        memoryfinal = memorydecimal+memoryinteger
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal) + 'Gi'
     
     if gpu != '0':
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
@@ -250,9 +262,20 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
         }
     }
     if str(cpu) != '0':
-        resourceQuotaSpec["hard"]["requests.cpu"] = str(cpu)
+        cpudecimal = float(cpu)
+        cpudecimal = cpudecimal/10
+        cpupinteger = float(cpu)
+        cpufinal = cpupinteger+cpudecimal
+        resourceQuotaSpec["hard"]["requests.cpu"] = str(cpufinal)
+
     if str(memoryStr) != '0Gi':
-        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryStr)
+        memoryIntStr = memoryStr[:-2]
+        memorydecimal = float(memoryIntStr)
+        memorydecimal = memorydecimal/10
+        memoryinteger = float(memoryIntStr)
+        memoryfinal = memorydecimal+memoryinteger
+        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryfinal) + 'Gi'
+        
     if str(gpu) != '0':
         resourceQuotaSpec["hard"]["requests.nvidia.com/gpu"] = str(gpu)
 
