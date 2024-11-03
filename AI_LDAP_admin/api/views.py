@@ -703,18 +703,30 @@ def get_user_info(request):
         print(profile)
         # add try error control below
         try:
-            cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            cpu = profile["metadata"]["annotations"]["cpu"]
         except:
-            cpu = "0"
+            try:
+                cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            except:
+                cpu = "0"
+
         try:
-            gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            gpu = profile["metadata"]["annotations"]["gpu"]
         except:
-           gpu = "0"
+            try:
+                gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            except:
+                gpu = "0"
+
         try:
-            memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
-            memory = memory[:-2]
+            memory = profile["metadata"]["annotations"]["memory"]
         except:
-            memory = "0"
+            try:
+                memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                memory = memory[:-2]
+            except:
+                memory = "0"
+                
     else:
         print("Profile not found")
         memory = "0"
