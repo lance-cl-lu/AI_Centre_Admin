@@ -20,21 +20,12 @@ rules:
   - delete
   - patch
   - update
+- apiGroups:
+  - kubeflow.org  
   resources:
   - notebooks
   - notebooks/finalizers
   - poddefaults
-  verbs:
-  - get
-  - list
-  - create
-  - delete
-  - patch
-  - update
-- apiGroups:
-  - kubeflow.org
-  resources:
-  - profiles
   verbs:
   - get
   - list
