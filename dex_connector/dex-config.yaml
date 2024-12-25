@@ -81,3 +81,22 @@ connectors:
       - userAttr: cn
         groupAttr: member
       nameAttr: cn
+- type: github
+  # Required field for connector id.
+  id: github
+  # Required field for connector name.
+  name: GitHub
+  config:
+    # Credentials can be string literals or pulled from the environment.
+    clientID: $GITHUB_CLIENT_ID
+    clientSecret: $GITHUB_CLIENT_SECRET
+    redirectURI: http://127.0.0.1:5556/dex/callback
+  orgs:
+    - name: my-organization
+    - name: my-organization-with-teams
+      teams:
+      - red-team
+      - blue-team
+  loadAllGroups: false
+  teamNameField: slug
+  useLoginAsID: false

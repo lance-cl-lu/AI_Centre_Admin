@@ -348,11 +348,11 @@ def get_gid():
         except KeyError:
             return uid
 '''
-# connect to LDAP server
+
 def connectLDAP():
-    # server = Server('ldap://120.126.23.245:31979')
     server = Server('ldap://' + urls.LDAP_IP + ':' + urls.LDAP_PORT)
-    conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
+    conn = Connection(server, user='cn=admin,dc=example,dc=org',
+                      password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 
 @api_view(['GET'])
@@ -1161,7 +1161,6 @@ def export_lab_user(request):
 @api_view(['POST'])
 def import_lab_user(request):
     group = request.POST['lab']
-    print(group)
     if request.FILES.get('file'):
         excel_file = request.FILES['file']
         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
@@ -1172,14 +1171,14 @@ def import_lab_user(request):
         # Get all information from the excel file
         userinfo = []
         for row in worksheet.iter_rows():
+            # error control: if the row is empty or the first row
             if row[0].value == "Username" or row[0].value is None:
                 continue
-            print(row[0])
+                
             Excelemail = row[2].value.lower() if row[2].value is not None else None 
             user = {
                 "username": row[0].value.lower(),
                 "password": row[1].value,
-                # lowercase email
                 "email": Excelemail,
                 "firstname": row[3].value,
                 "lastname": row[4].value,
@@ -1189,7 +1188,6 @@ def import_lab_user(request):
                 "mem_quota": row[8].value,
             }
             userinfo.append(user)
-            print(user)
         # check all data is valid or not with database, use pandas
         for user in userinfo:
             if user['permission'] != 'admin' and user['permission'] != 'user':
@@ -1236,9 +1234,10 @@ def import_lab_user(request):
                 continue
             
             try:
-                # add user into kube flow
+                # add user into kubeflow's profile
                 create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
             except:
+                # if user is not added into kubeflow, remove the user from database
                 failed_user.append({user['username']: "user add into kubeflow failed"})
                 continue
                 # add user into ldap
