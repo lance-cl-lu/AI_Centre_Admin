@@ -6,15 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-
+	"k8s.io/client-go/rest"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -50,13 +48,12 @@ type PodMetricsList struct {
 
 func main() {
 	// Use the current context in kubeconfig
-	kubeconfig := filepath.Join(
-		homeDir(), ".kube", "config",
-	)
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
+
 
 	// Create the clientset
 	clientset, err := kubernetes.NewForConfig(config)
@@ -89,7 +86,7 @@ func main() {
 		//Labels: map[app:sfmsdkfmdskflsdlfmds removal:OK]
 		removalTag, err := labels["removal"].(string)
 		if err != true {
-			removalTag = "false"
+			removalTag = "OK"
 		}
 		tmpRemovalTag := bool(removalTag == "OK")
 

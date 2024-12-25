@@ -1,20 +1,94 @@
+# Create the custom namespace if it doesn't exist
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pod-killer-ns
+---
+# Deployment for Go Application (pod-killer)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: your-controller
-  namespace: controller
+  name: pod-killer-deployment
+  namespace: pod-killer-ns
+  labels:
+    app: pod-killer
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: your-controller
+      app: pod-killer
   template:
     metadata:
       labels:
-        app: your-controller
+        app: pod-killer
     spec:
-      serviceAccountName: your-controller-sa  # Specify the service account here
+      serviceAccountName: pod-killer-service-account  # Link the service account here
       containers:
-      - name: your-controller
-        image: lms025187/mycontroller:latest
-        imagePullPolicy: Always
+      - name: pod-killer
+        image: cguaicadmin/pod-killer  # Updated with the correct image name
+        env:
+        - name: TIMEINTERVAL
+          value: "60"  # Time interval in seconds
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+---
+# Service to expose the pod-killer app
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-killer-service
+  namespace: pod-killer-ns
+spec:
+  selector:
+    app: pod-killer
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer  # You can also use ClusterIP or NodePort depending on your setup
+---
+# ServiceAccount for the pod-killer application
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-killer-service-account
+  namespace: pod-killer-ns  # Ensure this matches the namespace where the deployment is running
+---
+# Role to grant API access in custom namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pod-killer-ns  # Ensure this matches the custom namespace
+  name: api-access-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "deployments", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["*"]
+  resources: ["notebooks"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["notebooks.meta.k8s.io"]
+  resources: ["notebooks"]
+  verbs: ["get", "list", "watch"]
+---
+# RoleBinding to bind the Role to the ServiceAccount in custom namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-access-rolebinding
+  namespace: pod-killer-ns
+subjects:
+- kind: ServiceAccount
+  name: pod-killer-service-account  # The ServiceAccount created for the app
+  namespace: pod-killer-ns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: api-access-role  # Role name we defined above
