@@ -109,17 +109,24 @@ func main() {
 		// print labels
 		labels := metadata["labels"].(map[string]interface{})
 		fmt.Printf("Labels: %v\n", labels)
-		//Labels: map[app:sfmsdkfmdskflsdlfmds removal:OK]
-		removalTag, err := labels["removal"].(string)
-		if err != true {
-			removalTag = "OK"
+		// find the persisitent key in the labels
+		// if persisitent is true, set persisitentTag to true, else set it to false
+		persisitentTag := false
+		if labels, ok := metadata["labels"].(map[string]interface{}); ok {
+			fmt.Printf("Labels: %v\n", labels["persisitent"]) // Use the correct key "persisitent"
+			if val, exists := labels["persisitent"]; exists { // Match the typo in the key
+				// Convert to string and check its value
+				if valStr, ok := val.(string); ok && valStr == "true" {
+					persisitentTag = true
+				}
+			}
 		}
-		tmpRemovalTag := bool(removalTag == "OK")
+		// add the notebook to the list
 
 		notebooks = append(notebooks, Notebook{
 			Name:       metadata["name"].(string),
 			Namespace:  metadata["namespace"].(string),
-			removalTag: tmpRemovalTag,
+			removalTag: !persisitentTag,
 			// in Labels, there is a key called removalTag
 		})
 	}
