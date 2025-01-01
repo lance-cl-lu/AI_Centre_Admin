@@ -1,5 +1,5 @@
 # Requirements
-* nodejs > 14.0
+* nodejs >= 14.0
 
 
 # Getting Started with Create React App
