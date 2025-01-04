@@ -71,10 +71,7 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "services", "deployments", "namespaces"]
   verbs: ["get", "list", "watch"]
-- apiGroups: ["*"]
-  resources: ["notebooks"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["notebooks.meta.k8s.io"]
+- apiGroups: ["kubeflow.org"]
   resources: ["notebooks"]
   verbs: ["get", "list", "watch"]
 ---

@@ -70,7 +70,6 @@ func main() {
 	// use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-
 		// Use the current context in kubeconfig
 		config, err = rest.InClusterConfig()
 		if err != nil {
@@ -89,7 +88,7 @@ func main() {
 	notebooks := []Notebook{}
 	// get all pods of the notebook
 	// Fetch all notebooks
-
+	fmt.Println("Fetching all notebooks")
 	notebooksData, err := clientset.RESTClient().
 		Get().
 		AbsPath("/apis/kubeflow.org/v1").
@@ -186,7 +185,7 @@ func main() {
 		}
 	}
 	t := time.Now()
-	fmt.Printf("Time: %s\n", t.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Time1: %s\n", t.Format("2006-01-02 15:04:05"))
 	// sort notebooks by name
 	sort.Slice(notebooks, func(i, j int) bool {
 		return notebooks[i].Name < notebooks[j].Name
@@ -213,8 +212,17 @@ func main() {
 		// add new notebooks to the list and delete the notebooks that are not in use
 		for _, item := range tmpData["items"].([]interface{}) {
 			metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+			persisitentTag := false
+			if labels, ok := metadata["labels"].(map[string]interface{}); ok {
+				if val, exists := labels["persisitent"]; exists { // Match the typo in the key
+					// Convert to string and check its value
+					if valStr, ok := val.(string); ok && valStr == "true" {
+						persisitentTag = true
+					}
+				}
+			}
 			// check if the notebook is already in the list
-			found := true
+			found := false
 			for _, notebook := range notebooks {
 				if metadata["name"].(string) == notebook.Name && metadata["namespace"].(string) == notebook.Namespace {
 					found = true
@@ -223,25 +231,41 @@ func main() {
 			}
 			// if the notebook is not in the list, add it to the list
 			if !found {
+				fmt.Printf("notebook %s is added", metadata["name"].(string))
+
 				notebooks = append(notebooks, Notebook{
 					Name:      metadata["name"].(string),
 					Namespace: metadata["namespace"].(string),
+					removalTag: !persisitentTag,
 				})
 			}
 		}
 		// check if the notebook is still in use
 		for i, notebook := range notebooks {
-			found := true
+			found := false
 			for _, item := range tmpData["items"].([]interface{}) {
 				metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
+				persistentTag := false
+				if labels, ok := metadata["labels"].(map[string]interface{}); ok {
+					if val, exists := labels["persisitent"]; exists { // Match the typo in the key
+						// Convert to string and check its value
+						if valStr, ok := val.(string); ok && valStr == "true" {
+							persistentTag = true
+						}
+					}
+				}
 				if metadata["name"].(string) == notebook.Name && metadata["namespace"].(string) == notebook.Namespace {
 					found = true
+					notebooks[i].removalTag = persistentTag
 					break
 				}
 			}
 			// if the notebook is not in use, remove it from the list
 			if !found {
+				fmt.Printf("notebook %s is deteted", notebook.Name )
 				notebooks = append(notebooks[:i], notebooks[i+1:]...)
+			} else {
+				fmt.Printf("notebook %s is still inuse tag is %t\n", notebooks[i].Name,notebooks[i].removalTag )
 			}
 		}
 		// sleep for 1 minute
@@ -281,7 +305,7 @@ func main() {
 						notebooks[i].CPUUsage = container.Usage.CPU
 						notebooks[i].MemUsage = container.Usage.Memory
 						notebooks[i].IdleCounter += 1
-						fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s, Counter: %d, Removal Tag: %t\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory, notebooks[i].IdleCounter, notebook.removalTag)
+						fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Memory Usage: %s, Counter: %d, Removal Tag: %t\n", notebook.Name, notebook.Namespace, container.Usage.CPU, container.Usage.Memory, notebooks[i].IdleCounter, notebooks[i].removalTag)
 						// if the notebook is not in use for 5 minutes, delete it's pod
 						cpuUsageStr := ""
 						if strings.Contains(container.Usage.CPU, "n") {
@@ -305,7 +329,7 @@ func main() {
 
 							// get current time
 							t := time.Now()
-							fmt.Printf("Time: %s\n", t.Format("2006-01-02T15:04:05"))
+							fmt.Printf("Time2: %s\n", t.Format("2006-01-02T15:04:05"))
 
 							// Prepare the patch for stopping the noteboo
 							patchBody := map[string]interface{}{
@@ -352,7 +376,7 @@ func main() {
 			return notebooks[i].Name < notebooks[j].Name
 		})
 		t := time.Now()
-		fmt.Printf("Time: %s\n", t.Format("2006-01-02 15:04:05"))
+		fmt.Printf("Time3: %s\n", t.Format("2006-01-02 15:04:05"))
 
 		// reget all the notebooks
 		notebooksData, err := clientset.RESTClient().

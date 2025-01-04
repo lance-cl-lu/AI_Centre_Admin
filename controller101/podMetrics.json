@@ -2,74 +2,104 @@
   "items": [
     {
       "metadata": {
-        "name": "dex-6555448c78-zvfmf",
+        "name": "dex-6555448c78-bj6df",
         "namespace": "auth"
       },
       "containers": [
         {
           "name": "dex",
           "usage": {
-            "cpu": "109236n",
-            "memory": "35240Ki"
+            "cpu": "98223n",
+            "memory": "11144Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "cert-manager-cainjector-576655b654-cc5zc",
+        "name": "cert-manager-5d77b478-4bjt9",
+        "namespace": "cert-manager"
+      },
+      "containers": [
+        {
+          "name": "cert-manager-controller",
+          "usage": {
+            "cpu": "303163n",
+            "memory": "22032Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "cert-manager-cainjector-576655b654-8tkv8",
         "namespace": "cert-manager"
       },
       "containers": [
         {
           "name": "cert-manager-cainjector",
           "usage": {
-            "cpu": "892392n",
-            "memory": "119628Ki"
+            "cpu": "507141n",
+            "memory": "67216Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "cert-manager-webhook-795dc979b6-dmzl7",
+        "name": "cert-manager-webhook-795dc979b6-xctx2",
         "namespace": "cert-manager"
       },
       "containers": [
         {
           "name": "cert-manager-webhook",
           "usage": {
-            "cpu": "566846n",
-            "memory": "47220Ki"
+            "cpu": "226004n",
+            "memory": "12296Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-6q9xz",
+        "name": "node-resource-monitor-8f5997f7c-46tq5",
+        "namespace": "cgu"
+      },
+      "containers": [
+        {
+          "name": "node-resource-monitor",
+          "usage": {
+            "cpu": "93343n",
+            "memory": "130444Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ml-pipeline-ui-artifact-5c4b49cff9-sv2tx",
         "namespace": "d000018238"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4772390n",
-            "memory": "61880Ki"
+            "cpu": "2034858n",
+            "memory": "51364Ki"
           }
         },
         {
           "name": "ml-pipeline-ui-artifact",
           "usage": {
             "cpu": "0",
-            "memory": "73104Ki"
+            "memory": "73024Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-lqq5m",
+        "name": "ml-pipeline-visualizationserver-77f48b88c7-q6xjb",
         "namespace": "d000018238"
       },
       "containers": [
@@ -77,89 +107,80 @@
           "name": "ml-pipeline-visualizationserver",
           "usage": {
             "cpu": "0",
-            "memory": "93280Ki"
+            "memory": "93292Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4320106n",
-            "memory": "65472Ki"
+            "cpu": "1485615n",
+            "memory": "53252Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "my-release-0",
-        "namespace": "default"
+        "name": "nonstop-0",
+        "namespace": "d000018238"
       },
       "containers": [
         {
-          "name": "openldap-stack-ha",
+          "name": "istio-proxy",
           "usage": {
-            "cpu": "117113n",
-            "memory": "22372Ki"
+            "cpu": "1384492n",
+            "memory": "48800Ki"
+          }
+        },
+        {
+          "name": "nonstop",
+          "usage": {
+            "cpu": "1277803n",
+            "memory": "305456Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "my-release-1",
-        "namespace": "default"
+        "name": "ml-pipeline-ui-artifact-5c4b49cff9-z9pbh",
+        "namespace": "db1028025"
       },
       "containers": [
         {
-          "name": "openldap-stack-ha",
+          "name": "ml-pipeline-ui-artifact",
           "usage": {
-            "cpu": "119381n",
-            "memory": "5472Ki"
+            "cpu": "0",
+            "memory": "73304Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1448600n",
+            "memory": "51868Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "my-release-2",
-        "namespace": "default"
+        "name": "ml-pipeline-visualizationserver-77f48b88c7-6p259",
+        "namespace": "db1028025"
       },
       "containers": [
         {
-          "name": "openldap-stack-ha",
+          "name": "ml-pipeline-visualizationserver",
           "usage": {
-            "cpu": "116697n",
-            "memory": "5236Ki"
+            "cpu": "0",
+            "memory": "93268Ki"
           }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "my-release-ltb-passwd-57ccb6f66f-h66kk",
-        "namespace": "default"
-      },
-      "containers": [
+        },
         {
-          "name": "ltb-passwd",
+          "name": "istio-proxy",
           "usage": {
-            "cpu": "417111n",
-            "memory": "112528Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "my-release-phpldapadmin-7694584dc8-kpr85",
-        "namespace": "default"
-      },
-      "containers": [
-        {
-          "name": "phpldapadmin",
-          "usage": {
-            "cpu": "325776n",
-            "memory": "56248Ki"
+            "cpu": "1456232n",
+            "memory": "50868Ki"
           }
         }
       ]
@@ -173,8 +194,8 @@
         {
           "name": "openldap-stack-ha",
           "usage": {
-            "cpu": "107509n",
-            "memory": "20696Ki"
+            "cpu": "56742n",
+            "memory": "6552Ki"
           }
         }
       ]
@@ -188,8 +209,8 @@
         {
           "name": "openldap-stack-ha",
           "usage": {
-            "cpu": "107376n",
-            "memory": "5184Ki"
+            "cpu": "56589n",
+            "memory": "6820Ki"
           }
         }
       ]
@@ -203,188 +224,83 @@
         {
           "name": "openldap-stack-ha",
           "usage": {
-            "cpu": "118615n",
-            "memory": "4732Ki"
+            "cpu": "58155n",
+            "memory": "6148Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "openldap-ltb-passwd-677b8c768b-tgcqd",
+        "name": "openldap-ltb-passwd-677b8c768b-mtb8j",
         "namespace": "default"
       },
       "containers": [
         {
           "name": "ltb-passwd",
           "usage": {
-            "cpu": "478463n",
-            "memory": "66576Ki"
+            "cpu": "588557n",
+            "memory": "69324Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "openldap-phpldapadmin-669dd7dd68-5vjx4",
+        "name": "openldap-phpldapadmin-669dd7dd68-7wswq",
         "namespace": "default"
       },
       "containers": [
         {
           "name": "phpldapadmin",
           "usage": {
-            "cpu": "334133n",
-            "memory": "138484Ki"
+            "cpu": "553040n",
+            "memory": "74068Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "gpu-feature-discovery-k9xdx",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "gpu-feature-discovery",
-          "usage": {
-            "cpu": "0",
-            "memory": "31468Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "gpu-operator-node-feature-discovery-gc-7d87949898-t9lt7",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "gc",
-          "usage": {
-            "cpu": "13937n",
-            "memory": "9544Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "gpu-operator-node-feature-discovery-master-6c7b457d64-bfclf",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "master",
-          "usage": {
-            "cpu": "494265n",
-            "memory": "27356Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "nvidia-container-toolkit-daemonset-6vzf7",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "nvidia-container-toolkit-ctr",
-          "usage": {
-            "cpu": "0",
-            "memory": "42968Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "nvidia-dcgm-exporter-845zk",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "nvidia-dcgm-exporter",
-          "usage": {
-            "cpu": "2200266n",
-            "memory": "594472Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "nvidia-device-plugin-daemonset-w28qc",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "nvidia-device-plugin",
-          "usage": {
-            "cpu": "14076n",
-            "memory": "19592Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "nvidia-operator-validator-bqxkv",
-        "namespace": "gpu-operator"
-      },
-      "containers": [
-        {
-          "name": "nvidia-operator-validator",
-          "usage": {
-            "cpu": "0",
-            "memory": "728Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "cluster-local-gateway-68d65cbd8c-whdx9",
+        "name": "cluster-local-gateway-68d65cbd8c-jv5c9",
         "namespace": "istio-system"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "7381901n",
-            "memory": "153508Ki"
+            "cpu": "5850487n",
+            "memory": "60860Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "istio-ingressgateway-8f46b776-n65jq",
+        "name": "istio-ingressgateway-8f46b776-fz59h",
         "namespace": "istio-system"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "7394438n",
-            "memory": "79048Ki"
+            "cpu": "5722418n",
+            "memory": "71508Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "istiod-788f458f4b-kqfvp",
+        "name": "istiod-788f458f4b-szvmj",
         "namespace": "istio-system"
       },
       "containers": [
         {
           "name": "discovery",
           "usage": {
-            "cpu": "61333311n",
-            "memory": "233884Ki"
+            "cpu": "1664596n",
+            "memory": "115700Ki"
           }
         }
       ]
@@ -398,259 +314,304 @@
         {
           "name": "authservice",
           "usage": {
-            "cpu": "102960n",
-            "memory": "37680Ki"
+            "cpu": "127094n",
+            "memory": "15484Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "eventing-controller-69c5d5659-hhbtr",
+        "name": "nfs-subdir-external-provisioner-5868f4cbcb-4twk8",
+        "namespace": "kf-storage"
+      },
+      "containers": [
+        {
+          "name": "nfs-subdir-external-provisioner",
+          "usage": {
+            "cpu": "1874941n",
+            "memory": "16916Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "eventing-controller-69c5d5659-c5rm7",
         "namespace": "knative-eventing"
       },
       "containers": [
         {
           "name": "eventing-controller",
           "usage": {
-            "cpu": "38319730n",
-            "memory": "211468Ki"
+            "cpu": "4955273n",
+            "memory": "100808Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "eventing-webhook-5496bb69df-kndhn",
+        "name": "eventing-webhook-5496bb69df-bh99g",
         "namespace": "knative-eventing"
       },
       "containers": [
         {
           "name": "eventing-webhook",
           "usage": {
-            "cpu": "11799786n",
-            "memory": "174052Ki"
+            "cpu": "5359041n",
+            "memory": "100372Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "eventing-webhook-5496bb69df-n6clc",
-        "namespace": "knative-eventing"
-      },
-      "containers": [
-        {
-          "name": "eventing-webhook",
-          "usage": {
-            "cpu": "5994329n",
-            "memory": "165844Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "activator-57888f4455-fr9cm",
+        "name": "activator-57888f4455-jdg29",
         "namespace": "knative-serving"
       },
       "containers": [
         {
           "name": "activator",
           "usage": {
-            "cpu": "432744n",
-            "memory": "59624Ki"
+            "cpu": "556282n",
+            "memory": "15884Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "5490200n",
-            "memory": "67124Ki"
+            "cpu": "1874332n",
+            "memory": "54160Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "autoscaler-55449c6c49-5b5jt",
+        "name": "autoscaler-55449c6c49-r87vg",
         "namespace": "knative-serving"
       },
       "containers": [
         {
-          "name": "autoscaler",
+          "name": "istio-proxy",
           "usage": {
-            "cpu": "2903993n",
-            "memory": "57856Ki"
+            "cpu": "2199546n",
+            "memory": "53552Ki"
           }
         },
         {
-          "name": "istio-proxy",
+          "name": "autoscaler",
           "usage": {
-            "cpu": "5452163n",
-            "memory": "64776Ki"
+            "cpu": "2795220n",
+            "memory": "22764Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "controller-76bfc57447-qr67q",
+        "name": "controller-76bfc57447-s2wf7",
         "namespace": "knative-serving"
       },
       "containers": [
         {
           "name": "controller",
           "usage": {
-            "cpu": "10805694n",
-            "memory": "75536Ki"
+            "cpu": "5181344n",
+            "memory": "31988Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "5609547n",
-            "memory": "65900Ki"
+            "cpu": "2010550n",
+            "memory": "53784Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "domain-mapping-687fdbbfd-lk6j8",
+        "name": "domain-mapping-687fdbbfd-mbqg9",
         "namespace": "knative-serving"
       },
       "containers": [
         {
           "name": "domain-mapping",
           "usage": {
-            "cpu": "1103206n",
-            "memory": "53412Ki"
+            "cpu": "850847n",
+            "memory": "15648Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "2150450n",
-            "memory": "63928Ki"
+            "cpu": "1759748n",
+            "memory": "52716Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "domainmapping-webhook-758fbc96c6-7gc7h",
+        "name": "domainmapping-webhook-758fbc96c6-v4rt8",
         "namespace": "knative-serving"
       },
       "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "8409709n",
-            "memory": "68740Ki"
-          }
-        },
         {
           "name": "domainmapping-webhook",
           "usage": {
-            "cpu": "5172280n",
-            "memory": "55684Ki"
+            "cpu": "4883798n",
+            "memory": "20652Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "4911063n",
+            "memory": "64276Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "net-istio-controller-5f66f65c68-n9mmn",
+        "name": "net-istio-controller-5f66f65c68-tqgj7",
         "namespace": "knative-serving"
       },
       "containers": [
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1895674n",
+            "memory": "53560Ki"
+          }
+        },
         {
           "name": "controller",
           "usage": {
-            "cpu": "8844081n",
-            "memory": "76328Ki"
-          }
-        },
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "5369256n",
-            "memory": "63708Ki"
+            "cpu": "1676771n",
+            "memory": "27112Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "net-istio-webhook-5694575876-tjplm",
+        "name": "net-istio-webhook-5694575876-wcknf",
         "namespace": "knative-serving"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "7880205n",
-            "memory": "69960Ki"
+            "cpu": "4779795n",
+            "memory": "64944Ki"
           }
         },
         {
           "name": "webhook",
           "usage": {
-            "cpu": "8192692n",
-            "memory": "54860Ki"
+            "cpu": "4765511n",
+            "memory": "21136Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "webhook-8d4d56959-7hqdt",
+        "name": "webhook-8d4d56959-56pzb",
         "namespace": "knative-serving"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "9478591n",
-            "memory": "68356Ki"
+            "cpu": "4887293n",
+            "memory": "64452Ki"
           }
         },
         {
           "name": "webhook",
           "usage": {
-            "cpu": "9153841n",
-            "memory": "57428Ki"
+            "cpu": "5289891n",
+            "memory": "21096Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "calico-node-sjbw4",
+        "name": "calico-kube-controllers-6bdbf5c6b6-pcf92",
         "namespace": "kube-system"
       },
       "containers": [
         {
-          "name": "calico-node",
+          "name": "calico-kube-controllers",
           "usage": {
-            "cpu": "94249640n",
-            "memory": "165516Ki"
+            "cpu": "1521063n",
+            "memory": "74488Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "calico-node-zvn9g",
+        "name": "calico-node-dgvtc",
         "namespace": "kube-system"
       },
       "containers": [
         {
           "name": "calico-node",
           "usage": {
-            "cpu": "24028939n",
-            "memory": "189888Ki"
+            "cpu": "23833766n",
+            "memory": "168980Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "calico-node-vntnr",
+        "namespace": "kube-system"
+      },
+      "containers": [
+        {
+          "name": "calico-node",
+          "usage": {
+            "cpu": "32541419n",
+            "memory": "144276Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "coredns-787d4945fb-27vx4",
+        "namespace": "kube-system"
+      },
+      "containers": [
+        {
+          "name": "coredns",
+          "usage": {
+            "cpu": "1421449n",
+            "memory": "47064Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "coredns-787d4945fb-h9rmb",
+        "namespace": "kube-system"
+      },
+      "containers": [
+        {
+          "name": "coredns",
+          "usage": {
+            "cpu": "2496800n",
+            "memory": "43352Ki"
           }
         }
       ]
@@ -664,8 +625,8 @@
         {
           "name": "etcd",
           "usage": {
-            "cpu": "63651418n",
-            "memory": "445716Ki"
+            "cpu": "41205986n",
+            "memory": "450276Ki"
           }
         }
       ]
@@ -679,8 +640,8 @@
         {
           "name": "kube-apiserver",
           "usage": {
-            "cpu": "221066714n",
-            "memory": "967076Ki"
+            "cpu": "265923087n",
+            "memory": "1529192Ki"
           }
         }
       ]
@@ -694,38 +655,38 @@
         {
           "name": "kube-controller-manager",
           "usage": {
-            "cpu": "6689717n",
-            "memory": "97876Ki"
+            "cpu": "11119360n",
+            "memory": "122028Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kube-proxy-c7c5t",
+        "name": "kube-proxy-9xmgt",
         "namespace": "kube-system"
       },
       "containers": [
         {
           "name": "kube-proxy",
           "usage": {
-            "cpu": "1770236n",
-            "memory": "65820Ki"
+            "cpu": "497497n",
+            "memory": "18788Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kube-proxy-n2xjd",
+        "name": "kube-proxy-cw8lm",
         "namespace": "kube-system"
       },
       "containers": [
         {
           "name": "kube-proxy",
           "usage": {
-            "cpu": "23339n",
-            "memory": "58468Ki"
+            "cpu": "69052n",
+            "memory": "63516Ki"
           }
         }
       ]
@@ -739,223 +700,230 @@
         {
           "name": "kube-scheduler",
           "usage": {
-            "cpu": "4253788n",
-            "memory": "71196Ki"
+            "cpu": "1857285n",
+            "memory": "30392Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "metrics-server-f5479559b-5lvjv",
+        "name": "metrics-server-5d8cbbb5dc-b4v78",
         "namespace": "kube-system"
       },
       "containers": [
         {
           "name": "metrics-server",
           "usage": {
-            "cpu": "5378208n",
-            "memory": "76216Ki"
+            "cpu": "5444074n",
+            "memory": "33116Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "admission-webhook-deployment-6c9678d48b-9ljc2",
+        "name": "admission-webhook-deployment-6c9678d48b-6wkxz",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "admission-webhook",
           "usage": {
-            "cpu": "52340n",
-            "memory": "38792Ki"
+            "cpu": "287669n",
+            "memory": "11936Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "cache-server-574ddb7d97-crmxf",
+        "name": "cache-server-574ddb7d97-fqbl8",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4500766n",
-            "memory": "64932Ki"
+            "cpu": "1478374n",
+            "memory": "54232Ki"
+          }
+        },
+        {
+          "name": "server",
+          "usage": {
+            "cpu": "346328n",
+            "memory": "11272Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "centraldashboard-68c4d7c97c-jxnvw",
+        "name": "centraldashboard-68c4d7c97c-cprbd",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "centraldashboard",
           "usage": {
-            "cpu": "0",
-            "memory": "138792Ki"
+            "cpu": "70837n",
+            "memory": "100652Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "1725241n",
-            "memory": "64192Ki"
+            "cpu": "2076163n",
+            "memory": "53516Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "jupyter-web-app-deployment-688dc8bb8c-gz9zl",
+        "name": "jupyter-web-app-deployment-6894d46c-7cr29",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "1653661n",
-            "memory": "64760Ki"
+            "cpu": "1659301n",
+            "memory": "54636Ki"
           }
         },
         {
           "name": "jupyter-web-app",
           "usage": {
-            "cpu": "125133n",
-            "memory": "220468Ki"
+            "cpu": "328100n",
+            "memory": "174024Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "katib-controller-78d87df4f-mxxp5",
+        "name": "katib-controller-78d87df4f-9vkhn",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "katib-controller",
           "usage": {
-            "cpu": "2478321n",
-            "memory": "68780Ki"
+            "cpu": "1101915n",
+            "memory": "23980Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "katib-db-manager-678674f64d-z26g2",
+        "name": "katib-db-manager-678674f64d-9b6pw",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "katib-db-manager",
           "usage": {
-            "cpu": "50210n",
-            "memory": "14376Ki"
+            "cpu": "18760n",
+            "memory": "7020Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "katib-mysql-66c8cdff4f-zmdjs",
+        "name": "katib-mysql-66c8cdff4f-jz6t6",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "katib-mysql",
           "usage": {
-            "cpu": "5024933n",
-            "memory": "468440Ki"
+            "cpu": "4983311n",
+            "memory": "389800Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "katib-ui-74d9fdb748-9m5w9",
+        "name": "katib-ui-74d9fdb748-sb4sn",
         "namespace": "kubeflow"
       },
       "containers": [
         {
-          "name": "katib-ui",
+          "name": "istio-proxy",
           "usage": {
-            "cpu": "20940n",
-            "memory": "31Mi"
+            "cpu": "1413707n",
+            "memory": "51964Ki"
           }
         },
         {
-          "name": "istio-proxy",
+          "name": "katib-ui",
           "usage": {
-            "cpu": "4618139n",
-            "memory": "65484Ki"
+            "cpu": "227709n",
+            "memory": "6548Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kserve-controller-manager-54896c8c6b-bnhvb",
+        "name": "kserve-controller-manager-54896c8c6b-t7s66",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "kube-rbac-proxy",
           "usage": {
-            "cpu": "4001n",
-            "memory": "36836Ki"
+            "cpu": "0",
+            "memory": "8420Ki"
           }
         },
         {
           "name": "manager",
           "usage": {
-            "cpu": "881239n",
-            "memory": "24652Ki"
+            "cpu": "1099779n",
+            "memory": "24612Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kserve-models-web-app-9fbcd79f5-5xz6v",
+        "name": "kserve-models-web-app-9fbcd79f5-cjgp2",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "5202387n",
-            "memory": "64328Ki"
+            "cpu": "1592241n",
+            "memory": "53076Ki"
           }
         },
         {
           "name": "kserve-models-web-app",
           "usage": {
-            "cpu": "565759n",
-            "memory": "207372Ki"
+            "cpu": "483011n",
+            "memory": "167212Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kubeflow-pipelines-profile-controller-6f6bc888df-8jfgl",
+        "name": "kubeflow-pipelines-profile-controller-6f6bc888df-xlskh",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "profile-controller",
           "usage": {
-            "cpu": "105603n",
-            "memory": "31860Ki"
+            "cpu": "107150n",
+            "memory": "12792Ki"
           }
         }
       ]
@@ -969,698 +937,662 @@
         {
           "name": "metacontroller",
           "usage": {
-            "cpu": "9871557n",
-            "memory": "78552Ki"
+            "cpu": "765491n",
+            "memory": "35456Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "metadata-envoy-deployment-85cc676d57-rt5dt",
+        "name": "metadata-envoy-deployment-85cc676d57-mjjg8",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "container",
           "usage": {
-            "cpu": "5193600n",
-            "memory": "37164Ki"
+            "cpu": "5330886n",
+            "memory": "15240Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "metadata-grpc-deployment-98fd89ff6-sf952",
+        "name": "metadata-grpc-deployment-98fd89ff6-rhkn5",
         "namespace": "kubeflow"
       },
       "containers": [
-        {
-          "name": "container",
-          "usage": {
-            "cpu": "426142n",
-            "memory": "7452Ki"
-          }
-        },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4618727n",
-            "memory": "62576Ki"
+            "cpu": "1652133n",
+            "memory": "53176Ki"
+          }
+        },
+        {
+          "name": "container",
+          "usage": {
+            "cpu": "309787n",
+            "memory": "3064Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "metadata-writer-58f578f45d-xcn4n",
+        "name": "metadata-writer-58f578f45d-7qzcq",
         "namespace": "kubeflow"
       },
       "containers": [
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1414647n",
+            "memory": "52312Ki"
+          }
+        },
         {
           "name": "main",
           "usage": {
-            "cpu": "495098n",
-            "memory": "52664Ki"
-          }
-        },
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "7248382n",
-            "memory": "66472Ki"
+            "cpu": "134712n",
+            "memory": "53340Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "minio-549846c488-4zx89",
+        "name": "minio-549846c488-8vr4k",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4377u",
-            "memory": "62832Ki"
+            "cpu": "1941522n",
+            "memory": "52352Ki"
           }
         },
         {
           "name": "minio",
           "usage": {
-            "cpu": "125208n",
-            "memory": "45736Ki"
+            "cpu": "126752n",
+            "memory": "12452Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-6f5f9c79cf-sckmf",
+        "name": "ml-pipeline-6f5f9c79cf-t2f76",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "5070604n",
-            "memory": "63172Ki"
+            "cpu": "2119033n",
+            "memory": "52792Ki"
           }
         },
         {
           "name": "ml-pipeline-api-server",
           "usage": {
-            "cpu": "2808523n",
-            "memory": "24620Ki"
+            "cpu": "2969160n",
+            "memory": "19004Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-persistenceagent-66964dbc95-jvpt7",
+        "name": "ml-pipeline-persistenceagent-66964dbc95-s7tkt",
         "namespace": "kubeflow"
       },
       "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4243311n",
-            "memory": "64268Ki"
-          }
-        },
         {
           "name": "ml-pipeline-persistenceagent",
           "usage": {
-            "cpu": "427190n",
-            "memory": "43220Ki"
+            "cpu": "444251n",
+            "memory": "10464Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1422011n",
+            "memory": "52304Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-scheduledworkflow-5b47b9d5f5-2bnzc",
+        "name": "ml-pipeline-scheduledworkflow-5b47b9d5f5-wtfb7",
         "namespace": "kubeflow"
       },
       "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4295745n",
-            "memory": "64000Ki"
-          }
-        },
         {
           "name": "ml-pipeline-scheduledworkflow",
           "usage": {
-            "cpu": "115133n",
-            "memory": "47072Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-85d4f4fb54-ghcn8",
-        "namespace": "kubeflow"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4585760n",
-            "memory": "63556Ki"
+            "cpu": "19897n",
+            "memory": "10848Ki"
           }
         },
         {
-          "name": "ml-pipeline-ui",
+          "name": "istio-proxy",
           "usage": {
-            "cpu": "1777162n",
-            "memory": "136212Ki"
+            "cpu": "1452207n",
+            "memory": "51776Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-viewer-crd-765d85855b-xf4kc",
+        "name": "ml-pipeline-ui-85d4f4fb54-96pmp",
+        "namespace": "kubeflow"
+      },
+      "containers": [
+        {
+          "name": "ml-pipeline-ui",
+          "usage": {
+            "cpu": "1872412n",
+            "memory": "84768Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1632127n",
+            "memory": "53308Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ml-pipeline-viewer-crd-765d85855b-8sjrg",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4575476n",
-            "memory": "63356Ki"
+            "cpu": "1423698n",
+            "memory": "51736Ki"
           }
         },
         {
           "name": "ml-pipeline-viewer-crd",
           "usage": {
-            "cpu": "505302n",
-            "memory": "23628Ki"
+            "cpu": "218224n",
+            "memory": "13548Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-visualizationserver-6c49dff8dc-l9dtj",
+        "name": "ml-pipeline-visualizationserver-6c49dff8dc-wbm8p",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "ml-pipeline-visualizationserver",
           "usage": {
-            "cpu": "2848596n",
-            "memory": "142352Ki"
+            "cpu": "3109508n",
+            "memory": "93616Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4562758n",
-            "memory": "65872Ki"
+            "cpu": "1376719n",
+            "memory": "51884Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "mysql-5f968d4688-cc8zg",
+        "name": "mysql-5f968d4688-wxrtm",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "1722585n",
-            "memory": "62556Ki"
+            "cpu": "1425614n",
+            "memory": "53124Ki"
           }
         },
         {
           "name": "mysql",
           "usage": {
-            "cpu": "1324396n",
-            "memory": "468328Ki"
+            "cpu": "1344459n",
+            "memory": "405360Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "notebook-controller-deployment-7d4b968b5-4jfh6",
+        "name": "notebook-controller-deployment-7d4b968b5-vd9ml",
         "namespace": "kubeflow"
       },
       "containers": [
         {
-          "name": "manager",
+          "name": "istio-proxy",
           "usage": {
-            "cpu": "18803654n",
-            "memory": "51524Ki"
+            "cpu": "1591949n",
+            "memory": "53064Ki"
           }
         },
         {
-          "name": "istio-proxy",
+          "name": "manager",
           "usage": {
-            "cpu": "7535138n",
-            "memory": "64916Ki"
+            "cpu": "807774n",
+            "memory": "21360Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "profiles-deployment-7bf5788f98-knp67",
+        "name": "profiles-deployment-7bf5788f98-dgqpg",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "5132680n",
-            "memory": "64228Ki"
+            "cpu": "1654228n",
+            "memory": "54216Ki"
           }
         },
         {
           "name": "kfam",
           "usage": {
-            "cpu": "892816n",
-            "memory": "41316Ki"
+            "cpu": "1018759n",
+            "memory": "12528Ki"
           }
         },
         {
           "name": "manager",
           "usage": {
-            "cpu": "2956382n",
-            "memory": "25352Ki"
+            "cpu": "350891n",
+            "memory": "17868Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "pvcviewer-controller-manager-66f454bfb9-697p8",
+        "name": "pvcviewer-controller-manager-66f454bfb9-qf78f",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4822956n",
-            "memory": "65136Ki"
+            "cpu": "1806113n",
+            "memory": "53688Ki"
           }
         },
         {
           "name": "kube-rbac-proxy",
           "usage": {
-            "cpu": "2999n",
-            "memory": "8376Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "tensorboard-controller-deployment-844967d94b-ctzrh",
-        "namespace": "kubeflow"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "5408227n",
-            "memory": "64876Ki"
-          }
-        },
-        {
-          "name": "kube-rbac-proxy",
-          "usage": {
-            "cpu": "20140n",
-            "memory": "34844Ki"
+            "cpu": "0",
+            "memory": "9652Ki"
           }
         },
         {
           "name": "manager",
           "usage": {
-            "cpu": "866315n",
-            "memory": "34068Ki"
+            "cpu": "899946n",
+            "memory": "17676Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "tensorboards-web-app-deployment-7bff589c99-l6kt5",
+        "name": "tensorboard-controller-deployment-844967d94b-4wbw5",
+        "namespace": "kubeflow"
+      },
+      "containers": [
+        {
+          "name": "kube-rbac-proxy",
+          "usage": {
+            "cpu": "23693n",
+            "memory": "11308Ki"
+          }
+        },
+        {
+          "name": "manager",
+          "usage": {
+            "cpu": "301883n",
+            "memory": "18260Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1383547n",
+            "memory": "52232Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "tensorboards-web-app-deployment-7bff589c99-x2cp2",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4324153n",
-            "memory": "64792Ki"
+            "cpu": "1329794n",
+            "memory": "52416Ki"
           }
         },
         {
           "name": "tensorboards-web-app",
           "usage": {
-            "cpu": "126583n",
-            "memory": "211492Ki"
+            "cpu": "116206n",
+            "memory": "164264Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "training-operator-754d664965-ljbgq",
+        "name": "training-operator-754d664965-8jfgf",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "training-operator",
           "usage": {
-            "cpu": "844070n",
-            "memory": "67288Ki"
+            "cpu": "1141225n",
+            "memory": "25648Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "volumes-web-app-deployment-68675f95d9-4sc2g",
+        "name": "volumes-web-app-deployment-68675f95d9-bdgwf",
         "namespace": "kubeflow"
       },
       "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4534378n",
-            "memory": "63532Ki"
-          }
-        },
         {
           "name": "volumes-web-app",
           "usage": {
-            "cpu": "122566n",
-            "memory": "211708Ki"
+            "cpu": "119650n",
+            "memory": "164480Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1449979n",
+            "memory": "52016Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "workflow-controller-545cbd7ddb-rcjmg",
+        "name": "workflow-controller-545cbd7ddb-zqvvm",
         "namespace": "kubeflow"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4977324n",
-            "memory": "63208Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-cxkzn",
-        "namespace": "kubeflow-user-example-com"
-      },
-      "containers": [
-        {
-          "name": "ml-pipeline-ui-artifact",
-          "usage": {
-            "cpu": "0",
-            "memory": "72864Ki"
+            "cpu": "1518226n",
+            "memory": "51872Ki"
           }
         },
         {
-          "name": "istio-proxy",
+          "name": "workflow-controller",
           "usage": {
-            "cpu": "4643457n",
-            "memory": "62636Ki"
+            "cpu": "1973157n",
+            "memory": "20320Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-fz6lh",
+        "name": "ml-pipeline-ui-artifact-5c4b49cff9-8sbr2",
         "namespace": "kubeflow-user-example-com"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4507936n",
-            "memory": "62440Ki"
-          }
-        },
-        {
-          "name": "ml-pipeline-visualizationserver",
-          "usage": {
-            "cpu": "0",
-            "memory": "93292Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-z4qg5",
-        "namespace": "lance011"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4207547n",
-            "memory": "63260Ki"
+            "cpu": "1479297n",
+            "memory": "53308Ki"
           }
         },
         {
           "name": "ml-pipeline-ui-artifact",
           "usage": {
             "cpu": "0",
-            "memory": "73164Ki"
+            "memory": "73188Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-fszpl",
-        "namespace": "lance011"
+        "name": "ml-pipeline-visualizationserver-77f48b88c7-scgxl",
+        "namespace": "kubeflow-user-example-com"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4282u",
-            "memory": "63168Ki"
+            "cpu": "1339899n",
+            "memory": "51912Ki"
           }
         },
-        {
-          "name": "ml-pipeline-visualizationserver",
-          "usage": {
-            "cpu": "0",
-            "memory": "93296Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-bngnw",
-        "namespace": "lance202"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4755983n",
-            "memory": "63072Ki"
-          }
-        },
-        {
-          "name": "ml-pipeline-ui-artifact",
-          "usage": {
-            "cpu": "0",
-            "memory": "73384Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-gvv8z",
-        "namespace": "lance202"
-      },
-      "containers": [
-        {
-          "name": "ml-pipeline-visualizationserver",
-          "usage": {
-            "cpu": "0",
-            "memory": "93324Ki"
-          }
-        },
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4210312n",
-            "memory": "63760Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-cn56d",
-        "namespace": "lance203"
-      },
-      "containers": [
-        {
-          "name": "ml-pipeline-ui-artifact",
-          "usage": {
-            "cpu": "0",
-            "memory": "72944Ki"
-          }
-        },
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4817054n",
-            "memory": "62536Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-qntjb",
-        "namespace": "lance203"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4717553n",
-            "memory": "62804Ki"
-          }
-        },
-        {
-          "name": "ml-pipeline-visualizationserver",
-          "usage": {
-            "cpu": "0",
-            "memory": "93280Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-rkcmh",
-        "namespace": "lance204"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4486428n",
-            "memory": "62480Ki"
-          }
-        },
-        {
-          "name": "ml-pipeline-ui-artifact",
-          "usage": {
-            "cpu": "0",
-            "memory": "72884Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-6d8kk",
-        "namespace": "lance204"
-      },
-      "containers": [
         {
           "name": "ml-pipeline-visualizationserver",
           "usage": {
             "cpu": "0",
             "memory": "93288Ki"
           }
-        },
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4381993n",
-            "memory": "63552Ki"
-          }
         }
       ]
     },
     {
       "metadata": {
-        "name": "backend-deployment-65c67747f4-4sttk",
-        "namespace": "ldap"
-      },
-      "containers": [
-        {
-          "name": "backend",
-          "usage": {
-            "cpu": "32839167n",
-            "memory": "240440Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-pmdk7",
-        "namespace": "mike025187"
+        "name": "ml-pipeline-ui-artifact-5c4b49cff9-n84b7",
+        "namespace": "lance"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4974249n",
-            "memory": "62420Ki"
+            "cpu": "1379922n",
+            "memory": "51556Ki"
           }
         },
         {
           "name": "ml-pipeline-ui-artifact",
           "usage": {
             "cpu": "0",
-            "memory": "72544Ki"
+            "memory": "72756Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-w8lht",
-        "namespace": "mike025187"
+        "name": "ml-pipeline-visualizationserver-77f48b88c7-6wcnz",
+        "namespace": "lance"
+      },
+      "containers": [
+        {
+          "name": "ml-pipeline-visualizationserver",
+          "usage": {
+            "cpu": "0",
+            "memory": "93276Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1479500n",
+            "memory": "52880Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "backend-deployment-b4767f4b9-qvmkx",
+        "namespace": "ldap"
+      },
+      "containers": [
+        {
+          "name": "backend",
+          "usage": {
+            "cpu": "35866257n",
+            "memory": "178040Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "lms025187lms025187-0",
+        "namespace": "lms025187"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4323933n",
-            "memory": "62944Ki"
+            "cpu": "1381699n",
+            "memory": "52460Ki"
           }
         },
+        {
+          "name": "lms025187lms025187",
+          "usage": {
+            "cpu": "375749966n",
+            "memory": "294764Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ml-pipeline-ui-artifact-5c4b49cff9-76cxt",
+        "namespace": "lms025187"
+      },
+      "containers": [
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1403964n",
+            "memory": "51656Ki"
+          }
+        },
+        {
+          "name": "ml-pipeline-ui-artifact",
+          "usage": {
+            "cpu": "0",
+            "memory": "72868Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "ml-pipeline-visualizationserver-77f48b88c7-lk2b7",
+        "namespace": "lms025187"
+      },
+      "containers": [
         {
           "name": "ml-pipeline-visualizationserver",
           "usage": {
             "cpu": "0",
-            "memory": "93308Ki"
+            "memory": "93284Ki"
+          }
+        },
+        {
+          "name": "istio-proxy",
+          "usage": {
+            "cpu": "1344169n",
+            "memory": "51800Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "nvdp-node-feature-discovery-master-8566779c9-z9bt5",
+        "namespace": "nvidia-device-plugin"
+      },
+      "containers": [
+        {
+          "name": "master",
+          "usage": {
+            "cpu": "260365n",
+            "memory": "22348Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "nvdp-node-feature-discovery-worker-j9clr",
+        "namespace": "nvidia-device-plugin"
+      },
+      "containers": [
+        {
+          "name": "worker",
+          "usage": {
+            "cpu": "0",
+            "memory": "16240Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "nvdp-nvidia-device-plugin-gpu-feature-discovery-jjdnl",
+        "namespace": "nvidia-device-plugin"
+      },
+      "containers": [
+        {
+          "name": "gpu-feature-discovery-ctr",
+          "usage": {
+            "cpu": "0",
+            "memory": "22964Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "nvdp-nvidia-device-plugin-vhvlf",
+        "namespace": "nvidia-device-plugin"
+      },
+      "containers": [
+        {
+          "name": "nvidia-device-plugin-ctr",
+          "usage": {
+            "cpu": "43797n",
+            "memory": "21748Ki"
           }
         }
       ]
@@ -1672,91 +1604,106 @@
       },
       "containers": [
         {
-          "name": "config-reloader",
+          "name": "alertmanager",
           "usage": {
-            "cpu": "0",
-            "memory": "16464Ki"
+            "cpu": "507732n",
+            "memory": "24980Ki"
           }
         },
         {
-          "name": "alertmanager",
+          "name": "config-reloader",
           "usage": {
-            "cpu": "173379n",
-            "memory": "48100Ki"
+            "cpu": "267830n",
+            "memory": "16612Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kube-prom-stack-grafana-6b7b69d548-np9c2",
+        "name": "kube-prom-stack-grafana-85c478f9bc-n6xfs",
         "namespace": "prometheus"
       },
       "containers": [
         {
           "name": "grafana",
           "usage": {
-            "cpu": "1648973n",
-            "memory": "223732Ki"
+            "cpu": "1741501n",
+            "memory": "102092Ki"
           }
         },
         {
           "name": "grafana-sc-dashboard",
           "usage": {
-            "cpu": "10669n",
-            "memory": "109044Ki"
+            "cpu": "10064n",
+            "memory": "88548Ki"
           }
         },
         {
           "name": "grafana-sc-datasources",
           "usage": {
-            "cpu": "9867n",
-            "memory": "103240Ki"
+            "cpu": "9998n",
+            "memory": "86472Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kube-prom-stack-kube-prome-operator-6d45c44f7b-sznqs",
+        "name": "kube-prom-stack-kube-prome-operator-79c6877cc8-g9762",
         "namespace": "prometheus"
       },
       "containers": [
         {
           "name": "kube-prometheus-stack",
           "usage": {
-            "cpu": "3954860n",
-            "memory": "74964Ki"
+            "cpu": "700553n",
+            "memory": "31848Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kube-prom-stack-prometheus-node-exporter-g2h64",
+        "name": "kube-prom-stack-kube-state-metrics-66dbb8d8f8-9k46q",
         "namespace": "prometheus"
       },
       "containers": [
         {
-          "name": "node-exporter",
+          "name": "kube-state-metrics",
           "usage": {
-            "cpu": "67222n",
-            "memory": "15788Ki"
+            "cpu": "2592775n",
+            "memory": "24268Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "kube-prom-stack-prometheus-node-exporter-prmk5",
+        "name": "kube-prom-stack-prometheus-node-exporter-d2wkx",
         "namespace": "prometheus"
       },
       "containers": [
         {
           "name": "node-exporter",
           "usage": {
-            "cpu": "60878n",
-            "memory": "29720Ki"
+            "cpu": "13118801n",
+            "memory": "16172Ki"
+          }
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "name": "kube-prom-stack-prometheus-node-exporter-vhwds",
+        "namespace": "prometheus"
+      },
+      "containers": [
+        {
+          "name": "node-exporter",
+          "usage": {
+            "cpu": "4711638n",
+            "memory": "25080Ki"
           }
         }
       ]
@@ -1770,103 +1717,59 @@
         {
           "name": "config-reloader",
           "usage": {
-            "cpu": "0",
-            "memory": "16740Ki"
+            "cpu": "528196n",
+            "memory": "18924Ki"
           }
         },
         {
           "name": "prometheus",
           "usage": {
-            "cpu": "14254168n",
-            "memory": "785460Ki"
+            "cpu": "29313624n",
+            "memory": "3013664Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-bxlkb",
-        "namespace": "wycc2"
+        "name": "ml-pipeline-ui-artifact-5c4b49cff9-mwpx4",
+        "namespace": "yuantest"
       },
       "containers": [
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4807920n",
-            "memory": "62620Ki"
+            "cpu": "1951668n",
+            "memory": "51928Ki"
           }
         },
         {
           "name": "ml-pipeline-ui-artifact",
           "usage": {
             "cpu": "0",
-            "memory": "73208Ki"
+            "memory": "73064Ki"
           }
         }
       ]
     },
     {
       "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-6h6j7",
-        "namespace": "wycc2"
-      },
-      "containers": [
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4472413n",
-            "memory": "64864Ki"
-          }
-        },
-        {
-          "name": "ml-pipeline-visualizationserver",
-          "usage": {
-            "cpu": "0",
-            "memory": "93280Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-ui-artifact-5c4b49cff9-98hqb",
-        "namespace": "yuantest1"
-      },
-      "containers": [
-        {
-          "name": "ml-pipeline-ui-artifact",
-          "usage": {
-            "cpu": "0",
-            "memory": "72568Ki"
-          }
-        },
-        {
-          "name": "istio-proxy",
-          "usage": {
-            "cpu": "4419589n",
-            "memory": "61896Ki"
-          }
-        }
-      ]
-    },
-    {
-      "metadata": {
-        "name": "ml-pipeline-visualizationserver-77f48b88c7-g8hcb",
-        "namespace": "yuantest1"
+        "name": "ml-pipeline-visualizationserver-77f48b88c7-62qnv",
+        "namespace": "yuantest"
       },
       "containers": [
         {
           "name": "ml-pipeline-visualizationserver",
           "usage": {
             "cpu": "0",
-            "memory": "93304Ki"
+            "memory": "93292Ki"
           }
         },
         {
           "name": "istio-proxy",
           "usage": {
-            "cpu": "4214138n",
-            "memory": "63148Ki"
+            "cpu": "1443747n",
+            "memory": "51920Ki"
           }
         }
       ]

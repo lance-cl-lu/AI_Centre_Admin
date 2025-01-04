@@ -7,7 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 # copy k8s config
 RUN mkdir -p /root/.kube
-COPY config /root/.kube/config
+#COPY config /root/.kube/config
 
 
 COPY . .
@@ -22,7 +22,7 @@ FROM golang
 WORKDIR /app
 
 RUN mkdir -p /root/.kube
-COPY config /root/.kube/config
+#COPY config /root/.kube/config
 
 COPY --from=builder /app/main .
 
