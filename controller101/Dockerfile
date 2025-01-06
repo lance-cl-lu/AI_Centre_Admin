@@ -8,8 +8,7 @@ RUN go mod download
 # copy k8s config
 RUN mkdir -p /root/.kube
 #COPY config /root/.kube/config
-
-
+# copy the source code
 COPY . .
 
 # Build statically linked Go binary (recommended to avoid glibc issues)
@@ -21,7 +20,7 @@ FROM golang
 
 WORKDIR /app
 
-RUN mkdir -p /root/.kube
+#RUN mkdir -p /root/.kube
 #COPY config /root/.kube/config
 
 COPY --from=builder /app/main .

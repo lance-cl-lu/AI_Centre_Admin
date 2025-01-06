@@ -105,9 +105,6 @@ func main() {
 
 	for _, item := range data["items"].([]interface{}) {
 		metadata := item.(map[string]interface{})["metadata"].(map[string]interface{})
-		// print labels
-		labels := metadata["labels"].(map[string]interface{})
-		fmt.Printf("Labels: %v\n", labels)
 		// find the persisitent key in the labels
 		// if persisitent is true, set persisitentTag to true, else set it to false
 		persisitentTag := false
@@ -426,6 +423,7 @@ func main() {
 				notebooks = append(notebooks[:i], notebooks[i+1:]...)
 			}
 		}
+		time.Sleep(time.Second * time.Duration(60))
 
 	}
 }
