@@ -234,8 +234,8 @@ func main() {
 				fmt.Printf("notebook %s is added", metadata["name"].(string))
 
 				notebooks = append(notebooks, Notebook{
-					Name:      metadata["name"].(string),
-					Namespace: metadata["namespace"].(string),
+					Name:       metadata["name"].(string),
+					Namespace:  metadata["namespace"].(string),
 					removalTag: !persisitentTag,
 				})
 			}
@@ -262,14 +262,14 @@ func main() {
 			}
 			// if the notebook is not in use, remove it from the list
 			if !found {
-				fmt.Printf("notebook %s is deteted", notebook.Name )
+				fmt.Printf("notebook %s is deteted", notebook.Name)
 				notebooks = append(notebooks[:i], notebooks[i+1:]...)
 			} else {
-				fmt.Printf("notebook %s is still inuse tag is %t\n", notebooks[i].Name,notebooks[i].removalTag )
+				fmt.Printf("notebook %s is still inuse tag is %t\n", notebooks[i].Name, notebooks[i].removalTag)
 			}
 		}
 		// sleep for 1 minute
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 60)
 		// get resources of each notebook's pod by calling the API
 		metricsData, err := clientset.RESTClient().
 			Get().
