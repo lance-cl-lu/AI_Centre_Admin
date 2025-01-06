@@ -25,6 +25,7 @@ function Navbar() {
             ) : (
               null
             )}
+            <li classname="navigation-ul-li"><Link to="/move">Move</Link></li>
           <AuthProvider>
             <li className="navigation-ul-li"><Dropdonw></Dropdonw></li>
           </AuthProvider>
