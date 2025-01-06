@@ -1,19 +1,34 @@
 // This is the page for "Move" (move notebooks). It's added by Patten in 2025/01/05
-import React, { useState } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Card, Button, ListGroup, Form, FloatingLabel } from "react-bootstrap";
+import { createFilterOptions } from "@mui/material";
+import { useLocation } from "react-router-dom";
+import jwt_decode from "jwt-decode";
+import AuthContext from "../context/AuthContext"
 
 function FileManagement() {
+    // get the user from useLocation
+    let { logoutUser, user } = useContext(AuthContext);
     const [uploadList, setUploadList] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [notebookList, setOptions] = useState();
 
-    const downloadFile = (fileName) => {
-        // 模擬下載動作
-        alert(`${fileName} 正在下載...`);
-    };
-
-    const toggleDropdown = () => {
-        setIsOpen(!isOpen);
-    };
+    useEffect(() => {
+        console.log("user:", user.username);
+        fetch("/api/notebook/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({user: user.username})
+        })
+        .then(res => res.json())
+        .then(data => setOptions(data));
+    },
+    [user]);
+    useEffect(() => {
+        console.log("notebookList:", notebookList);
+    }, [notebookList]);
 
     const handleFileUpload = (event) => {
         const files = Array.from(event.target.files);
@@ -45,15 +60,13 @@ function FileManagement() {
                         className="mb-3"
                     >
                         <Form.Select aria-label="Floating label select example" id="gpuQuota">
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                            <option value="6">6</option>
-                            <option value="7">7</option>
-                            <option value="8">8</option>
+                            {typeof notebookList != "undefined" ? (
+                                notebookList.map((notebook, index) => (
+                                <option key={index} value={notebook.name}>{notebook.name}</option>
+                                ))
+                            ) : (
+                            <option disabled>loading notebookList</option>
+                            )}
                         </Form.Select>
                     </FloatingLabel>
                     <Button>下載</Button>

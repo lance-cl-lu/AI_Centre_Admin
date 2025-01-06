@@ -12,8 +12,8 @@ function Navbar() {
     <nav className="navigation">
         <ul className="navigation-ul">
           <li>
-            <a href="https://aic.cgu.edu.tw/" style={{textDecoration: "none", color: "white"}}>
-              <img src="https://aic.cgu.edu.tw/var/file/44/1044/msys_1044_4886051_59674.png" alt="CUG AI Centre" style={{marginLeft: "15px"}}>
+            <a href="/" style={{textDecoration: "none", color: "white"}}>
+              <img src="https://www.cgu.edu.tw/Uploads/Logo/226cbf55-707f-4b74-88eb-61a390e760e2.png" alt="CUG AI Centre" style={{marginLeft: "15px"}}>
               </img>
             </a>
           </li>
@@ -25,7 +25,7 @@ function Navbar() {
             ) : (
               null
             )}
-            <li classname="navigation-ul-li"><Link to="/move">Move</Link></li>
+            <li classname="navigation-ul-li"><Link to="/move" >Move</Link></li>
           <AuthProvider>
             <li className="navigation-ul-li"><Dropdonw></Dropdonw></li>
           </AuthProvider>
