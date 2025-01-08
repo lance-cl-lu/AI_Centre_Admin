@@ -18,6 +18,7 @@ from kubernetes.config.config_exception import ConfigException
 
 import smtplib, ssl
 from email.mime.text import MIMEText
+import yaml
 
 
 def send_email_gmail(subject, message, destination):
@@ -1522,5 +1523,20 @@ def template(request):
     workbook.save(response)
     return response
 
-    
-    
+# Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
+@api_view(["POST"])
+def get_notebook_yaml(request):
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        api = client.CustomObjectsApi()
+        notebook_yaml = yaml.dump(api.get_namespaced_custom_object(group="kubeflow.org", version="v1", namespace=data["namespace"], plural="notebooks", name=data["notebook_name"]))
+        notebook_yaml = yaml.load(notebook_yaml, Loader=yaml.SafeLoader)
+        del notebook_yaml["metadata"]["creationTimestamp"]
+        del notebook_yaml["metadata"]["generation"]
+        del notebook_yaml["metadata"]["resourceVersion"]
+        del notebook_yaml["metadata"]["uid"]
+        del notebook_yaml["status"]
+        response = [{"notebookJSON": json.dumps(notebook_yaml)}]
+        return Response(response, status=200)
+    except client.exceptions.ApiException as e:
+        return Response([{"error": str()}], status=e.status)

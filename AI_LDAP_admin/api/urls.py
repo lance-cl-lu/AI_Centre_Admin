@@ -46,6 +46,7 @@ urlpatterns = [
 
     path("notebook/", list_notebooks, name="get_notebooks"),
     path("setNotebook/", set_notebook, name="set_notebook"),
+    path("getNotebookYAML/", get_notebook_yaml, name="get_notebook_yaml"),
     # danger for deploy
     # path("ldap/danger/", remove_all_entr, name="danger"),
 ]

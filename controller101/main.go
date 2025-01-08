@@ -266,7 +266,7 @@ func main() {
 			}
 		}
 		// sleep for 1 minute
-		time.Sleep(time.Second * 60)
+		//time.Sleep(time.Second * 60)
 		// get resources of each notebook's pod by calling the API
 		metricsData, err := clientset.RESTClient().
 			Get().
@@ -423,7 +423,7 @@ func main() {
 				notebooks = append(notebooks[:i], notebooks[i+1:]...)
 			}
 		}
-		time.Sleep(time.Second * time.Duration(60))
+		time.Sleep(time.Second * time.Duration(timeIntervalInt))
 
 	}
 }

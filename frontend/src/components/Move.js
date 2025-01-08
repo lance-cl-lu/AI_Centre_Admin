@@ -1,10 +1,11 @@
-// This is the page for "Move" (move notebooks). It's added by Patten in 2025/01/05
+// This is the page for "Move" (move notebooks). [Patten, 2025/01/05]
 import React, { useState, useEffect, useContext } from "react";
 import { Card, Button, ListGroup, Form, FloatingLabel } from "react-bootstrap";
 import { createFilterOptions } from "@mui/material";
 import { useLocation } from "react-router-dom";
 import jwt_decode from "jwt-decode";
 import AuthContext from "../context/AuthContext"
+import YAML from "js-yaml"
 
 function FileManagement() {
     // get the user from useLocation
@@ -12,28 +13,59 @@ function FileManagement() {
     const [uploadList, setUploadList] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
     const [notebookList, setOptions] = useState();
+    const [selectedValue, setSelectedValue] = useState();
+    let notebookYAML = {};
 
     useEffect(() => {
-        console.log("user:", user.username);
         fetch("/api/notebook/", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({user: user.username})
+            body: JSON.stringify({"user": user.username})
         })
         .then(res => res.json())
         .then(data => setOptions(data));
     },
     [user]);
-    useEffect(() => {
-        console.log("notebookList:", notebookList);
-    }, [notebookList]);
 
     const handleFileUpload = (event) => {
         const files = Array.from(event.target.files);
         const uploadedFileNames = files.map(file => file.name);
         setUploadList([...uploadList, ...uploadedFileNames]);
+    };
+
+    const getNotebookYAML = async (notebookName) => {
+        if (notebookName !== undefined & notebookName !== ""){
+            let notebookString = await fetch("/api/getNotebookYAML/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    "namespace": user.username,
+                    "notebook_name": notebookName,
+                }),
+            })
+            .then(res => res.text())
+            .then(data => {return data});
+            console.log(notebookString);
+            const notebookJSON = await JSON.parse(JSON.parse(notebookString)[0]["notebookJSON"]);
+            console.log(typeof notebookJSON, notebookJSON);
+            notebookYAML = YAML.dump(notebookJSON)
+            console.log(notebookYAML);
+            const blob = new Blob([notebookYAML], {type: "text/yaml"});
+            const url = window.URL.createObjectURL(blob);
+            const tempLink = document.createElement("a");
+            tempLink.href = url;
+            tempLink.download = notebookName + ".yaml";
+            tempLink.click();
+            window.URL.revokeObjectURL(url);
+        }
+    };
+    
+    const handleSelectChange = (event) => {
+        setSelectedValue(event.target.value);
     };
 
     return (
@@ -59,7 +91,8 @@ function FileManagement() {
                         label="Select A Notebook"
                         className="mb-3"
                     >
-                        <Form.Select aria-label="Floating label select example" id="gpuQuota">
+                        <Form.Select aria-label="Floating label select example" id="gpuQuota" onChange={handleSelectChange} value={selectedValue}>
+                            <option value="">Select A Notebook</option>
                             {typeof notebookList != "undefined" ? (
                                 notebookList.map((notebook, index) => (
                                 <option key={index} value={notebook.name}>{notebook.name}</option>
@@ -69,7 +102,7 @@ function FileManagement() {
                             )}
                         </Form.Select>
                     </FloatingLabel>
-                    <Button>下載</Button>
+                    <Button onClick={() => getNotebookYAML(selectedValue)}>下載</Button>
                 </Card.Body>
             </Card>
 
