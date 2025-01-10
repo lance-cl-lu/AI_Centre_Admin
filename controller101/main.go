@@ -95,7 +95,8 @@ func main() {
 
 			persistentTag := false
 			if labels, ok := metadata["labels"].(map[string]interface{}); ok {
-				if val, exists := labels["persistent"]; exists {
+				fmt.Println(labels)
+				if val, exists := labels["persisitent"]; exists {
 					if valStr, ok := val.(string); ok && valStr == "true" {
 						persistentTag = true
 					}
@@ -150,6 +151,7 @@ func main() {
 						}
 
 						if notebook.IdleCounter > timeIntervalInt && notebook.RemovalTag {
+							fmt.Printf("Notebook %s in namespace %s has been idle for %d seconds\n", notebook.Name, notebook.Namespace, notebook.IdleCounter)
 							stopNotebook(clientset, notebook, ctx)
 							notebook.IdleCounter = 0
 						}
@@ -165,7 +167,7 @@ func main() {
 				fmt.Printf("Notebook %s in namespace %s is removable\n", notebook.Name, notebook.Namespace)
 			}
 			if notebook.IdleCounter > timeIntervalInt && notebook.RemovalTag {
-				fmt.Printf("Notebook %s in namespace %s has been idle for %d seconds\n", notebook.Name, notebook.Namespace, notebook.IdleCounter)
+				fmt.Printf("Notebook %s in namespace %s has been idle for %d minutes\n", notebook.Name, notebook.Namespace, notebook.IdleCounter)
 			}
 		}
 
