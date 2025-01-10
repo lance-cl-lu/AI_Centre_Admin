@@ -14,6 +14,8 @@ function FileManagement() {
     const [isOpen, setIsOpen] = useState(false);
     const [notebookList, setOptions] = useState();
     const [selectedValue, setSelectedValue] = useState();
+    // let download_button = document.getElementById("download_button");
+    // download_button.addEventListener("click", getNotebookYAML(selectedValue));
     let notebookYAML = {};
 
     useEffect(() => {
@@ -37,7 +39,7 @@ function FileManagement() {
 
     const getNotebookYAML = async (notebookName) => {
         if (notebookName !== undefined & notebookName !== ""){
-            let notebookString = await fetch("/api/getNotebookYAML/", {
+            let json = await fetch("/api/getNotebookYAML/", { //get the yamls
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -47,20 +49,48 @@ function FileManagement() {
                     "notebook_name": notebookName,
                 }),
             })
-            .then(res => res.text())
+            .then(res => res.json())
             .then(data => {return data});
-            console.log(notebookString);
-            const notebookJSON = await JSON.parse(JSON.parse(notebookString)[0]["notebookJSON"]);
-            console.log(typeof notebookJSON, notebookJSON);
-            notebookYAML = YAML.dump(notebookJSON)
-            console.log(notebookYAML);
-            const blob = new Blob([notebookYAML], {type: "text/yaml"});
-            const url = window.URL.createObjectURL(blob);
-            const tempLink = document.createElement("a");
+            console.log(json);
+
+            // prepare notebook.yaml for downloading
+            let notebookJSON = await json["notebook"];
+            notebookYAML = YAML.dump(notebookJSON);
+            let blob = new Blob([notebookYAML], {type: "text/yaml"});
+            let url = window.URL.createObjectURL(blob);
+            let tempLink = document.createElement("a");
             tempLink.href = url;
             tempLink.download = notebookName + ".yaml";
             tempLink.click();
             window.URL.revokeObjectURL(url);
+
+            // prepare pv.yaml (may be more than one) for downloading
+            let pvJSONs = await json["pv"];
+            for(let i = 0; i < pvJSONs.length; i++){
+                let pvJSON = pvJSONs[i];
+                let pvYAML = YAML.dump(pvJSON);
+                let blob = new Blob([pvYAML], {type: "text/yaml"});
+                let url = window.URL.createObjectURL(blob);
+                let tempLink = document.createElement("a");
+                tempLink.href = url;
+                tempLink.download = notebookName + "_pv_" + (i + 1) + ".yaml";
+                tempLink.click();
+                window.URL.revokeObjectURL(url);
+            }
+
+            // prepare pvc.yaml (may be more than one) for downloading
+            let pvcJSONs = await json["pvc"];
+            for(let i = 0; i < pvcJSONs.length; i++){
+                let pvcJSON = pvcJSONs[i];
+                let pvcYAML = YAML.dump(pvcJSON);
+                let blob = new Blob([pvcYAML], {type: "text/yaml"});
+                let url = window.URL.createObjectURL(blob);
+                let tempLink = document.createElement("a");
+                tempLink.href = url;
+                tempLink.download = notebookName + "_pvc_" + (i + 1) + ".yaml";
+                tempLink.click();
+                window.URL.revokeObjectURL(url);
+            }
         }
     };
     
@@ -102,7 +132,7 @@ function FileManagement() {
                             )}
                         </Form.Select>
                     </FloatingLabel>
-                    <Button onClick={() => getNotebookYAML(selectedValue)}>下載</Button>
+                    <Button id="download_button" onClick={() => getNotebookYAML(selectedValue)}>下載</Button>
                 </Card.Body>
             </Card>
 

@@ -25,7 +25,7 @@ spec:
       serviceAccountName: pod-killer-service-account  # Link the service account here
       containers:
       - name: pod-killer
-        image: cguaicadmin/pod-killer:v0.1  # Updated with the correct image name
+        image: cguaicadmin/pod-killer:v0.4  # Updated with the correct image name
         env:
         - name: TIMEINTERVAL
           value: "60"  # Time interval in seconds
@@ -38,6 +38,12 @@ spec:
           requests:
             memory: "64Mi"
             cpu: "250m"
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""  # Matches the label for the control-plane/master node
+      tolerations:
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
 ---
 # Service to expose the pod-killer app
 apiVersion: v1

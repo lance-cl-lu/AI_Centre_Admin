@@ -5,11 +5,8 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-# copy k8s config
-RUN mkdir -p /root/.kube
-#COPY config /root/.kube/config
 # copy the source code
-COPY . .
+COPY main.go .
 
 # Build statically linked Go binary (recommended to avoid glibc issues)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o main main.go

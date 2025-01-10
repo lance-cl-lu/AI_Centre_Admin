@@ -1529,14 +1529,49 @@ def get_notebook_yaml(request):
     try:
         data = json.loads(request.body.decode("utf-8"))
         api = client.CustomObjectsApi()
-        notebook_yaml = yaml.dump(api.get_namespaced_custom_object(group="kubeflow.org", version="v1", namespace=data["namespace"], plural="notebooks", name=data["notebook_name"]))
-        notebook_yaml = yaml.load(notebook_yaml, Loader=yaml.SafeLoader)
+        # get notebook.yaml
+        notebook_yaml = api.get_namespaced_custom_object(group="kubeflow.org", version="v1", namespace=data["namespace"], plural="notebooks", name=data["notebook_name"])
         del notebook_yaml["metadata"]["creationTimestamp"]
         del notebook_yaml["metadata"]["generation"]
         del notebook_yaml["metadata"]["resourceVersion"]
         del notebook_yaml["metadata"]["uid"]
         del notebook_yaml["status"]
-        response = [{"notebookJSON": json.dumps(notebook_yaml)}]
-        return Response(response, status=200)
+
+        # get pvc.yaml (may be more than 1)
+        pvc_names = []
+        for volume in notebook_yaml["spec"]["template"]["spec"]["volumes"][1:]:
+            pvc_names.append(volume["persistentVolumeClaim"]["claimName"])
+        v1 = client.CoreV1Api()
+        pvc_yamls = []
+        for name in pvc_names:
+            pvc_yaml = v1.read_namespaced_persistent_volume_claim(name, data["namespace"])
+            pvc_yaml = pvc_yaml.to_dict()
+            del pvc_yaml["metadata"]["annotations"]
+            del pvc_yaml["metadata"]["creation_timestamp"]
+            del pvc_yaml["metadata"]["finalizers"]
+            del pvc_yaml["metadata"]["resource_version"]
+            del pvc_yaml["metadata"]["uid"]
+            del pvc_yaml["status"]
+            pvc_yamls.append(pvc_yaml)
+
+        # get pv.yaml
+        pv_names = []
+        for y in pvc_yamls:
+            pv_names.append(y["spec"]["volume_name"])
+        pv_yamls = []
+        for name in pv_names:
+            pv_yaml = v1.read_persistent_volume(name)
+            pv_yaml = pv_yaml.to_dict()
+            del pv_yaml["metadata"]["annotations"]
+            del pv_yaml["metadata"]["creation_timestamp"]
+            del pv_yaml["metadata"]["finalizers"]
+            del pv_yaml["metadata"]["resource_version"]
+            del pv_yaml["metadata"]["uid"]
+            del pv_yaml["spec"]["claim_ref"]["resource_version"]
+            del pv_yaml["spec"]["claim_ref"]["uid"]
+            del pv_yaml["status"]
+            pv_yamls.append(pv_yaml)
+        response = {"notebook": notebook_yaml, "pvc": pvc_yamls, "pv": pv_yamls}
+        return JsonResponse(response, status=200)
     except client.exceptions.ApiException as e:
-        return Response([{"error": str()}], status=e.status)
+        return JsonResponse({"error": str(e)}, status=e.status)

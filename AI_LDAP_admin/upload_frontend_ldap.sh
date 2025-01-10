@@ -1,4 +1,4 @@
-POD=backend-deployment-bd94df95f-qk7n6
+POD=backend-deployment-bd94df95f-vpqm7
 
 [ -d frontend/templates/ ] || mkdir frontend/templates/
 [ -d frontend/templates/frontend/ ] || mkdir frontend/templates/frontend/
