@@ -6,6 +6,8 @@ import { useLocation } from "react-router-dom";
 import jwt_decode from "jwt-decode";
 import AuthContext from "../context/AuthContext"
 import YAML from "js-yaml"
+import JSZip from "jszip";
+import {saveAs} from "file-saver";
 
 function FileManagement() {
     // get the user from useLocation
@@ -39,6 +41,7 @@ function FileManagement() {
 
     const getNotebookYAML = async (notebookName) => {
         if (notebookName !== undefined & notebookName !== ""){
+            const zip = new JSZip();
             let json = await fetch("/api/getNotebookYAML/", { //get the yamls
                 method: "POST",
                 headers: {
@@ -56,26 +59,14 @@ function FileManagement() {
             // prepare notebook.yaml for downloading
             let notebookJSON = await json["notebook"];
             notebookYAML = YAML.dump(notebookJSON);
-            let blob = new Blob([notebookYAML], {type: "text/yaml"});
-            let url = window.URL.createObjectURL(blob);
-            let tempLink = document.createElement("a");
-            tempLink.href = url;
-            tempLink.download = notebookName + ".yaml";
-            tempLink.click();
-            window.URL.revokeObjectURL(url);
+            zip.file(notebookName + ".yaml", notebookYAML);
 
             // prepare pv.yaml (may be more than one) for downloading
             let pvJSONs = await json["pv"];
             for(let i = 0; i < pvJSONs.length; i++){
                 let pvJSON = pvJSONs[i];
                 let pvYAML = YAML.dump(pvJSON);
-                let blob = new Blob([pvYAML], {type: "text/yaml"});
-                let url = window.URL.createObjectURL(blob);
-                let tempLink = document.createElement("a");
-                tempLink.href = url;
-                tempLink.download = notebookName + "_pv_" + (i + 1) + ".yaml";
-                tempLink.click();
-                window.URL.revokeObjectURL(url);
+                zip.file(notebookName + "_pv_" + (i + 1) + ".yaml", pvYAML);
             }
 
             // prepare pvc.yaml (may be more than one) for downloading
@@ -83,14 +74,11 @@ function FileManagement() {
             for(let i = 0; i < pvcJSONs.length; i++){
                 let pvcJSON = pvcJSONs[i];
                 let pvcYAML = YAML.dump(pvcJSON);
-                let blob = new Blob([pvcYAML], {type: "text/yaml"});
-                let url = window.URL.createObjectURL(blob);
-                let tempLink = document.createElement("a");
-                tempLink.href = url;
-                tempLink.download = notebookName + "_pvc_" + (i + 1) + ".yaml";
-                tempLink.click();
-                window.URL.revokeObjectURL(url);
+                zip.file(notebookName + "_pvc_" + (i + 1) + ".yaml", pvcYAML);
             }
+            zip.generateAsync({type: "blob"}).then((content) => {
+                saveAs(content, notebookName + ".zip")
+            });
         }
     };
     
