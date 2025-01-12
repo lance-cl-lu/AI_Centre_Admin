@@ -67,31 +67,48 @@ metadata:
   name: pod-killer-service-account
   namespace: pod-killer-ns  # Ensure this matches the namespace where the deployment is running
 ---
-# Role to grant API access in custom namespace
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  namespace: pod-killer-ns  # Ensure this matches the custom namespace
-  name: api-access-role
+  name: pod-killer-combined-role
 rules:
-- apiGroups: [""]
-  resources: ["pods", "services", "deployments", "namespaces"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["kubeflow.org"]
-  resources: ["notebooks"]
-  verbs: ["get", "list", "watch"]
+  # Permissions for Notebooks (kubeflow.org)
+  - apiGroups: ["kubeflow.org"]
+    resources:
+      - notebooks
+    verbs:
+      - get
+      - list
+      - watch
+  # Permissions for Metrics API (metrics.k8s.io)
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+
+  # Core Kubernetes resources (optional if needed for other operations)
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
 ---
-# RoleBinding to bind the Role to the ServiceAccount in custom namespace
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
-  name: api-access-rolebinding
-  namespace: pod-killer-ns
+  name: pod-killer-combined-rolebinding
 subjects:
-- kind: ServiceAccount
-  name: pod-killer-service-account  # The ServiceAccount created for the app
-  namespace: pod-killer-ns
+  - kind: ServiceAccount
+    name: pod-killer-service-account
+    namespace: pod-killer-ns
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: api-access-role  # Role name we defined above
+  kind: ClusterRole
+  name: pod-killer-combined-role
