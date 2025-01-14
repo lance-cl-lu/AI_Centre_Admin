@@ -3,6 +3,7 @@ from ldap3 import *
 import json, random 
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
+from django.core.files.storage import default_storage
 
 from passlib.hash import ldap_md5
 
@@ -19,6 +20,7 @@ from kubernetes.config.config_exception import ConfigException
 import smtplib, ssl
 from email.mime.text import MIMEText
 import yaml
+import zipfile
 
 
 def send_email_gmail(subject, message, destination):
@@ -1575,3 +1577,62 @@ def get_notebook_yaml(request):
         return JsonResponse(response, status=200)
     except client.exceptions.ApiException as e:
         return JsonResponse({"error": str(e)}, status=e.status)
+    
+@api_view(["POST"])
+def upload_notebook_yaml(request):
+    if request.method == "POST" and request.FILES.get("file"):
+        api_v1 = client.CoreV1Api()
+        api = client.CustomObjectsApi()
+        uploaded_file = request.FILES["file"]
+        with zipfile.ZipFile(uploaded_file, "r") as zip:
+            file_list = zip.namelist()
+
+            processed_files = []
+            for file_name in file_list:
+                with zip.open(file_name) as f:
+                    file = yaml.load(f, Loader=yaml.SafeLoader)
+                    processed_files.append({
+                        "file_name": file_name,
+                        "content": file
+                    })
+        pvcs = []
+        results = dict()
+        for file in processed_files:
+            content = file["content"]
+            if content["kind"] == "PersistentVolume":
+                try:
+                    existed = api_v1.read_persistent_volume(content["metadata"]["name"])
+                    results[content["metadata"]["name"]] = "existed"
+                except Exception as e:
+                    obj = client.V1PersistentVolume(**content)
+                    api_v1.create_persistent_volume(obj)
+                    results[content["metadata"]["name"]] = "non-existed, created it"
+            elif content["kind"] == "Notebook":
+                try:
+                    existed = api.get_namespaced_custom_object(
+                        group="kubeflow.org",
+                        version="v1",
+                        plural="notebooks",
+                        namespace=content["metadata"]["namespace"],
+                        name=content["metadata"]["name"])
+                    results[content["metadata"]["name"]] = "existed"
+                except Exception as e:
+                    api.create_namespaced_custom_object(group="kubeflow.org",
+                                                        version="v1",
+                                                        plural="notebooks",
+                                                        namespace=content["metadata"]["namespace"],
+                                                        body=content)
+                    results[content["metadata"]["name"]] = "non-existed, created it"
+            elif content["kind"] == "PersistentVolumeClaim":
+                pvcs.append(file)
+        for file in pvcs:
+            content = file["content"]
+            try:
+                existed = api_v1.read_namespaced_persistent_volume_claim(content["metadata"]["name"], content["metadata"]["namespace"])
+                results[content["metadata"]["name"]] = "existed"
+            except Exception as e:
+                obj = client.V1PersistentVolumeClaim(**content)
+                api_v1.create_namespaced_persistent_volume_claim(content["metadata"]["namespace"], obj)
+                results[content["metadata"]["name"]] = "non-existed, created it"
+        
+        return JsonResponse({"files": processed_files, "results": results}, status=200)

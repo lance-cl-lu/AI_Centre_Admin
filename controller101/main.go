@@ -167,7 +167,7 @@ func main() {
 			}
 		}
 
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(time.Duration(10) * time.Second)
 		// print time
 		fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 		fmt.Println("=====================================================")

@@ -8,11 +8,13 @@ import AuthContext from "../context/AuthContext"
 import YAML from "js-yaml"
 import JSZip from "jszip";
 import {saveAs} from "file-saver";
+import Swal from "sweetalert2"
 
 function FileManagement() {
     // get the user from useLocation
     let { logoutUser, user } = useContext(AuthContext);
     const [uploadList, setUploadList] = useState([]);
+    let [uploadFiles, setUploadFiles] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
     const [notebookList, setOptions] = useState();
     const [selectedValue, setSelectedValue] = useState();
@@ -32,12 +34,6 @@ function FileManagement() {
         .then(data => setOptions(data));
     },
     [user]);
-
-    const handleFileUpload = (event) => {
-        const files = Array.from(event.target.files);
-        const uploadedFileNames = files.map(file => file.name);
-        setUploadList([...uploadList, ...uploadedFileNames]);
-    };
 
     const getNotebookYAML = async (notebookName) => {
         if (notebookName !== undefined & notebookName !== ""){
@@ -86,6 +82,52 @@ function FileManagement() {
         setSelectedValue(event.target.value);
     };
 
+    const handleFileUpload = (event) => {
+        const files = Array.from(event.target.files);
+        const uploadedFileNames = files.map(file => file.name);
+        setUploadList([...uploadList, ...uploadedFileNames]);
+        setUploadFiles([...uploadFiles, ...files]);
+        // const control = document.getElementById("upload_control");
+        // control.value = ""
+        event.target.value = ""
+    };
+    const handleDeleteFile = (index) => {
+        const updatedList = uploadList.filter((_, i) => i !== index);
+        const updatedFiles = uploadFiles.filter((_, i) => i !== index);
+        setUploadList(updatedList);
+        setUploadFiles(updatedFiles);
+    };
+
+    const sendFile = async (uploadFils) => {
+        console.log(uploadFiles);
+        if (!uploadFiles) return;
+
+        const formData = new FormData();
+        formData.append("file", uploadFiles[0]);
+        try {
+            const data = await fetch("/api/uploadNotebookYAML/", {
+                method: "POST",
+                body: formData,
+            })
+            .then(res => {
+                return res.json()
+            });
+            
+            const result = data["results"];
+            Swal.fire({
+                title: "Upload Successfully",
+                text: "Note: Existed resources wiil NOT be replaced!",
+                icon: "success"
+            });
+        } catch {
+            Swal.fire({
+                title: "Upload Failed",
+                icon: "error"
+            });
+        }
+        
+    };
+
     return (
         <div style={{ padding: "20px" }}>
             <h3>Notebooks搬移</h3>
@@ -129,16 +171,20 @@ function FileManagement() {
                 <Card.Header>上傳Notebooks</Card.Header>
                 <Card.Body>
                     <Form.Group controlId="fileUpload">
-                        <Form.Label>選擇文件上傳</Form.Label>
-                        <Form.Control type="file" multiple onChange={handleFileUpload} />
+                        <Form.Label>選擇檔案上傳</Form.Label>
+                        <Form.Control id="upload_control" type="file" onChange={handleFileUpload} value=""/>
                     </Form.Group>
 
-                    <h5 className="mt-4">已上傳的文件：</h5>
+                    <h5 className="mt-4">待上傳的檔案：</h5>
                     <ListGroup>
                         {uploadList.map((file, index) => (
-                            <ListGroup.Item key={index}>{file}</ListGroup.Item>
+                            <ListGroup.Item key={index}>
+                                {file}
+                                <Button onClick={() => handleDeleteFile(index)}>刪除</Button>
+                            </ListGroup.Item>
                         ))}
                     </ListGroup>
+                    <Button id="upload_button" onClick={() => sendFile(uploadFiles)}>上傳</Button>
                 </Card.Body>
             </Card>
         </div>

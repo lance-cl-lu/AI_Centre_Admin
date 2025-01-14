@@ -80,6 +80,7 @@ rules:
       - get
       - list
       - watch
+      - patch
   # Permissions for Metrics API (metrics.k8s.io)
   - apiGroups: ["metrics.k8s.io"]
     resources:
