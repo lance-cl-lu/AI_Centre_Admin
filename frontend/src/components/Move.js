@@ -44,7 +44,7 @@ function FileManagement() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    "namespace": user.username,
+                    "namespace": user.username.toLowerCase(),
                     "notebook_name": notebookName,
                 }),
             })
@@ -130,11 +130,11 @@ function FileManagement() {
 
     return (
         <div style={{ padding: "20px" }}>
-            <h3>Notebooks搬移</h3>
+            <h3>Moving Notebooks</h3>
 
             {/* 下載區域 */}
             <Card className="mb-4">
-                <Card.Header>下載Notebooks</Card.Header>
+                <Card.Header>Download Notebooks</Card.Header>
                 <Card.Body>
                     {/* <ListGroup>
                         {downloadList.map((file, index) => (
@@ -168,14 +168,14 @@ function FileManagement() {
 
             {/* 上傳區域 */}
             <Card>
-                <Card.Header>上傳Notebooks</Card.Header>
+                <Card.Header>Upload Notebooks</Card.Header>
                 <Card.Body>
                     <Form.Group controlId="fileUpload">
-                        <Form.Label>選擇檔案上傳</Form.Label>
+                        <Form.Label>Choose a file to upload</Form.Label>
                         <Form.Control id="upload_control" type="file" onChange={handleFileUpload} value=""/>
                     </Form.Group>
 
-                    <h5 className="mt-4">待上傳的檔案：</h5>
+                    <h5 className="mt-4">Files to Be Upload</h5>
                     <ListGroup>
                         {uploadList.map((file, index) => (
                             <ListGroup.Item key={index}>
