@@ -808,6 +808,19 @@ def user_delete(request):
 def lab_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
+    group = Group.objects.get(name=labname)
+    for user in User.objects.filter(groups=group):
+        User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
+        UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
+        group_list = get_user_all_groups(user)
+        # print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
+        print(user.username)
     # delete the group from database
     Group.objects.get(name=labname).delete()
     conn = connectLDAP()
