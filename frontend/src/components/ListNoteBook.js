@@ -56,7 +56,7 @@ function ListNoteBook() {
 
 
     return (
-        <TableContainer className="AddContent">
+        <TableContainer className="NotebookContent" >
             <Table variant='striped' colorScheme='orange'>
                 <TableCaption>Available Notebooks</TableCaption>
                 <Thead>
