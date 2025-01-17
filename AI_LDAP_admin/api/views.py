@@ -706,7 +706,7 @@ def syschronize_ldap(requset):
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
 
-def get_user_all_permission(user):
+def get_user_all_groups(user):
     user = User.objects.get(username=user)
     # get current group
     group_list = []
@@ -775,7 +775,7 @@ def get_user_info(request):
         "cpu_quota" : cpu,
         "mem_quota" : memoryStr,
         "gpu_quota" : gpu,
-        "permission": get_user_all_permission(user_obj.username),
+        "permission": get_user_all_groups(user_obj.username),
         "notebooks": notebooks,
     }
     return Response(data, status=200)
@@ -1039,7 +1039,8 @@ def excel(request):
     
 
 def get_permission(user, group):
-    print(user, group)
+    # get the permission of the user
+    print("Lance - ",user, group)
     try:
         detail_obj = UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group))
     except:
@@ -1436,8 +1437,18 @@ def remove_user_from_lab(request):
     lab = data['lab']
     # remove user from group in database
     try:
+        group_list = get_user_all_groups(user)
+        print(group_list)
         User.objects.get(username=user).groups.remove(Group.objects.get(name=lab))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=lab)).delete()
+        group_list = get_user_all_groups(user)
+        print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
         return Response(status=200)
     except:
         return Response(status=500)
