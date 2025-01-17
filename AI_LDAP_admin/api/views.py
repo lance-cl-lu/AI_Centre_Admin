@@ -1437,12 +1437,12 @@ def remove_user_from_lab(request):
     lab = data['lab']
     # remove user from group in database
     try:
-        group_list = get_user_all_groups(user)
-        print(group_list)
+        # group_list = get_user_all_groups(user)
+        # print(group_list)
         User.objects.get(username=user).groups.remove(Group.objects.get(name=lab))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=lab)).delete()
         group_list = get_user_all_groups(user)
-        print(group_list)
+        # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
             print("group is empty")
@@ -1519,6 +1519,14 @@ def remove_multiple_user_from_lab(request):
     for user in users:
         User.objects.get(username=user).groups.remove(Group.objects.get(name=group))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group)).delete()
+        group_list = get_user_all_groups(user)
+        # print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
         conn.search('dc={},ou=Groups,dc=example,dc=org'.format(group), '(objectclass=posixGroup)', attributes=['*'])
         for entry in conn.entries:
             try:
