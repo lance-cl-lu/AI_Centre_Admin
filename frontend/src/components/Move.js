@@ -85,10 +85,8 @@ function FileManagement() {
     const handleFileUpload = (event) => {
         const files = Array.from(event.target.files);
         const uploadedFileNames = files.map(file => file.name);
-        setUploadList([...uploadList, ...uploadedFileNames]);
-        setUploadFiles([...uploadFiles, ...files]);
-        // const control = document.getElementById("upload_control");
-        // control.value = ""
+        setUploadList([...uploadedFileNames]);
+        setUploadFiles([...files]);
         event.target.value = ""
     };
     const handleDeleteFile = (index) => {
@@ -99,11 +97,11 @@ function FileManagement() {
     };
 
     const sendFile = async (uploadFils) => {
-        console.log(uploadFiles);
         if (!uploadFiles) return;
 
         const formData = new FormData();
         formData.append("file", uploadFiles[0]);
+        formData.append("namespace", user.username.toLowerCase());
         try {
             const data = await fetch("/api/uploadNotebookYAML/", {
                 method: "POST",
@@ -112,8 +110,7 @@ function FileManagement() {
             .then(res => {
                 return res.json()
             });
-            
-            const result = data["results"];
+            console.log(data)
             Swal.fire({
                 title: "Upload Successfully",
                 text: "Note: Existed resources wiil NOT be replaced!",
@@ -132,7 +129,7 @@ function FileManagement() {
         <div style={{ padding: "20px" }}>
             <h3>Moving Notebooks</h3>
 
-            {/* 下載區域 */}
+            {/* Download */}
             <Card className="mb-4">
                 <Card.Header>Download Notebooks</Card.Header>
                 <Card.Body>
@@ -162,29 +159,29 @@ function FileManagement() {
                             )}
                         </Form.Select>
                     </FloatingLabel>
-                    <Button id="download_button" onClick={() => getNotebookYAML(selectedValue)}>下載</Button>
+                    <Button id="download_button" onClick={() => getNotebookYAML(selectedValue)}>Download</Button>
                 </Card.Body>
             </Card>
 
-            {/* 上傳區域 */}
+            {/* Upload */}
             <Card>
                 <Card.Header>Upload Notebooks</Card.Header>
                 <Card.Body>
                     <Form.Group controlId="fileUpload">
-                        <Form.Label>Choose a file to upload</Form.Label>
+                        <Form.Label>Select a .zip File for Uploading</Form.Label>
                         <Form.Control id="upload_control" type="file" onChange={handleFileUpload} value=""/>
                     </Form.Group>
 
-                    <h5 className="mt-4">Files to Be Upload</h5>
+                    <h5 className="mt-4">The File to Be Upload:</h5>
                     <ListGroup>
                         {uploadList.map((file, index) => (
                             <ListGroup.Item key={index}>
                                 {file}
-                                <Button onClick={() => handleDeleteFile(index)}>刪除</Button>
+                                <Button onClick={() => handleDeleteFile(index)}>Delete</Button>
                             </ListGroup.Item>
                         ))}
                     </ListGroup>
-                    <Button id="upload_button" onClick={() => sendFile(uploadFiles)}>上傳</Button>
+                    <Button id="upload_button" onClick={() => sendFile(uploadFiles)}>Upload</Button>
                 </Card.Body>
             </Card>
         </div>
