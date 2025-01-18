@@ -1679,10 +1679,11 @@ def upload_notebook_yaml(request):
         pvcs = []
         results = dict()
         for file in processed_files:
-            spec = file["content"]["spec"]
-            content = humps.decamelize(file["content"])
-            content["spec"] = spec
+            content = file["content"]
             if content["kind"] == "PersistentVolume":
+                spec = content["spec"]
+                content = humps.decamelize(file["content"])
+                content["spec"] = spec
                 try:
                     existed = api_v1.read_persistent_volume(content["metadata"]["name"])
                     results[content["metadata"]["name"]] = "existed"
@@ -1694,7 +1695,6 @@ def upload_notebook_yaml(request):
                         results[content["metadata"]["name"]] = str(e)
                     results[content["metadata"]["name"]] = "non-existed, created it"
             elif content["kind"] == "Notebook":
-                content = humps.camelize(content)
                 try:
                     existed = api.get_namespaced_custom_object(
                         group="kubeflow.org",
