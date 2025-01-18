@@ -21,6 +21,7 @@ import smtplib, ssl
 from email.mime.text import MIMEText
 import yaml
 import zipfile
+import humps
 
 
 def send_email_gmail(subject, message, destination):
@@ -1583,6 +1584,23 @@ def template(request):
     workbook.save(response)
     return response
 
+def remove_null(data):
+    if isinstance(data, dict):
+        removed = dict()
+        for k, v in data.items():
+            cleaned = remove_null(v)
+            if not(cleaned in [None, {}, []]):
+                removed[k] = cleaned
+    elif isinstance(data, list):
+        removed = list()
+        for v in data:
+            cleaned = remove_null(v)
+            if not(cleaned in [None, {}, []]):
+                removed.append(cleaned)
+    else:
+        return data
+    return removed
+
 # Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
 @api_view(["POST"])
 def get_notebook_yaml(request):
@@ -1606,30 +1624,34 @@ def get_notebook_yaml(request):
         for name in pvc_names:
             pvc_yaml = v1.read_namespaced_persistent_volume_claim(name, data["namespace"])
             pvc_yaml = pvc_yaml.to_dict()
+            pvc_yaml = humps.camelize(pvc_yaml)
             del pvc_yaml["metadata"]["annotations"]
-            del pvc_yaml["metadata"]["creation_timestamp"]
+            del pvc_yaml["metadata"]["creationTimestamp"]
             del pvc_yaml["metadata"]["finalizers"]
-            del pvc_yaml["metadata"]["resource_version"]
+            del pvc_yaml["metadata"]["resourceVersion"]
             del pvc_yaml["metadata"]["uid"]
             del pvc_yaml["status"]
+            pvc_yaml = remove_null(pvc_yaml)
             pvc_yamls.append(pvc_yaml)
 
         # get pv.yaml
         pv_names = []
-        for y in pvc_yamls:
-            pv_names.append(y["spec"]["volume_name"])
+        for i in range(len(pvc_yamls)):
+            pv_names.append(pvc_yamls[i]["spec"]["volumeName"])
         pv_yamls = []
         for name in pv_names:
             pv_yaml = v1.read_persistent_volume(name)
             pv_yaml = pv_yaml.to_dict()
+            pv_yaml = humps.camelize(pv_yaml)
             del pv_yaml["metadata"]["annotations"]
-            del pv_yaml["metadata"]["creation_timestamp"]
+            del pv_yaml["metadata"]["creationTimestamp"]
             del pv_yaml["metadata"]["finalizers"]
-            del pv_yaml["metadata"]["resource_version"]
+            del pv_yaml["metadata"]["resourceVersion"]
             del pv_yaml["metadata"]["uid"]
-            del pv_yaml["spec"]["claim_ref"]["resource_version"]
-            del pv_yaml["spec"]["claim_ref"]["uid"]
+            del pv_yaml["spec"]["claimRef"]["resourceVersion"]
+            del pv_yaml["spec"]["claimRef"]["uid"]
             del pv_yaml["status"]
+            pv_yaml = remove_null(pv_yaml)
             pv_yamls.append(pv_yaml)
         response = {"notebook": notebook_yaml, "pvc": pvc_yamls, "pv": pv_yamls}
         return JsonResponse(response, status=200)
@@ -1641,7 +1663,8 @@ def upload_notebook_yaml(request):
     if request.method == "POST" and request.FILES.get("file"):
         api_v1 = client.CoreV1Api()
         api = client.CustomObjectsApi()
-        uploaded_file = request.FILES["file"]
+        uploaded_file = request.FILES.get("file")
+        namespace = request.POST.get("namespace")
         with zipfile.ZipFile(uploaded_file, "r") as zip:
             file_list = zip.namelist()
 
@@ -1658,12 +1681,18 @@ def upload_notebook_yaml(request):
         for file in processed_files:
             content = file["content"]
             if content["kind"] == "PersistentVolume":
+                spec = content["spec"]
+                content = humps.decamelize(file["content"])
+                content["spec"] = spec
                 try:
                     existed = api_v1.read_persistent_volume(content["metadata"]["name"])
                     results[content["metadata"]["name"]] = "existed"
                 except Exception as e:
-                    obj = client.V1PersistentVolume(**content)
-                    api_v1.create_persistent_volume(obj)
+                    try:
+                        obj = client.V1PersistentVolume(**content)
+                        api_v1.create_persistent_volume(obj)
+                    except Exception as e:
+                        results[content["metadata"]["name"]] = str(e)
                     results[content["metadata"]["name"]] = "non-existed, created it"
             elif content["kind"] == "Notebook":
                 try:
@@ -1671,26 +1700,31 @@ def upload_notebook_yaml(request):
                         group="kubeflow.org",
                         version="v1",
                         plural="notebooks",
-                        namespace=content["metadata"]["namespace"],
+                        namespace=namespace,
                         name=content["metadata"]["name"])
                     results[content["metadata"]["name"]] = "existed"
                 except Exception as e:
                     api.create_namespaced_custom_object(group="kubeflow.org",
                                                         version="v1",
                                                         plural="notebooks",
-                                                        namespace=content["metadata"]["namespace"],
+                                                        namespace=namespace,
                                                         body=content)
                     results[content["metadata"]["name"]] = "non-existed, created it"
             elif content["kind"] == "PersistentVolumeClaim":
                 pvcs.append(file)
         for file in pvcs:
-            content = file["content"]
+            spec = file["content"]["spec"]
+            content = humps.decamelize(file["content"])
+            content["spec"] = spec
             try:
-                existed = api_v1.read_namespaced_persistent_volume_claim(content["metadata"]["name"], content["metadata"]["namespace"])
+                existed = api_v1.read_namespaced_persistent_volume_claim(content["metadata"]["name"], namespace)
                 results[content["metadata"]["name"]] = "existed"
             except Exception as e:
-                obj = client.V1PersistentVolumeClaim(**content)
-                api_v1.create_namespaced_persistent_volume_claim(content["metadata"]["namespace"], obj)
+                try:
+                    obj = client.V1PersistentVolumeClaim(**content)
+                    api_v1.create_namespaced_persistent_volume_claim(namespace, obj)
+                except Exception as e:
+                    results[content["metadata"]["name"]] = str(e)
                 results[content["metadata"]["name"]] = "non-existed, created it"
         
         return JsonResponse({"files": processed_files, "results": results}, status=200)
