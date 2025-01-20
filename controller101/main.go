@@ -47,12 +47,21 @@ func main() {
 	if timeInterval == "" {
 		timeInterval = "60"
 	}
+	duration := os.Getenv("DURATION")
+	if duration == "" {
+		duration = "60"
+	}
 
 	timeIntervalInt, err := strconv.Atoi(timeInterval)
 	if err != nil {
 		panic(err.Error())
 	}
 	fmt.Printf("Time interval: %d seconds\n", timeIntervalInt)
+	durationInt, err := strconv.Atoi(duration)
+	if err != nil {
+		panic(err.Error())
+	}
+	fmt.Printf("Duration: %d seconds\n", durationInt)
 
 	home := os.Getenv("HOME")
 	kubeconfig := home + "/.kube/config"
@@ -102,15 +111,30 @@ func main() {
 				}
 			}
 
-			if _, exists := notebookMap[key]; !exists {
-				notebookMap[key] = &Notebook{
-					Name:       name,
-					Namespace:  namespace,
-					RemovalTag: !persistentTag,
+			annotations, hasAnnotations := metadata["annotations"].(map[string]interface{})
+			stoppedAnnotation := ""
+			if hasAnnotations {
+				if stopped, ok := annotations["kubeflow-resource-stopped"]; ok {
+					stoppedAnnotation, _ = stopped.(string)
 				}
 			}
-			notebookMap[key].RemovalTag = !persistentTag
 
+			if _, exists := notebookMap[key]; !exists {
+				notebookMap[key] = &Notebook{
+					Name:        name,
+					Namespace:   namespace,
+					RemovalTag:  !persistentTag, // 使用 persistentTag
+					IdleCounter: 0,              // 初始化 IdleCounter 為 0
+				}
+			}
+
+			// 如果有 kubeflow-resource-stopped annotation，將 IdleCounter 設為 0
+			if stoppedAnnotation != "" {
+				notebookMap[key].IdleCounter = 0
+			} else {
+				// 更新是否需要刪除的標記
+				notebookMap[key].RemovalTag = !persistentTag
+			}
 		}
 
 		// 動態更新 Pod Metrics 資料
@@ -167,7 +191,7 @@ func main() {
 			}
 		}
 
-		time.Sleep(time.Duration(10) * time.Second)
+		time.Sleep(time.Duration(durationInt) * time.Second)
 		// print time
 		fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 		fmt.Println("=====================================================")
