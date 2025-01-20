@@ -1,8 +1,6 @@
-<<<<<<< HEAD
+
 POD=backend-deployment-bd94df95f-sqwsj
-=======
-POD=backend-deployment-bd94df95f-q9rfg
->>>>>>> refs/remotes/origin/v0.3
+
 
 
 [ -d frontend/templates/ ] || mkdir frontend/templates/
