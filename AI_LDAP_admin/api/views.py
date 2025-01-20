@@ -1614,6 +1614,9 @@ def get_notebook_yaml(request):
         del notebook_yaml["metadata"]["resourceVersion"]
         del notebook_yaml["metadata"]["uid"]
         del notebook_yaml["status"]
+        del notebook_yaml["metadata"]["annotations"]
+        del notebook_yaml["metadata"]["managedFields"]
+        notebook_yaml["spec"]["template"]["spec"]["containers"][0]["image"] = "cguaicadmin/remote-desktop:V1.0.7"
 
         # get pvc.yaml (may be more than 1)
         pvc_names = []
@@ -1631,6 +1634,7 @@ def get_notebook_yaml(request):
             del pvc_yaml["metadata"]["resourceVersion"]
             del pvc_yaml["metadata"]["uid"]
             del pvc_yaml["status"]
+            del pvc_yaml["metadata"]["managedFields"]
             pvc_yaml = remove_null(pvc_yaml)
             pvc_yamls.append(pvc_yaml)
 
@@ -1651,11 +1655,12 @@ def get_notebook_yaml(request):
             del pv_yaml["spec"]["claimRef"]["resourceVersion"]
             del pv_yaml["spec"]["claimRef"]["uid"]
             del pv_yaml["status"]
+            del pv_yaml["metadata"]["managedFields"]
             pv_yaml = remove_null(pv_yaml)
             pv_yamls.append(pv_yaml)
         response = {"notebook": notebook_yaml, "pvc": pvc_yamls, "pv": pv_yamls}
         return JsonResponse(response, status=200)
-    except client.exceptions.ApiException as e:
+    except Exception as e:
         return JsonResponse({"error": str(e)}, status=e.status)
     
 @api_view(["POST"])
