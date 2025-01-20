@@ -270,12 +270,12 @@ spec:
   ports:
     - name: ldap-port
       protocol: TCP
-      port: 389
+      port: 1389
       targetPort: ldap-port
       nodePort: null
     - name: ssl-ldap-port
       protocol: TCP
-      port: 636
+      port: 1636
       targetPort: ssl-ldap-port
       nodePort: null
   sessionAffinity: None
@@ -516,9 +516,9 @@ spec:
             requests: {}
           ports:
             - name: ldap-port
-              containerPort: 1389
+              containerPort: 389
             - name: ssl-ldap-port
-              containerPort: 1636
+              containerPort: 636
           livenessProbe:
             tcpSocket:
               port: ldap-port

@@ -3,6 +3,7 @@ from ldap3 import *
 import json, random 
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
+from django.core.files.storage import default_storage
 
 from passlib.hash import ldap_md5
 
@@ -18,11 +19,14 @@ from kubernetes.config.config_exception import ConfigException
 
 import smtplib, ssl
 from email.mime.text import MIMEText
+import yaml
+import zipfile
+import humps
 
 
 def send_email_gmail(subject, message, destination):
     # First assemble the message
-    msg = MIMEText(message, 'plain')
+    msg = MIMEText(message, 'html')
     msg['Subject'] = subject
 
     # Login and send the message
@@ -39,7 +43,7 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
-def change_notebooks_removal(namespace, notebook, removal):
+def change_notebooks_persisitent(namespace, notebook, persisitent):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -48,7 +52,7 @@ def change_notebooks_removal(namespace, notebook, removal):
     profile_data = {
         "metadata": {
             "labels": {
-                "removal": removal
+                "persisitent": persisitent
             }
         },
     }
@@ -68,12 +72,12 @@ def set_notebook(request):
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
     notebookName = data['notebookName']
-    removal = data['removal']
+    persisitent = data['persisitent']
 
     user_obj = User.objects.get(username=data['user'])
     profileName = get_profile_by_email(user_obj.email)
     print("profileName = ", profileName)
-    change_notebooks_removal(profileName, notebookName, removal)
+    change_notebooks_persisitent(profileName, notebookName, persisitent)
     return Response( status=200)
     
 @api_view(['POST'])
@@ -112,11 +116,11 @@ def list_notebooks_api(namespace):
             name = notebook["metadata"]["name"]
             cpu = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["cpu"]
             memory = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]["memory"]
-            removal = ""
+            persisitent = ""
             try:
-                removal = notebook["metadata"]["labels"]["removal"]
+                persisitent = notebook["metadata"]["labels"]["persisitent"]
             except:
-                removal = "non-removal"
+                persisitent = "false"
                 
             try:
                 gpus = notebook["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["nvidia.com/gpu"]
@@ -128,7 +132,7 @@ def list_notebooks_api(namespace):
             except:
                 status = 'none'
 
-            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "removal": removal, "status": status }
+            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "persisitent": persisitent, "status": status }
             Response.append(ResponseOne)
 
         print("Response = {}", Response)
@@ -189,7 +193,10 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         "metadata": {
             "name": username.lower(),
             "annotations": {
-                "manager": manager
+                "manager": manager,
+                "cpu" : cpu,
+                "gpu" : gpu,
+                "memory" : memory
             }
         },
         "spec": {
@@ -205,10 +212,19 @@ def create_profile(username, email, cpu, gpu, memory, manager):
     }
 
     if cpu != '0':
-        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.cpu"] = cpu
+        cpudecimal = float(cpu)
+        cpudecimal = cpudecimal/10
+        cpupinteger = float(cpu)
+        cpufinal = cpupinteger+cpudecimal
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.cpu"] = str(cpufinal)
 
     if memoryStr != '0Gi':
-        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = memoryStr
+        memoryIntStr = memoryStr[:-2]
+        memorydecimal = float(memoryIntStr)
+        memorydecimal = memorydecimal/10
+        memoryinteger = float(memoryIntStr)
+        memoryfinal = memorydecimal+memoryinteger
+        profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
     
     if gpu != '0':
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
@@ -250,9 +266,20 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
         }
     }
     if str(cpu) != '0':
-        resourceQuotaSpec["hard"]["requests.cpu"] = str(cpu)
+        cpudecimal = float(cpu)
+        cpudecimal = cpudecimal/10
+        cpupinteger = float(cpu)
+        cpufinal = cpupinteger+cpudecimal
+        resourceQuotaSpec["hard"]["requests.cpu"] = str(cpufinal)
+
     if str(memoryStr) != '0Gi':
-        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryStr)
+        memoryIntStr = memoryStr[:-2]
+        memorydecimal = float(memoryIntStr)
+        memorydecimal = memorydecimal/10
+        memoryinteger = float(memoryIntStr)
+        memoryfinal = memorydecimal+memoryinteger
+        resourceQuotaSpec["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
+        
     if str(gpu) != '0':
         resourceQuotaSpec["hard"]["requests.nvidia.com/gpu"] = str(gpu)
 
@@ -292,13 +319,16 @@ def replace_profile(name,cpu,gpu,memory):
         if p['metadata']['name'] == name:
             replace_quota_of_profile(p,cpu,gpu,memory)
 
-def replace_profile_user(name,user):
+def replace_profile_user(name,user,cpu,gpu,memory):
     profiles = get_all_profiles()['items']
     print("name = ", name)
     for p in profiles:
         if p['metadata']['name'] == name:
             userAnnotations = {
-                "manager": user
+                "manager": user,
+                "cpu" : cpu,
+                "gpu" : gpu,
+                "memory" : memory
             }
             p['metadata']['annotations'] = userAnnotations
             print(" p = ", p)
@@ -322,11 +352,11 @@ def get_gid():
         except KeyError:
             return uid
 '''
-# connect to LDAP server
+
 def connectLDAP():
-    # server = Server('ldap://120.126.23.245:31979')
     server = Server('ldap://' + urls.LDAP_IP + ':' + urls.LDAP_PORT)
-    conn = Connection(server, user='cn=admin,dc=example,dc=org', password='Not@SecurePassw0rd', auto_bind=True)
+    conn = Connection(server, user='cn=admin,dc=example,dc=org',
+                      password='Not@SecurePassw0rd', auto_bind=True)
     return conn
 
 @api_view(['GET'])
@@ -542,6 +572,7 @@ def adduser(request):
     firstname = data['first_name']
     lastname = data['last_name']
     password = data['password']
+    password_ori = data['password']
     labname = data['lab']
     email = data['email'].lower()
     cpu_quota = data['cpu_quota']
@@ -599,7 +630,32 @@ def adduser(request):
     UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
     create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
     
-    send_email_gmail('Introduction', 'Account Created', email)
+    k8s_account = username
+    k8s_password = password_ori
+    k8s_name = firstname + ' ' + lastname
+    email_title = '您的帳號已成功建立'
+    email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
+        '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' ，</span></p>'\
+        '<p><span style="font-weight: 400;">您好！</span><span style="font-weight: 400;"><br /></span>'\
+        '<span style="font-weight: 400;">感謝您加入我們的服務，以下是您的帳號資訊：</span></p>' \
+        '<ul>' \
+        '<li style="font-weight: 400;" aria-level="1"><strong>使用者名稱</strong><span style="font-weight: 400;">：</span>'\
+        '<span style="font-weight: 400;">' + k8s_account + '</span></li>' \
+        '<li style="font-weight: 400;" aria-level="1"><strong>密碼</strong>'\
+        '<span style="font-weight: 400;">：</span><span style="font-weight: 400;">' + k8s_password +'</span></li>' \
+        '</ul>' \
+        '<p><span style="font-weight: 400;">為了確保您的帳號安全，請您在首次登入後立即修改密碼。</span></p>' \
+        '<p><span style="font-weight: 400;">我們為您準備了一份詳細的使用手冊，幫助您快速熟悉系統功能，您可以透過以下連結查看：</span>'\
+        '<span style="font-weight: 400;"><br /></span><a href="https://zh.wikipedia.org/zh-tw/%E8%B6%85%E6%96%87%E6%9C%AC%E4%BC%A0%E8%BE%93%E5%8D%8F%E8%AE%AE">'\
+        '<span style="font-weight: 400;">點擊這裡下載使用手冊</span></a></p>' \
+        '<p><span style="font-weight: 400;">如果您在使用過程中遇到任何問題，歡迎隨時聯繫我們的客服團隊，我們將竭誠為您服務。</span></p>' \
+        '<p><strong>&nbsp;</strong></p>' \
+        '<p><span style="font-weight: 400;">祝您使用愉快！</span></p>' \
+        '<p><strong><br /><span style="font-weight: 400;">此致</span>'\
+        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">長庚大學 AI 中心</span>'\
+        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></strong></p>'
+
+    send_email_gmail(email_title, email_body, email)
 
     return Response(status=200)
 
@@ -651,7 +707,7 @@ def syschronize_ldap(requset):
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
 
-def get_user_all_permission(user):
+def get_user_all_groups(user):
     user = User.objects.get(username=user)
     # get current group
     group_list = []
@@ -677,18 +733,30 @@ def get_user_info(request):
         print(profile)
         # add try error control below
         try:
-            cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            cpu = profile["metadata"]["annotations"]["cpu"]
         except:
-            cpu = "0"
+            try:
+                cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            except:
+                cpu = "0"
+
         try:
-            gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            gpu = profile["metadata"]["annotations"]["gpu"]
         except:
-           gpu = "0"
+            try:
+                gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            except:
+                gpu = "0"
+
         try:
-            memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
-            memory = memory[:-2]
+            memory = profile["metadata"]["annotations"]["memory"]
         except:
-            memory = "0"
+            try:
+                memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                memory = memory[:-2]
+            except:
+                memory = "0"
+                
     else:
         print("Profile not found")
         memory = "0"
@@ -708,7 +776,7 @@ def get_user_info(request):
         "cpu_quota" : cpu,
         "mem_quota" : memoryStr,
         "gpu_quota" : gpu,
-        "permission": get_user_all_permission(user_obj.username),
+        "permission": get_user_all_groups(user_obj.username),
         "notebooks": notebooks,
     }
     return Response(data, status=200)
@@ -741,6 +809,19 @@ def user_delete(request):
 def lab_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
+    group = Group.objects.get(name=labname)
+    for user in User.objects.filter(groups=group):
+        User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
+        UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
+        group_list = get_user_all_groups(user)
+        # print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
+        print(user.username)
     # delete the group from database
     Group.objects.get(name=labname).delete()
     conn = connectLDAP()
@@ -855,7 +936,7 @@ def change_user_info(request):
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
             print("manager = ", manager)    
-            replace_profile_user(profileName, manager)
+            replace_profile_user(profileName, manager,cpu_quota,gpu_quota,mem_quota)
         return Response(status=200)
     except:
         return Response(status=500)
@@ -972,7 +1053,8 @@ def excel(request):
     
 
 def get_permission(user, group):
-    print(user, group)
+    # get the permission of the user
+    print("Lance - ",user, group)
     try:
         detail_obj = UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group))
     except:
@@ -1123,7 +1205,6 @@ def export_lab_user(request):
 @api_view(['POST'])
 def import_lab_user(request):
     group = request.POST['lab']
-    print(group)
     if request.FILES.get('file'):
         excel_file = request.FILES['file']
         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
@@ -1134,14 +1215,14 @@ def import_lab_user(request):
         # Get all information from the excel file
         userinfo = []
         for row in worksheet.iter_rows():
+            # error control: if the row is empty or the first row
             if row[0].value == "Username" or row[0].value is None:
                 continue
-            print(row[0])
+                
             Excelemail = row[2].value.lower() if row[2].value is not None else None 
             user = {
                 "username": row[0].value.lower(),
                 "password": row[1].value,
-                # lowercase email
                 "email": Excelemail,
                 "firstname": row[3].value,
                 "lastname": row[4].value,
@@ -1151,7 +1232,6 @@ def import_lab_user(request):
                 "mem_quota": row[8].value,
             }
             userinfo.append(user)
-            print(user)
         # check all data is valid or not with database, use pandas
         for user in userinfo:
             if user['permission'] != 'admin' and user['permission'] != 'user':
@@ -1198,9 +1278,10 @@ def import_lab_user(request):
                 continue
             
             try:
-                # add user into kube flow
+                # add user into kubeflow's profile
                 create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
             except:
+                # if user is not added into kubeflow, remove the user from database
                 failed_user.append({user['username']: "user add into kubeflow failed"})
                 continue
                 # add user into ldap
@@ -1370,8 +1451,18 @@ def remove_user_from_lab(request):
     lab = data['lab']
     # remove user from group in database
     try:
+        # group_list = get_user_all_groups(user)
+        # print(group_list)
         User.objects.get(username=user).groups.remove(Group.objects.get(name=lab))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=lab)).delete()
+        group_list = get_user_all_groups(user)
+        # print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
         return Response(status=200)
     except:
         return Response(status=500)
@@ -1442,6 +1533,14 @@ def remove_multiple_user_from_lab(request):
     for user in users:
         User.objects.get(username=user).groups.remove(Group.objects.get(name=group))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group)).delete()
+        group_list = get_user_all_groups(user)
+        # print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
         conn.search('dc={},ou=Groups,dc=example,dc=org'.format(group), '(objectclass=posixGroup)', attributes=['*'])
         for entry in conn.entries:
             try:
@@ -1485,5 +1584,147 @@ def template(request):
     workbook.save(response)
     return response
 
+def remove_null(data):
+    if isinstance(data, dict):
+        removed = dict()
+        for k, v in data.items():
+            cleaned = remove_null(v)
+            if not(cleaned in [None, {}, []]):
+                removed[k] = cleaned
+    elif isinstance(data, list):
+        removed = list()
+        for v in data:
+            cleaned = remove_null(v)
+            if not(cleaned in [None, {}, []]):
+                removed.append(cleaned)
+    else:
+        return data
+    return removed
+
+# Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
+@api_view(["POST"])
+def get_notebook_yaml(request):
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+        api = client.CustomObjectsApi()
+        # get notebook.yaml
+        notebook_yaml = api.get_namespaced_custom_object(group="kubeflow.org", version="v1", namespace=data["namespace"], plural="notebooks", name=data["notebook_name"])
+        del notebook_yaml["metadata"]["creationTimestamp"]
+        del notebook_yaml["metadata"]["generation"]
+        del notebook_yaml["metadata"]["resourceVersion"]
+        del notebook_yaml["metadata"]["uid"]
+        del notebook_yaml["status"]
+
+        # get pvc.yaml (may be more than 1)
+        pvc_names = []
+        for volume in notebook_yaml["spec"]["template"]["spec"]["volumes"][1:]:
+            pvc_names.append(volume["persistentVolumeClaim"]["claimName"])
+        v1 = client.CoreV1Api()
+        pvc_yamls = []
+        for name in pvc_names:
+            pvc_yaml = v1.read_namespaced_persistent_volume_claim(name, data["namespace"])
+            pvc_yaml = pvc_yaml.to_dict()
+            pvc_yaml = humps.camelize(pvc_yaml)
+            del pvc_yaml["metadata"]["annotations"]
+            del pvc_yaml["metadata"]["creationTimestamp"]
+            del pvc_yaml["metadata"]["finalizers"]
+            del pvc_yaml["metadata"]["resourceVersion"]
+            del pvc_yaml["metadata"]["uid"]
+            del pvc_yaml["status"]
+            pvc_yaml = remove_null(pvc_yaml)
+            pvc_yamls.append(pvc_yaml)
+
+        # get pv.yaml
+        pv_names = []
+        for i in range(len(pvc_yamls)):
+            pv_names.append(pvc_yamls[i]["spec"]["volumeName"])
+        pv_yamls = []
+        for name in pv_names:
+            pv_yaml = v1.read_persistent_volume(name)
+            pv_yaml = pv_yaml.to_dict()
+            pv_yaml = humps.camelize(pv_yaml)
+            del pv_yaml["metadata"]["annotations"]
+            del pv_yaml["metadata"]["creationTimestamp"]
+            del pv_yaml["metadata"]["finalizers"]
+            del pv_yaml["metadata"]["resourceVersion"]
+            del pv_yaml["metadata"]["uid"]
+            del pv_yaml["spec"]["claimRef"]["resourceVersion"]
+            del pv_yaml["spec"]["claimRef"]["uid"]
+            del pv_yaml["status"]
+            pv_yaml = remove_null(pv_yaml)
+            pv_yamls.append(pv_yaml)
+        response = {"notebook": notebook_yaml, "pvc": pvc_yamls, "pv": pv_yamls}
+        return JsonResponse(response, status=200)
+    except client.exceptions.ApiException as e:
+        return JsonResponse({"error": str(e)}, status=e.status)
     
-    
+@api_view(["POST"])
+def upload_notebook_yaml(request):
+    if request.method == "POST" and request.FILES.get("file"):
+        api_v1 = client.CoreV1Api()
+        api = client.CustomObjectsApi()
+        uploaded_file = request.FILES.get("file")
+        namespace = request.POST.get("namespace")
+        with zipfile.ZipFile(uploaded_file, "r") as zip:
+            file_list = zip.namelist()
+
+            processed_files = []
+            for file_name in file_list:
+                with zip.open(file_name) as f:
+                    file = yaml.load(f, Loader=yaml.SafeLoader)
+                    processed_files.append({
+                        "file_name": file_name,
+                        "content": file
+                    })
+        pvcs = []
+        results = dict()
+        for file in processed_files:
+            content = file["content"]
+            if content["kind"] == "PersistentVolume":
+                spec = content["spec"]
+                content = humps.decamelize(file["content"])
+                content["spec"] = spec
+                try:
+                    existed = api_v1.read_persistent_volume(content["metadata"]["name"])
+                    results[content["metadata"]["name"]] = "existed"
+                except Exception as e:
+                    try:
+                        obj = client.V1PersistentVolume(**content)
+                        api_v1.create_persistent_volume(obj)
+                    except Exception as e:
+                        results[content["metadata"]["name"]] = str(e)
+                    results[content["metadata"]["name"]] = "non-existed, created it"
+            elif content["kind"] == "Notebook":
+                try:
+                    existed = api.get_namespaced_custom_object(
+                        group="kubeflow.org",
+                        version="v1",
+                        plural="notebooks",
+                        namespace=namespace,
+                        name=content["metadata"]["name"])
+                    results[content["metadata"]["name"]] = "existed"
+                except Exception as e:
+                    api.create_namespaced_custom_object(group="kubeflow.org",
+                                                        version="v1",
+                                                        plural="notebooks",
+                                                        namespace=namespace,
+                                                        body=content)
+                    results[content["metadata"]["name"]] = "non-existed, created it"
+            elif content["kind"] == "PersistentVolumeClaim":
+                pvcs.append(file)
+        for file in pvcs:
+            spec = file["content"]["spec"]
+            content = humps.decamelize(file["content"])
+            content["spec"] = spec
+            try:
+                existed = api_v1.read_namespaced_persistent_volume_claim(content["metadata"]["name"], namespace)
+                results[content["metadata"]["name"]] = "existed"
+            except Exception as e:
+                try:
+                    obj = client.V1PersistentVolumeClaim(**content)
+                    api_v1.create_namespaced_persistent_volume_claim(namespace, obj)
+                except Exception as e:
+                    results[content["metadata"]["name"]] = str(e)
+                results[content["metadata"]["name"]] = "non-existed, created it"
+        
+        return JsonResponse({"files": processed_files, "results": results}, status=200)

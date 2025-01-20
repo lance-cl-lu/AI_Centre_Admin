@@ -1,0 +1,14 @@
+
+
+.NotebookContent {
+    overflow: auto;
+    height: 60vh;
+}
+
+.container {
+    overflow: auto;
+}
+
+table {
+    overflow: auto;
+}

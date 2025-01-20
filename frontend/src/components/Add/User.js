@@ -9,23 +9,36 @@ import WarningIcon from '@mui/icons-material/Warning';
 
 function AddUser() {
     const [lab, setLab] = useState([]);
+    const [isGPUQuotaDisabled, setIsGPUQuotaDisabled] = useState(true); // State to manage GPUQuota disabled state
     const group = useLocation().state['group'];
     console.log(group);
     //const state = useLocation().state; 
     useEffect(() => {
-        fetch('/api/ldap/lab/list/', {
-            method: 'GET',
+
+        fetchDefaultValues();
+    }, []);
+
+    const fetchDefaultValues = () => {
+        fetch('/api/ldap/lab/default_values/', {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
+            body: JSON.stringify({
+                labname: document.getElementById('addUserGroup').value,
+            }),
         })
         .then(response => response.json())
-        .then(data => setLab(data))
+        .then(data => {
+            document.getElementById('cpuQuota').value = data['cpu_quota'];
+            document.getElementById('memQuota').value = data['mem_quota'];
+            document.getElementById('GPUQuota').value = data['gpu_quota'];
+            document.getElementById('GPUVendor').value = data['gpu_vendor'];
+        })
         .catch((error) => {
             console.error('Error:', error);
-        }
-        );
-    }, []);
+        });
+    };
 
     let handleSubmit = async(e) => {
         e.preventDefault();
@@ -68,19 +81,19 @@ function AddUser() {
             return;
         }
         // test cpu, mem and gpu quota and gpu vendor
-        if(e.target[8].value===''){
+        if(e.target[9].value===''){
             alert('CPU Quota cannot be empty');
             return;
         }
-        if(e.target[9].value===''){
+        if(e.target[10].value===''){
             alert('Memory Quota cannot be empty');
             return;
         }
-        if(e.target[10].value===''){
+        if(e.target[11].value===''){
             alert('GPU Quota cannot be empty');
             return;
         }
-        if(e.target[11].value===''){
+        if(e.target[12].value===''){
             alert('GPU Vendor cannot be empty');
             return;
         }
@@ -99,6 +112,7 @@ function AddUser() {
                     "lab":e.target[4].value,
                     "is_lab_manager": e.target[5].checked,
                     "password":e.target[6].value,
+                    "labdefault": e.target[8].value,
                     "cpu_quota":e.target[9].value,
                     "mem_quota":e.target[10].value,
                     "gpu_quota":e.target[11].value,
@@ -183,7 +197,8 @@ function AddUser() {
                         <Form.Control type="password" placeholder="Enter Password Again" />
                     </Form.Group>
                     <Form.Group className="mb-3" controlId="formBasicCheckbox" style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
-                        <Form.Check type="checkbox" label="Group Default Values" onClick={(e) => {
+                        <Form.Check type="checkbox" defaultChecked label="Group Default Values" onClick={(e) => {
+                            setIsGPUQuotaDisabled(e.target.checked);
                             if(e.target.checked){
                                 // get group default values
                                 fetch('/api/ldap/lab/default_values/', {
@@ -217,7 +232,7 @@ function AddUser() {
                             label="CPU Quota"
                             className="mb-3"
                         >
-                        <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="1" max="16" defaultValue="8" step="1" />
+                        <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="1" max="16" defaultValue="8" step="1" disabled={isGPUQuotaDisabled}/>
                         </FloatingLabel>
                     </Form.Group>
                     <Form.Group>
@@ -227,7 +242,7 @@ function AddUser() {
                             label="Memory Quota (Gi)"
                             className="mb-3"
                         >
-                        <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="16" step="0.1"/>
+                        <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue="16" step="0.1" disabled={isGPUQuotaDisabled}/>
                         </FloatingLabel>
                     </Form.Group>
                     <Form.Group>
@@ -237,7 +252,7 @@ function AddUser() {
                             label="GPU Quota"
                             className="mb-3"
                         >
-                            <Form.Control as="select" id="GPUQuota">
+                            <Form.Control as="select" id="GPUQuota" disabled={isGPUQuotaDisabled} >
                                 <option value="0">0</option>
                                 <option value="1">1</option>
                                 <option value="2">2</option>
