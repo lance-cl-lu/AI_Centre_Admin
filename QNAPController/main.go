@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
@@ -30,10 +31,24 @@ func main() {
 	}
 	flag.Parse()
 
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		fmt.Printf("Error building kubeconfig: %s\n", err.Error())
-		os.Exit(1)
+	var config *rest.Config
+	var err error
+
+	// Check if kubeconfig file exists
+	if _, err = os.Stat(*kubeconfig); err == nil {
+		// kubeconfig file exists, use it to build config
+		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
+		if err != nil {
+			fmt.Printf("Error building kubeconfig: %s\n", err.Error())
+			os.Exit(1)
+		}
+	} else {
+		// kubeconfig file does not exist, try in-cluster config
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			fmt.Printf("Error building in-cluster config: %s\n", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -47,7 +62,6 @@ func main() {
 		fmt.Printf("Error creating dynamic client: %s\n", err.Error())
 		os.Exit(1)
 	}
-
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, syscall.SIGINT, syscall.SIGTERM)
 
