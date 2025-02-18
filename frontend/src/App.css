@@ -12,14 +12,13 @@
   display: inline-flex;
   justify-content: center;
   height: 100%;
-  width: 100vw;
   margin-top: 28px;
   transition: opacity 0.5s ease-in-out;
 }
 .Centre-Page-Content {
   box-sizing: border-box;
   margin: 0;
-  width: 76vw;
+  width: 75vw;
   padding: 5px;
   margin-left: 2vw;
   margin-right: 2vw;

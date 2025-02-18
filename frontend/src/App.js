@@ -49,7 +49,7 @@ function App() {
               <div className='Centre-Page-Content'>
                   <Routes>
                     <Route exact path="/" element={<Home />} />
-                    <Route path='password' element={<Password></Password>}/>
+                    <Route path='password' element={<Password />}/>
                     <Route path="about/" element={<About />} />
                     <Route path="add/" element={<Add />} />
                     <Route path='lab/import' element={<LabImport/>}/>

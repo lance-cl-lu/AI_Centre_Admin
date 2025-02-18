@@ -1,7 +1,7 @@
 .infolist {
     box-sizing: border-box;
     margin-left: 1em;
-    width: 20%;
+    width: 20vw;
     display: block;
 }
 .tree {

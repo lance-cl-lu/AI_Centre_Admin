@@ -23,6 +23,8 @@ import yaml
 import zipfile
 import humps
 
+# traceback
+import traceback    
 
 def send_email_gmail(subject, message, destination):
     # First assemble the message
@@ -159,6 +161,8 @@ def check_email(email):
     return False
     
 def delete_profile(name):
+    if name is None:
+        return
     # delete profile
     try:
         config.load_incluster_config()
@@ -166,7 +170,8 @@ def delete_profile(name):
         config.load_kube_config()
 
     api_instance = client.CustomObjectsApi()
-
+    # convert name to lower case, and deal with 'NoneType' object has no attribute 'lower'
+    print("name = ", name)
     api_response = api_instance.delete_cluster_custom_object(
         group=group,
         version=version,
@@ -210,8 +215,8 @@ def create_profile(username, email, cpu, gpu, memory, manager):
             }
         }
     }
-
-    if cpu != '0':
+    print(profile_data)
+    if cpu != '0' or cpu != 0:
         cpudecimal = float(cpu)
         cpudecimal = cpudecimal/10
         cpupinteger = float(cpu)
@@ -226,9 +231,9 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         memoryfinal = memorydecimal+memoryinteger
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
     
-    if gpu != '0':
+    if gpu != '0' or gpu != 0:
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
-
+    print("profile_data = ", profile_data)
     api_instance = client.CustomObjectsApi()
 
     api_response = api_instance.create_cluster_custom_object(
@@ -266,6 +271,7 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
         }
     }
     if str(cpu) != '0':
+        print("cpu = ", cpu)
         cpudecimal = float(cpu)
         cpudecimal = cpudecimal/10
         cpupinteger = float(cpu)
@@ -1245,10 +1251,13 @@ def import_lab_user(request):
             # if username is exist in database
             if User.objects.filter(username=user['username']).exists() is True:
                 failed_user.append({user['username']: "username is exist in database"})
+                # remove the user from userinfo
+                userinfo.remove(user)
                 continue
             if User.objects.filter(email=user['email']).exists() is True:
                 # "username":"reason"
                 failed_user.append({user['username']: "email is exist in database"})
+                userinfo.remove(user)
                 continue
             # if user is exist in ldap
             try:
@@ -1256,15 +1265,31 @@ def import_lab_user(request):
                 conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
                 for entry in conn.entries:
                     failed_user.append({user['username']: "username is exist in ldap"})
+                    userinfo.remove(user)
                     continue
             except:
                 pass
             # if user is exist in kubeflow
             if get_profile_by_email(user['email']) is not None:
                 failed_user.append({user['username']: "email is exist in kubeflow"})
+                userinfo.remove(user)
                 continue
         # add user into django, ldap, and kubeflow
         for user in userinfo:
+            # convert cpu value to correct format, from 8800m remove m and devide to 8 ,  if more than 1100
+            print("Without check", user['cpu_quota'])
+            if str(user['cpu_quota']).isdigit() is False:
+                user['cpu_quota'] = user['cpu_quota'][:-1]
+            print("After check1", user['cpu_quota'])
+            if int(user['cpu_quota']) > 1100:
+                user['cpu_quota'] = str(float(user['cpu_quota'])/1100)
+            print("After check2", user['cpu_quota'])
+            try:
+                if int(user['mem_quota']) > 1100:
+                    user['mem_quota'] = str(float(user['mem_quota'])/1100)
+            except:
+                user['mem_quota'] = '0'
+            
             try:
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
@@ -1277,11 +1302,17 @@ def import_lab_user(request):
                 failed_user.append({user['username']: "user add into database failed"})
                 continue
             
+            # convert user['cpu_quota'], user['gpu_quota'] and user['mem_quota'] to correct format str
+            user['cpu_quota'] = str(user['cpu_quota'])
+            user['gpu_quota'] = str(user['gpu_quota'])
+            user['mem_quota'] = str(user['mem_quota'])        
+    
             try:
                 # add user into kubeflow's profile
                 create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
             except:
                 # if user is not added into kubeflow, remove the user from database
+                print(traceback.format_exc())
                 failed_user.append({user['username']: "user add into kubeflow failed"})
                 continue
                 # add user into ldap
