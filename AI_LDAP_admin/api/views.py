@@ -1645,12 +1645,14 @@ def get_notebook_yaml(request):
         del notebook_yaml["metadata"]["resourceVersion"]
         del notebook_yaml["metadata"]["uid"]
         del notebook_yaml["status"]
+        del notebook_yaml["metadata"]["annotations"]
         del notebook_yaml["metadata"]["managedFields"]
-        try:
-            del notebook_yaml["metadata"]["annotations"]
-        except Exception as e: 
-            pass
-        notebook_yaml["spec"]["template"]["spec"]["containers"][0]["image"] = "cguaicadmin/remote-desktop-eng:V1.0.7"
+        notebook_yaml["spec"]["template"]["spec"]["containers"][0]["image"] = "cguaicadmin/remote-desktop:V1.0.7"
+        # try:
+        #     del notebook_yaml["metadata"]["annotations"]
+        # except Exception as e: 
+        #     pass
+        # notebook_yaml["spec"]["template"]["spec"]["containers"][0]["image"] = "cguaicadmin/remote-desktop-eng:V1.0.7"
 
         # get pvc.yaml (may be more than 1)
         pvc_names = []
@@ -1669,6 +1671,7 @@ def get_notebook_yaml(request):
             del pvc_yaml["metadata"]["uid"]
             del pvc_yaml["status"]
             del pvc_yaml["metadata"]["managedFields"]
+            pv_yaml["spec"]["persistentVolumeReclaimPolicy"] = "Retain"
             pvc_yaml = remove_null(pvc_yaml)
             pvc_yamls.append(pvc_yaml)
 
