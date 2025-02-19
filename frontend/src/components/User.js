@@ -19,6 +19,37 @@ function User() {
         getuserinfo();
     }, [state]);
     console.log(state)
+    
+    function convertCpuQuota(cpuQuota) {
+        // Check if it's a string ending with 'm' (millicores)
+        if (typeof cpuQuota === 'string' && cpuQuota.endsWith('m')) {
+            // Remove the 'm' and parse the number
+            cpuQuota = parseInt(cpuQuota.replace('m', ''), 10);
+        }
+
+        // If it's a number and not an integer, convert to an integer
+        if (cpuQuota >= 1100) {
+            cpuQuota = Math.round(cpuQuota / 1100);
+        }
+
+        return cpuQuota;
+    }
+    function convertMemQuota(memQuota) {
+        if (typeof cpuQuota === 'string') {
+            // Remove "Gi" and parse the number
+            memQuota = parseInt(memQuota.replace('Gi', ''), 10);
+        }
+
+        // If it's a number and not an integer, convert to an integer
+        if (memQuota >= 1100) {
+            memQuota = Math.round(memQuota / 1100);
+        }
+
+        return memQuota;
+    }
+
+
+
     let getuserinfo = async () => {
         document.getElementsByClassName('userPage')[0].style.opacity = 0;
 
@@ -36,9 +67,10 @@ function User() {
             console.log('Success:', data);
             setTimeout(() => {
                 setUser(data);
-                cpuQuota = data.cpu_quota;
-                memoryQuota = data.mem_quota;
+                cpuQuota = convertCpuQuota(data.cpu_quota);
+                memoryQuota = convertMemQuota(data.mem_quota);
                 gpuQuota = data.gpu_quota;
+
                 document.getElementById("cpuQuota").value = cpuQuota;
                 document.getElementById("memQuota").value = memoryQuota;
                 document.getElementById("gpuQuota").value = gpuQuota;
