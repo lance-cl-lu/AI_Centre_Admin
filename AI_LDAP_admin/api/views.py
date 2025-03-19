@@ -639,7 +639,7 @@ def adduser(request):
     k8s_account = username
     k8s_password = password_ori
     k8s_name = firstname + ' ' + lastname
-    email_title = '您的帳號已成功建立'
+    email_title = '您的教學平台帳號已成功建立'
     email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
         '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' ，</span></p>'\
         '<p><span style="font-weight: 400;">您好！</span><span style="font-weight: 400;"><br /></span>'\
@@ -652,7 +652,7 @@ def adduser(request):
         '</ul>' \
         '<p><span style="font-weight: 400;">為了確保您的帳號安全，請您在首次登入後立即修改密碼。</span></p>' \
         '<p><span style="font-weight: 400;">我們為您準備了一份詳細的使用手冊，幫助您快速熟悉系統功能，您可以透過以下連結查看：</span>'\
-        '<span style="font-weight: 400;"><br /></span><a href="https://zh.wikipedia.org/zh-tw/%E8%B6%85%E6%96%87%E6%9C%AC%E4%BC%A0%E8%BE%93%E5%8D%8F%E8%AE%AE">'\
+        '<span style="font-weight: 400;"><br /></span><a href="https://drive.google.com/drive/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI?usp=sharing">'\
         '<span style="font-weight: 400;">點擊這裡下載使用手冊</span></a></p>' \
         '<p><span style="font-weight: 400;">如果您在使用過程中遇到任何問題，歡迎隨時聯繫我們的客服團隊，我們將竭誠為您服務。</span></p>' \
         '<p><strong>&nbsp;</strong></p>' \
