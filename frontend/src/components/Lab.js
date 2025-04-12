@@ -275,11 +275,11 @@ function Lab() {
         <div>
                 <h1 style={{fontFamily: "Comic Sans MS"}}>{labinfo ? labinfo.labname : null} Members  <ContactPageIcon fontSize='large'/></h1>
             <br/>
-            <Container style={{display: "flex", justifyContent: "space-evenly", alignItems: "center"}}>
+            <Container style={{display: "flex", justifyContent: "center", alignItems: "center"}}>
                 <div style={{ flex: "0 0 20%", padding: "10px" }}>
                     <Text style={{fontFamily: "Comic Sans MS", fontSize:"20px", color:"orange"}}># of group members: {labinfo ? labinfo.memberUid ? Object.keys(labinfo.memberUid).length : 0 : null}</Text>
                 </div>
-                <div style={{ flex: "0 0 80%", padding: "10px", display: "flex" }}>
+                <div style={{ flex: "0 0 80%", padding: "10px", display: "flex", justifyContent: "center" }}>
                     <Link to="/insert" state={{'group': state.lab}} style={{textDecoration: 'none', color: "#FFFFFF", marginLeft: "2vh", backgroundColor: "navy",}} class="btn btn-primary"><Button style={{ backgroundColor:"navy"}}>Add existed user</Button></Link>
                     <Link to="/add/user" style={{textDecoration: 'none', color: "#FFFFFF",marginLeft: "2vh", backgroundColor: "purple"}} state={{"group": state.lab}} class="btn btn-primary"><Button style={{ backgroundColor: "purple"}}>Add new user</Button></Link>
                     <Button variant="success" style={{marginLeft: "2vh"}} onClick={handleOnclick_mutiple_remove}>Mutiple Remove</Button>
@@ -385,7 +385,7 @@ function Lab() {
                                       });
                                 }
                             } >Delete</Button></div></td>
-                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none", display: "grid"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
+                            <td style={{height:"8vh",display: "inline-flex", width:"10vw", justifyContent: "center", alignItems: "center"}}><div style={{height:"80%", border: "none", display: "grid",  alignContent: "center"}}><Button variant="info"><Link to="/password" style={{textDecoration: "none", color: "#FFFFFF"}} state={{"user": memberUid}}>Change Password</Link></Button></div></td>
                         </tr>
                     )) : null  
                     }

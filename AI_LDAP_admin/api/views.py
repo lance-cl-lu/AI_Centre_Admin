@@ -23,6 +23,8 @@ import yaml
 import zipfile
 import humps
 
+# traceback
+import traceback    
 
 def send_email_gmail(subject, message, destination):
     # First assemble the message
@@ -159,6 +161,8 @@ def check_email(email):
     return False
     
 def delete_profile(name):
+    if name is None:
+        return
     # delete profile
     try:
         config.load_incluster_config()
@@ -166,7 +170,8 @@ def delete_profile(name):
         config.load_kube_config()
 
     api_instance = client.CustomObjectsApi()
-
+    # convert name to lower case, and deal with 'NoneType' object has no attribute 'lower'
+    print("name = ", name)
     api_response = api_instance.delete_cluster_custom_object(
         group=group,
         version=version,
@@ -210,8 +215,8 @@ def create_profile(username, email, cpu, gpu, memory, manager):
             }
         }
     }
-
-    if cpu != '0':
+    print(profile_data)
+    if cpu != '0' or cpu != 0:
         cpudecimal = float(cpu)
         cpudecimal = cpudecimal/10
         cpupinteger = float(cpu)
@@ -226,9 +231,9 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         memoryfinal = memorydecimal+memoryinteger
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
     
-    if gpu != '0':
+    if gpu != '0' or gpu != 0:
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
-
+    print("profile_data = ", profile_data)
     api_instance = client.CustomObjectsApi()
 
     api_response = api_instance.create_cluster_custom_object(
@@ -266,6 +271,7 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
         }
     }
     if str(cpu) != '0':
+        print("cpu = ", cpu)
         cpudecimal = float(cpu)
         cpudecimal = cpudecimal/10
         cpupinteger = float(cpu)
@@ -715,9 +721,6 @@ def get_user_all_groups(user):
         ## add permission and groupname into list
         group_list.append({"permission": get_permission(user.username, group.name), "groupname": group.name})
     return group_list
-
-        
-    #return group_list
 
 @api_view(['POST'])
 def get_user_info(request):
@@ -1205,6 +1208,18 @@ def export_lab_user(request):
 @api_view(['POST'])
 def import_lab_user(request):
     group = request.POST['lab']
+    
+    # check the group is exist or not
+    if Group.objects.filter(name=group).exists() is False:
+        return JsonResponse({'message': 'lab {} is not exist'.format(group)}, status=400)
+    group_obj = Group.objects.get(name=group)
+    # get group default resource quota
+    group_resource_obj = GroupDefaultQuota.objects.get(labname=group_obj)
+    group_default_cpu_quota = group_resource_obj.cpu_quota
+    group_default_gpu_quota = group_resource_obj.gpu_quota
+    group_default_mem_quota = group_resource_obj.mem_quota
+    
+    
     if request.FILES.get('file'):
         excel_file = request.FILES['file']
         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
@@ -1218,12 +1233,34 @@ def import_lab_user(request):
             # error control: if the row is empty or the first row
             if row[0].value == "Username" or row[0].value is None:
                 continue
+            # check value email
+            if row[2].value is None:
+                return JsonResponse({'message': 'user {} email is empty'.format(row[0].value)}, status=400)
+            
+            # check value permission
+            if row[5].value != 'admin' and row[5].value != 'user':
+                row[5].value = 'user'
                 
-            Excelemail = row[2].value.lower() if row[2].value is not None else None 
+            if row[6].value is None:
+                row[6].value = group_default_cpu_quota
+            else:
+                # if cpu value is not integer, remove m and devide to 8
+                if str(row[6].value).isdigit() is False:
+                    row[6].value = row[6].value[:-1]
+                if int(row[6].value) > 1100:
+                    row[6].value = str(float(row[6].value)/1100)
+                    
+            
+            if row[7].value is None:
+                row[7].value = group_default_gpu_quota
+            
+            if row[8].value is None:
+                row[8].value = group_default_mem_quota
+                
             user = {
                 "username": row[0].value.lower(),
                 "password": row[1].value,
-                "email": Excelemail,
+                "email": row[2].value.lower(),
                 "firstname": row[3].value,
                 "lastname": row[4].value,
                 "permission": row[5].value,
@@ -1232,6 +1269,7 @@ def import_lab_user(request):
                 "mem_quota": row[8].value,
             }
             userinfo.append(user)
+        
         # check all data is valid or not with database, use pandas
         for user in userinfo:
             if user['permission'] != 'admin' and user['permission'] != 'user':
@@ -1241,14 +1279,18 @@ def import_lab_user(request):
                 return JsonResponse({'message': 'user {} password is not valid'.format(user['username'])}, status=400)
         # check all data is exist in database, ldap, and kubeflow or not
         failed_user = []
+        
         for user in userinfo:
             # if username is exist in database
             if User.objects.filter(username=user['username']).exists() is True:
                 failed_user.append({user['username']: "username is exist in database"})
+                # remove the user from userinfo
+                userinfo.remove(user)
                 continue
             if User.objects.filter(email=user['email']).exists() is True:
                 # "username":"reason"
                 failed_user.append({user['username']: "email is exist in database"})
+                userinfo.remove(user)
                 continue
             # if user is exist in ldap
             try:
@@ -1256,15 +1298,31 @@ def import_lab_user(request):
                 conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
                 for entry in conn.entries:
                     failed_user.append({user['username']: "username is exist in ldap"})
+                    userinfo.remove(user)
                     continue
             except:
                 pass
             # if user is exist in kubeflow
             if get_profile_by_email(user['email']) is not None:
                 failed_user.append({user['username']: "email is exist in kubeflow"})
+                userinfo.remove(user)
                 continue
         # add user into django, ldap, and kubeflow
         for user in userinfo:
+            # convert cpu value to correct format, from 8800m remove m and devide to 8 ,  if more than 1100
+            print("Without check", user['cpu_quota'])
+            if str(user['cpu_quota']).isdigit() is False:
+                user['cpu_quota'] = user['cpu_quota'][:-1]
+            print("After check1", user['cpu_quota'])
+            if int(user['cpu_quota']) > 1100:
+                user['cpu_quota'] = str(float(user['cpu_quota'])/1100)
+            print("After check2", user['cpu_quota'])
+            try:
+                if int(user['mem_quota']) > 1100:
+                    user['mem_quota'] = str(float(user['mem_quota'])/1100)
+            except:
+                user['mem_quota'] = '0'
+            
             try:
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
@@ -1277,11 +1335,17 @@ def import_lab_user(request):
                 failed_user.append({user['username']: "user add into database failed"})
                 continue
             
+            # convert user['cpu_quota'], user['gpu_quota'] and user['mem_quota'] to correct format str
+            user['cpu_quota'] = str(user['cpu_quota'])
+            user['gpu_quota'] = str(user['gpu_quota'])
+            user['mem_quota'] = str(user['mem_quota'])        
+    
             try:
                 # add user into kubeflow's profile
                 create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
             except:
                 # if user is not added into kubeflow, remove the user from database
+                print(traceback.format_exc())
                 failed_user.append({user['username']: "user add into kubeflow failed"})
                 continue
                 # add user into ldap
@@ -1310,124 +1374,6 @@ def import_lab_user(request):
             return JsonResponse({'message': '{} users are not added'.format(failed_user)}, status=400)
     else:
         return JsonResponse({'message': 'file is not exist'}, status=400)
-        
-# @api_view(['POST'])
-# def import_lab_user(request):
-#     group = request.POST['lab']
-#     print(group)
-#     if request.FILES.get('file'):
-#         excel_file = request.FILES['file']
-#         conn = connectLDAP()
-#         with open('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name, 'wb+') as destination:
-#             for chunk in excel_file.chunks():
-#                 destination.write(chunk)
-#         # read and pritn the excel file, attribute ["Username","password","email", "firstname", "lastname", "permission"]
-#         worksheet = openpyxl.load_workbook('./' +  datetime.datetime.now().strftime('%Y%m%d%H%M%S') + excel_file.name).active
-#         # intialize check all false
-#         # check all data is valid or not with database, use pandas
-#         for row in worksheet.iter_rows():
-#             if row[0].value == "Username":
-#                 continue
-#             ## if there is any data is null, return error
-#             for item in row:
-#                 if item.value == None:
-#                     return JsonResponse({'message': 'excel format is not valid'}, status=400)
-#             if row[5].value != 'admin' and row[5].value != 'user':
-#                 return JsonResponse({'message': 'user {} permission is not valid'.format(row[0].value)}, status=400)
-#             # password is or not valid(all integer)
-#             if isinstance(row[1].value, int) is True:
-#                 return JsonResponse({'message': 'user {} password is not valid'.format(row[0].value)}, status=400)
-        
-#         # check all data is exist in database, ldap, and kubeflow or not
-#         failed_user = []
-#         for row in worksheet.iter_rows():
-#             # if username is exist in database
-#             username_excel = row[0].value
-#             if User.objects.filter(username=username_excel).exists() is True:
-#                 failed_user.append(row[0].value)
-#                 # remove the user from excel
-#                 worksheet.remove(row)
-#                 continue
-#             email_excel = row[1].value
-#             if User.objects.filter(email=email_excel).exists() is True:
-#                 failed_user.append(row[0].value)
-#                 worksheet.remove(row)
-#                 continue
-#             # if user is exist in ldap
-#             try:
-#                 conn.search('cn={},ou=users,dc=example,dc=org'.format(username_excel), '(objectclass=posixAccount)', attributes=['*'])
-#                 for entry in conn.entries:
-#                     failed_user.append(row[0].value)
-#                     worksheet.remove(row)
-#                     continue
-#             except:
-#                 pass
-#             # if user is exist in kubeflow
-#             if get_profile_by_email(email_excel) is not None:
-#                 failed_user.append(row[0].value)
-#                 worksheet.remove(row)
-#                 continue
-#         # add user into django
-#         for row in worksheet.iter_rows():
-#             if row[0].value == "Username":
-#                     continue
-#             # if user is exist and in correct group, skip
-#             user_corresponding_group = False
-#             if User.objects.filter(username=row[0].value).exists() is True:
-#                 subuser_obj = User.objects.get(username=row[0].value)
-#                 if subuser_obj.email != row[2].value:
-#                     subuser_obj.email = row[2].value
-#                 if subuser_obj.first_name != row[3].value:
-#                     subuser_obj.first_name = row[3].value
-#                 if subuser_obj.last_name != row[4].value:
-#                     subuser_obj.last_name = row[4].value
-#                 subuser_obj.save()
-
-#                 for group_obj in User.objects.get(username=row[0].value).groups.all():
-#                     if group_obj.name == group:
-#                         user_corresponding_group = True
-#                         # check password is correct or not
-#                         print(User.objects.get(username=row[0].value).check_password(row[1].value), row[1].value)
-#                         if User.objects.get(username=row[0].value).check_password(row[1].value) is False:
-#                             if User.objects.get(username=row[0].value).password == row[1].value:
-#                                 print("user {} password is correct".format(row[0].value))
-#                                 continue
-#                             user_obj_password = User.objects.get(username=row[0].value)
-#                             print(user_obj_password.set_password(row[1].value))
-#                             user_obj_password.save()
-#                             print("user {} password is not correct, change password to {}".format(row[0].value, row[1].value))
-
-#                         if get_permission(row[0].value, group) == row[5].value:
-#                             print("user {} permission is correct".format(row[0].value))
-#                         else:
-#                             UserDetail.objects.get(uid=User.objects.get(username=row[0].value).id, labname=Group.objects.get(name=group)).delete()
-#                             if row[5].value == 'admin':
-#                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
-#                             elif row[5].value == 'user':
-#                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
-#                             print("user {} permission is not correct, change permission to {}".format(row[0].value, row[5].value))
-#                         break
-#                 if user_corresponding_group is True:
-#                     continue
-#                 else:
-#                     # add user into corresponding group
-#                     User.objects.get(username=row[0].value).groups.add(Group.objects.get(name=group))
-#                     if row[5].value == 'admin':
-#                         UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=group))
-#                     else:
-#                         UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=2, labname=Group.objects.get(name=group))
-                    
-            
-#             # add new user into django
-#             user = User.objects.create_user(username=row[0].value, password=row[1].value, first_name=row[3].value, last_name=row[4].value, email=row[2].value)
-#             user.groups.add(Group.objects.get(name=group))
-#             if row[5].value == 'admin':
-#                 UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=group))
-#             else:
-#                 UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=group))
-#     if failed_user != []:
-#         return JsonResponse({'message': 'user {} is exist in database, ldap, or kubeflow'.format(failed_user)}, status=400)
-#     return JsonResponse({'message': 'File upload success'}, status=200)
 
 @api_view(['GET'])
 def db_ldap_check(request):
@@ -1511,17 +1457,6 @@ def multiple_user_delete(request):
     users = data['users']
     for user in users:
         deleteUserModel(User.objects.get(username=user).username)
-        # delete_profile(get_profile_by_email(User.objects.get(username=user).email))
-        # conn.delete('cn={},ou=users,dc=example,dc=org'.format(user))
-        # # remove from group entry
-        # conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
-        # for entry in conn.entries:
-        #     try:
-        #         conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [user])]})
-        #     except:
-        #         pass
-        # User.objects.get(username=user).delete()
-        # remove user from kube flow
     return Response(status=200)
 
 @api_view(['POST'])
@@ -1614,6 +1549,14 @@ def get_notebook_yaml(request):
         del notebook_yaml["metadata"]["resourceVersion"]
         del notebook_yaml["metadata"]["uid"]
         del notebook_yaml["status"]
+        del notebook_yaml["metadata"]["annotations"]
+        del notebook_yaml["metadata"]["managedFields"]
+        notebook_yaml["spec"]["template"]["spec"]["containers"][0]["image"] = "cguaicadmin/remote-desktop:V1.0.7"
+        # try:
+        #     del notebook_yaml["metadata"]["annotations"]
+        # except Exception as e: 
+        #     pass
+        # notebook_yaml["spec"]["template"]["spec"]["containers"][0]["image"] = "cguaicadmin/remote-desktop-eng:V1.0.7"
 
         # get pvc.yaml (may be more than 1)
         pvc_names = []
@@ -1631,6 +1574,8 @@ def get_notebook_yaml(request):
             del pvc_yaml["metadata"]["resourceVersion"]
             del pvc_yaml["metadata"]["uid"]
             del pvc_yaml["status"]
+            del pvc_yaml["metadata"]["managedFields"]
+            pv_yaml["spec"]["persistentVolumeReclaimPolicy"] = "Retain"
             pvc_yaml = remove_null(pvc_yaml)
             pvc_yamls.append(pvc_yaml)
 
@@ -1651,11 +1596,13 @@ def get_notebook_yaml(request):
             del pv_yaml["spec"]["claimRef"]["resourceVersion"]
             del pv_yaml["spec"]["claimRef"]["uid"]
             del pv_yaml["status"]
+            del pv_yaml["metadata"]["managedFields"]
+            pv_yaml["spec"]["persistentVolumeReclaimPolicy"] = "Retain"
             pv_yaml = remove_null(pv_yaml)
             pv_yamls.append(pv_yaml)
         response = {"notebook": notebook_yaml, "pvc": pvc_yamls, "pv": pv_yamls}
         return JsonResponse(response, status=200)
-    except client.exceptions.ApiException as e:
+    except Exception as e:
         return JsonResponse({"error": str(e)}, status=e.status)
     
 @api_view(["POST"])

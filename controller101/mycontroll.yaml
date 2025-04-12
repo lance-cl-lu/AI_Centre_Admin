@@ -25,10 +25,12 @@ spec:
       serviceAccountName: pod-killer-service-account  # Link the service account here
       containers:
       - name: pod-killer
-        image: cguaicadmin/pod-killer:v0.4  # Updated with the correct image name
+        image: cguaicadmin/pod-killer:v0.5  # Updated with the correct image name
         env:
         - name: TIMEINTERVAL
           value: "60"  # Time interval in seconds
+        - name: DURATION
+          value: "60"  # Duration in seconds
         ports:
         - containerPort: 8080
         resources:
