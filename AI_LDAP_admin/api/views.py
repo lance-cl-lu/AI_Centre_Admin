@@ -180,7 +180,7 @@ def delete_profile(name):
     )
     print(api_response)
 
-def create_profile(username, email, cpu, gpu, memory, manager):
+def create_profile(username, email, cpu, gpu, memory, manager, fullname, password):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -243,6 +243,33 @@ def create_profile(username, email, cpu, gpu, memory, manager):
         body=profile_data,
     )
     print(api_response)
+
+    k8s_account = username
+    k8s_password = password
+    k8s_name = fullname
+    email_title = '您的教學平台帳號已成功建立'
+    email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
+        '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' ，</span></p>'\
+        '<p><span style="font-weight: 400;">您好！</span><span style="font-weight: 400;"><br /></span>'\
+        '<span style="font-weight: 400;">感謝您加入我們的服務，以下是您的帳號資訊：</span></p>' \
+        '<ul>' \
+        '<li style="font-weight: 400;" aria-level="1"><strong>使用者名稱</strong><span style="font-weight: 400;">：</span>'\
+        '<span style="font-weight: 400;">' + k8s_account + '</span></li>' \
+        '<li style="font-weight: 400;" aria-level="1"><strong>密碼</strong>'\
+        '<span style="font-weight: 400;">：</span><span style="font-weight: 400;">' + k8s_password +'</span></li>' \
+        '</ul>' \
+        '<p><span style="font-weight: 400;">為了確保您的帳號安全，請您在首次登入後立即修改密碼。</span></p>' \
+        '<p><span style="font-weight: 400;">我們為您準備了一份詳細的使用手冊，幫助您快速熟悉系統功能，您可以透過以下連結查看：</span>'\
+        '<span style="font-weight: 400;"><br /></span><a href="https://drive.google.com/drive/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI?usp=sharing">'\
+        '<span style="font-weight: 400;">點擊這裡下載使用手冊</span></a></p>' \
+        '<p><span style="font-weight: 400;">如果您在使用過程中遇到任何問題，歡迎隨時聯繫我們的客服團隊，我們將竭誠為您服務。</span></p>' \
+        '<p><strong>&nbsp;</strong></p>' \
+        '<p><span style="font-weight: 400;">祝您使用愉快！</span></p>' \
+        '<p><strong><br /><span style="font-weight: 400;">此致</span>'\
+        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">長庚大學 AI 中心</span>'\
+        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></strong></p>'
+
+    send_email_gmail(email_title, email_body, email)
 
 def get_profile_content(profile_name):
     try:
@@ -634,34 +661,9 @@ def adduser(request):
     user.save()
     # add gpu vendor
     UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
-    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager)
-    
-    k8s_account = username
     k8s_password = password_ori
     k8s_name = firstname + ' ' + lastname
-    email_title = '您的教學平台帳號已成功建立'
-    email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
-        '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' ，</span></p>'\
-        '<p><span style="font-weight: 400;">您好！</span><span style="font-weight: 400;"><br /></span>'\
-        '<span style="font-weight: 400;">感謝您加入我們的服務，以下是您的帳號資訊：</span></p>' \
-        '<ul>' \
-        '<li style="font-weight: 400;" aria-level="1"><strong>使用者名稱</strong><span style="font-weight: 400;">：</span>'\
-        '<span style="font-weight: 400;">' + k8s_account + '</span></li>' \
-        '<li style="font-weight: 400;" aria-level="1"><strong>密碼</strong>'\
-        '<span style="font-weight: 400;">：</span><span style="font-weight: 400;">' + k8s_password +'</span></li>' \
-        '</ul>' \
-        '<p><span style="font-weight: 400;">為了確保您的帳號安全，請您在首次登入後立即修改密碼。</span></p>' \
-        '<p><span style="font-weight: 400;">我們為您準備了一份詳細的使用手冊，幫助您快速熟悉系統功能，您可以透過以下連結查看：</span>'\
-        '<span style="font-weight: 400;"><br /></span><a href="https://drive.google.com/drive/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI?usp=sharing">'\
-        '<span style="font-weight: 400;">點擊這裡下載使用手冊</span></a></p>' \
-        '<p><span style="font-weight: 400;">如果您在使用過程中遇到任何問題，歡迎隨時聯繫我們的客服團隊，我們將竭誠為您服務。</span></p>' \
-        '<p><strong>&nbsp;</strong></p>' \
-        '<p><span style="font-weight: 400;">祝您使用愉快！</span></p>' \
-        '<p><strong><br /><span style="font-weight: 400;">此致</span>'\
-        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">長庚大學 AI 中心</span>'\
-        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></strong></p>'
-
-    send_email_gmail(email_title, email_body, email)
+    create_profile(username=username, email=email,cpu=cpu_quota, gpu=gpu_quota, memory=mem_quota, manager=manager, fullname=k8s_name, password=k8s_password)
 
     return Response(status=200)
 
@@ -1086,18 +1088,43 @@ def export_ldap(request):
             print(profile)
             # add try error control below
             try:
-                cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+                cpu = profile["metadata"]["annotations"]["cpu"]
             except:
-                cpu = "0"
+                try:
+                    cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+                except:
+                    cpu = "0"
+
             try:
-                gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+                gpu = profile["metadata"]["annotations"]["gpu"]
             except:
-                gpu = "0"
+                try:
+                    gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+                except:
+                    gpu = "0"
+
             try:
-                memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
-                memory = memory[:-2]
+                memory = profile["metadata"]["annotations"]["memory"]
             except:
-                memory = "0"
+                try:
+                    memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                    memory = memory[:-2]
+                except:
+                    memory = "0"
+
+            #try:
+            #    cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            #except:
+            #    cpu = "0"
+            #try:
+            #    gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            #except:
+            #    gpu = "0"
+            #try:
+            #    memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+            #    memory = memory[:-2]
+            #except:
+            #    memory = "0"
         else:
             print("Profile not found")
             memory = "0"
@@ -1173,20 +1200,45 @@ def export_lab_user(request):
         profile = get_profile_content(profileName)
         if profile is not None:
             print(profile)
+            try:
+                cpu = profile["metadata"]["annotations"]["cpu"]
+            except:
+                try:
+                    cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+                except:
+                    cpu = "0"
+
+            try:
+                gpu = profile["metadata"]["annotations"]["gpu"]
+            except:
+                try:
+                    gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+                except:
+                    gpu = "0"
+
+            try:
+                memory = profile["metadata"]["annotations"]["memory"]
+            except:
+                try:
+                    memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                    memory = memory[:-2]
+                except:
+                    memory = "0"
+
             # add try error control below
-            try:
-                cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
-            except:
-                cpu = "0"
-            try:
-                gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
-            except:
-                gpu = "0"
-            try:
-                memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
-                memory = memory[:-2]
-            except:
-                memory = "0"
+            # try:
+            #    cpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+            # except:
+            #    cpu = "0"
+            # try:
+            #    gpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+            # except:
+            #    gpu = "0"
+            # try:
+            #    memory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+            #    memory = memory[:-2]
+            # except:
+            #     memory = "0"
         else:
             print("Profile not found")
             memory = "0"
@@ -1205,6 +1257,13 @@ def export_lab_user(request):
     workbook.save(response)
     return response
 
+def is_number(val):
+    try:
+        float(val)
+        return True
+    except (TypeError, ValueError):
+        return False
+    
 @api_view(['POST'])
 def import_lab_user(request):
     group = request.POST['lab']
@@ -1245,9 +1304,17 @@ def import_lab_user(request):
                 row[6].value = group_default_cpu_quota
             else:
                 # if cpu value is not integer, remove m and devide to 8
-                if str(row[6].value).isdigit() is False:
-                    row[6].value = row[6].value[:-1]
-                if int(row[6].value) > 1100:
+                # 確保 value 是字串，方便後續處理
+                value = str(row[6].value)
+
+                # 如果不是整數也不是浮點數，砍掉最後一個字元
+                if not is_number(value):
+                    value = value[:-1]
+                row[6].value = value
+
+                # if str(row[6].value).isdigit() is False:
+                #    row[6].value = row[6].value[:-1]
+                if float(row[6].value) > 1100:
                     row[6].value = str(float(row[6].value)/1100)
                     
             
@@ -1314,7 +1381,7 @@ def import_lab_user(request):
             if str(user['cpu_quota']).isdigit() is False:
                 user['cpu_quota'] = user['cpu_quota'][:-1]
             print("After check1", user['cpu_quota'])
-            if int(user['cpu_quota']) > 1100:
+            if float(user['cpu_quota']) > 1100:
                 user['cpu_quota'] = str(float(user['cpu_quota'])/1100)
             print("After check2", user['cpu_quota'])
             try:
@@ -1342,7 +1409,9 @@ def import_lab_user(request):
     
             try:
                 # add user into kubeflow's profile
-                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'])
+                k8s_password = row[1].value
+                k8s_name = row[3].value + ' ' + row[4].value
+                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'], k8s_name=k8s_name, k8s_password=k8s_password)
             except:
                 # if user is not added into kubeflow, remove the user from database
                 print(traceback.format_exc())
