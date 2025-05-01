@@ -40,7 +40,7 @@ def send_email_gmail(subject, message, destination):
         server.login(my_mail, my_password)
         server.sendmail(my_mail, destination, msg.as_string())
 
-def send_add_account_email_gmail(k8s_name, k8s_account, k8s_password, destination):
+def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
     add_account_email_title = '帳號啟用通知信 ( Account Activation Notification )'
     add_account_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
             '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
@@ -80,7 +80,7 @@ def send_add_account_email_gmail(k8s_name, k8s_account, k8s_password, destinatio
             '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
     send_email_gmail(add_account_email_title, add_account_email_body, destination)
 
-def send_add_group_email_gmail(k8s_name, k8s_group, k8s_date, destination):    
+def send_add_group_email(k8s_name, k8s_group, k8s_date, destination):    
     add_group_email_title = '群組加入通知信 ( Group Membership Notification )'
     add_group_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
             '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
@@ -117,7 +117,7 @@ def send_add_group_email_gmail(k8s_name, k8s_group, k8s_date, destination):
             '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
     send_email_gmail(add_group_email_title, add_group_email_body, destination)
 
-def send_delete_group_email_gmail(k8s_name, k8s_group, k8s_date, destination): 
+def send_delete_group_email(k8s_name, k8s_group, k8s_date, destination): 
     remove_group_email_title = '群組移除通知信 ( Group Removal Notification )'
     remove_group_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
             '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
@@ -153,7 +153,7 @@ def send_delete_group_email_gmail(k8s_name, k8s_group, k8s_date, destination):
             '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
     send_email_gmail(remove_group_email_title, remove_group_email_body, destination)
 
-def send_delete_account_email_gmail(k8s_name, k8s_account, k8s_date, destination):     
+def send_delete_account_email(k8s_name, k8s_account, k8s_date, destination):     
     delete_account_email_title = '帳號刪除通知信 ( Account Deletion Notification )'
     delete_account_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
             '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
@@ -333,7 +333,7 @@ def delete_profile(name, email, fullname):
     k8s_name = fullname
     k8s_date = str(datetime.datetime.now())
     # send_email_gmail(email_title, email_body, email)
-    send_delete_account_email_gmail(k8s_name, k8s_account, k8s_date, email)
+    send_delete_account_email(k8s_name, k8s_account, k8s_date, email)
 
 def create_profile(username, email, cpu, gpu, memory, manager, fullname, password):
     try:
@@ -403,7 +403,7 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
     k8s_password = password
     k8s_name = fullname
     # send_email_gmail(email_title, email_body, email)
-    send_add_account_email_gmail(k8s_name, k8s_account, k8s_password, email)
+    send_add_account_email(k8s_name, k8s_account, k8s_password, email)
 
 def get_profile_content(profile_name):
     try:
@@ -772,6 +772,9 @@ def adduser(request):
         
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
+    k8s_date = str(datetime.datetime.now())
+    k8s_name = user.first_name + " " + user.last_name
+    send_add_group_email(k8s_name, labname, k8s_date, email)
     password = user.password
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
@@ -810,7 +813,13 @@ def add_admin(request):
     user.is_staff = True
     for group in user.groups.all():
         user.groups.remove(group)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user.first_name + " " + user.last_name
+        send_delete_group_email(k8s_name, group, k8s_date, user.email)
     user.groups.add(Group.objects.get(name='root'))
+    k8s_date = str(datetime.datetime.now())
+    k8s_name = user.first_name + " " + user.last_name
+    send_add_group_email(k8s_name, 'root', k8s_date, user.email)
     user.save()
     detail = UserDetail.objects.filter(uid=user.id)
     for item in detail:
@@ -955,6 +964,9 @@ def lab_delete(request):
         User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
         group_list = get_user_all_groups(user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user.first_name + " " + user.last_name
+        send_delete_group_email(k8s_name, labname, k8s_date, user.email)
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
@@ -1157,6 +1169,10 @@ def excel(request):
                     else:
                         try:
                             User.objects.get(username=row[0].value).groups.add(Group.objects.get(name=row[1].value))
+                            user = User.objects.get(username=row[0].value)
+                            k8s_date = str(datetime.datetime.now())
+                            k8s_name = user.first_name + " " + user.last_name
+                            send_add_group_email(k8s_name, row[1].value, k8s_date, user.email)
                             print("add user {} into group {} success".format(row[0].value, row[1].value))
                             if row[6].value == 'admin':
                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=row[1].value))
@@ -1172,6 +1188,9 @@ def excel(request):
             user_obj.save()
             # add user into group
             user_obj.groups.add(Group.objects.get(name=row[1].value))
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user_obj.first_name + " " + user_obj.last_name
+            send_add_group_email(k8s_name, row[1].value, k8s_date, user_obj.email)
             # add user into ldap
             group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(row[1].value)
             user_dn = 'cn={},ou=users,dc=example,dc=org'.format(row[0].value),
@@ -1195,7 +1214,7 @@ def excel(request):
 
 def get_permission(user, group):
     # get the permission of the user
-    print("Lance - ",user, group)
+    # print("Lance - ",user, group)
     try:
         detail_obj = UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group))
     except:
@@ -1309,6 +1328,9 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user_obj.first_name + " " + user_obj.last_name
+            send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -1316,6 +1338,9 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user_obj.first_name + " " + user_obj.last_name
+            send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -1530,6 +1555,9 @@ def import_lab_user(request):
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
                 user_obj.groups.add(Group.objects.get(name=group))
+                k8s_date = str(datetime.datetime.now())
+                k8s_name = user_obj.first_name + " " + user_obj.last_name
+                send_add_group_email(k8s_name, group, k8s_date, user_obj.email)
                 if user['permission'] == 'admin':
                     UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
                 elif user['permission'] == 'user':
@@ -1607,6 +1635,10 @@ def remove_user_from_lab(request):
         User.objects.get(username=user).groups.remove(Group.objects.get(name=lab))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=lab)).delete()
         group_list = get_user_all_groups(user)
+        user_obj = User.objects.get(username=user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user_obj.first_name + " " + user_obj.last_name
+        send_delete_group_email(k8s_name, lab, k8s_date, user_obj.email)
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
@@ -1674,6 +1706,10 @@ def remove_multiple_user_from_lab(request):
         User.objects.get(username=user).groups.remove(Group.objects.get(name=group))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group)).delete()
         group_list = get_user_all_groups(user)
+        user_obj = User.objects.get(username=user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user_obj.first_name + " " + user_obj.last_name
+        send_delete_group_email(k8s_name, group, k8s_date, user_obj.email)
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
