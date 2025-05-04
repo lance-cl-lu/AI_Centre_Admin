@@ -1,6 +1,5 @@
 
-POD=backend-deployment-bd94df95f-sqwsj
-
+POD=backend-deployment-697d44676f-rbl7j
 
 
 [ -d frontend/templates/ ] || mkdir frontend/templates/

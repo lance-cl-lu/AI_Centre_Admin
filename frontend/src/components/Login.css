@@ -5,3 +5,11 @@
     background-image: linear-gradient(to top, #d299c2 0%, #fef9d7 100%);
 
 }
+
+.login-img {
+    max-width: 80%; 
+    height: auto; 
+    display: block; 
+    margin: 0 auto; 
+}
+

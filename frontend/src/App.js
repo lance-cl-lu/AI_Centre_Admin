@@ -25,6 +25,7 @@ import { Grid } from '@chakra-ui/react';
 import ListNoteBook from './components/ListNoteBook';
 import EditGroup from './components/editgroup';
 import Move from "./components/Move"
+import '/home/cluster/AI_Centre_Admin/frontend/src/components/Lab.css';    
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)

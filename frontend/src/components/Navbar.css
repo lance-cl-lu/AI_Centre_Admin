@@ -1,69 +1,93 @@
+/* Navbar.css */
+
+/* 整體導航列 */
 .navigation {
-    background-color: #333;
-    color: white;
-}
-
-.navigation a {
-    color: white;
-    text-decoration: none;
-    font-family: 'Lato';
-    font-size: 28px;
-}
-
-.navigation a:hover {
-    color: black;
-    transition: 0.5s;
-}
-.navigation-ul {
-    list-style-type: none;
-    height: 8vh;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.navigation-ul-li {
-    width: 20%;
-    padding: 1em;
-    display: inline-block;
-}
-
-.navigation-ul-li:hover {
-    color: black;
-    transition: all 0.5s;
-}
-
-.navigation-ul-div {
-    width: 50%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    float: left;
-}
-.navigation-ul img {
-    float: left;
-    width: 35%;
-    height: 60%;
-    padding: 0.5em;
-}
-.navigation-ul li button {
-    border: none;
-    background-color: #333;
-}
-
-@media(max-width: 540px) {
+    background-color: #333 !important;
+    color: white !important;
+    width: 100% !important;
+  }
+  
+  /* 導航連結 */
+  .navigation a {
+    color: white !important;
+    text-decoration: none !important;
+    font-family: 'Lato', sans-serif !important;
+    font-size: 1.6rem !important;
+  }
+  
+  .navigation a:hover {
+    color: black !important;
+    transition: 0.5s !important;
+  }
+  
+  /* 導航列內的 ul 設定 */
+  .navigation-ul {
+    list-style-type: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+  }
+  
+  /* Logo 區塊 */
+  .nav-logo {
+    margin-left: 15px !important;
+  }
+  
+  /* Logo 圖片：預設桌面尺寸 */
+  .nav-logo-img {
+    width: 250px !important;
+    height: auto !important;
+  }
+  
+  /* 導航連結區塊 */
+  .navigation-ul-div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+  }
+  
+  /* 每個連結的 li */
+  .navigation-ul-li {
+    padding: 1em !important;
+  }
+  
+  /* 中尺寸裝置（max-width: 768px）：調整字型與 logo 尺寸 */
+  @media (max-width: 768px) {
+    .navigation a {
+      font-size: 1.4rem !important;
+    }
     .navigation-ul-li {
-        width: 100%;
-        padding: 0;
-        margin: 5px;
-        display: inline-block;
+      padding: 0.8em !important;
     }
-    .navigation-ul img{
-        width: 60%;
-        height: 100%;
-        padding: 10px;
+    .nav-logo-img {
+      width: 150px !important;
     }
-}
+  }
+  
+  /* 小尺寸裝置（max-width: 540px）：垂直排列、置中與 logo 尺寸 */
+  @media (max-width: 540px) {
+    .navigation-ul {
+      flex-direction: column !important;
+      align-items: center !important;
+    }
+    .navigation-ul-div {
+      justify-content: center !important;
+    }
+    .navigation-ul-li {
+      padding: 0.5em !important;
+      width: 100% !important;
+      text-align: center !important;
+    }
+    .nav-logo {
+      margin: 0 !important;
+      padding: 0.5em !important;
+    }
+    .nav-logo-img {
+      width: 120px !important;
+    }
+  }
+  

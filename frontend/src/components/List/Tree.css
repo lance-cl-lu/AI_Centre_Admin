@@ -1,10 +1,13 @@
-.TreeStyle {
-    text-align: left;
-    margin-left: 1vw;
+.tree-label {
+  display: flex;
+  align-items: center;
 }
 
-.PieStyle {
-    display: flex;
-    text-align: center;
-    margin-left: 23px;
+.icon {
+  margin-right: 8px;
+}
+
+.node-link {
+  text-decoration: none;
+  color: #242424;
 }
