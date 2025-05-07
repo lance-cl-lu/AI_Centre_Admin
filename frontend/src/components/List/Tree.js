@@ -1,74 +1,73 @@
-import React, { useContext, useEffect } from 'react';
-import Tree from 'react-animated-tree';
-import { Link } from 'react-router-dom';
+import React, { useContext, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthContext from '../../context/AuthContext';
-import { AuthProvider } from '../../context/AuthContext';
-import { FaFolder, FaUser, FaPlusSquare, FaMinusSquare } from 'react-icons/fa';
 import './Tree.css';
-
-// 自訂節點元件：根據類型顯示不同圖示與標籤
-const NodeItem = ({ type, label, linkTo, linkState }) => {
-  const IconComponent = type === 'group' ? FaFolder : FaUser;
-  return (
-    <Link 
-      to={linkTo} 
-      state={linkState}
-      style={{
-        textDecoration: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        color: '#242424',
-      }}
-    >
-      <IconComponent style={{ marginRight: '8px' }} />
-      <span>{label}</span>
-    </Link>
-  );
-};
 
 const TreeView = () => {
   const { userlist, getUserList } = useContext(AuthContext);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     getUserList();
-  }, [getUserList]);
+  }, []);
+
+  const toggleGroup = (groupDn) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupDn]: !prev[groupDn]
+    }));
+  };
+
+  const handleGroupClick = (e, groupDn) => {
+    // 避免箭頭點擊也觸發跳轉
+    if (e.target.closest('.arrow')) return;
+    navigate('/lab', { state: { lab: groupDn } });
+  };
+
+  const ArrowIcon = ({ expanded }) => (
+    <svg
+      className="arrow"
+      viewBox="0 0 24 24"
+      style={{
+        transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+        fill: '#888'
+      }}
+    >
+      <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
+    </svg>
+  );
 
   return (
-    <div className="tree">
-      <AuthProvider>
-        <div className="TreeStyle" style={{ fontFamily: 'Segoe UI', padding: '10px', margin: '10px' }}>
-          {userlist && userlist.map((user, index) => (
-            <Tree
-              key={index}
-              content={
-                <NodeItem 
-                  type="group"
-                  label={user.group_dn}
-                  linkTo="/lab"
-                  linkState={{ lab: user.group_dn }}
-                />
-              }
-              // 用自訂圖示覆蓋預設箭頭：展開時顯示 FaMinusSquare，收合時顯示 FaPlusSquare
-              openIcon={<FaMinusSquare style={{ marginRight: '8px' }} />}
-              closedIcon={<FaPlusSquare style={{ marginRight: '8px' }} />}
-            >
-              {user.member_uids.map((memberUid, idx) => (
-                <Tree
+    <div className="tree-container">
+      {userlist && userlist.map((user, index) => (
+        <div key={index}>
+          <div
+            className="group-row"
+            onClick={(e) => handleGroupClick(e, user.group_dn)}
+          >
+            <div onClick={() => toggleGroup(user.group_dn)}>
+              <ArrowIcon expanded={expandedGroups[user.group_dn]} />
+            </div>
+            <span className="group-label">{user.group_dn}</span>
+          </div>
+
+          {expandedGroups[user.group_dn] && (
+            <div className="member-list">
+              {user.member_uids.map((uid, idx) => (
+                <Link
                   key={idx}
-                  content={
-                    <NodeItem 
-                      type="user"
-                      label={memberUid}
-                      linkTo="/user"
-                      linkState={{ user: memberUid }}
-                    />
-                  }
-                />
+                  to="/user"
+                  state={{ user: uid }}
+                  className="member-item"
+                >
+                  {uid}
+                </Link>
               ))}
-            </Tree>
-          ))}
+            </div>
+          )}
         </div>
-      </AuthProvider>
+      ))}
     </div>
   );
 };
