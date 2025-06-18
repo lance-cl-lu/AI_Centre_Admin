@@ -14,7 +14,7 @@ function Login() {
     return (
         <Box className="Login" p={8} borderRadius="12px" w="100%" maxW="500px" mx="auto" mt="10%" mb="10%">
                 <form onSubmit={loginUser} className="LoginForm">
-                <img src="https://aic.cgu.edu.tw/var/file/44/1044/msys_1044_4886051_59674.png" alt="CUG AI Centre" className="login-img"/><br/>
+                <img src="https://www.cgu.edu.tw/Uploads/Logo/226cbf55-707f-4b74-88eb-61a390e760e2.png" alt="CUG AI Centre" className="login-img"/><br/>
                 <h2>Login</h2><br/>
                 <FormControl className="mb-3">
                     <InputGroup>

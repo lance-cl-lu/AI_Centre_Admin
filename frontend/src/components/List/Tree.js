@@ -1,34 +1,75 @@
-import Tree from 'react-animated-tree'
-import { useContext, useEffect } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthContext from '../../context/AuthContext';
-import { AuthProvider } from '../../context/AuthContext';
-import { Link } from 'react-router-dom';
-import { Card } from 'react-bootstrap';
-import "./Tree.css";
-function TreeView() {
-    let {userlist, getUserList} = useContext(AuthContext);
-    useEffect(() => {
-        getUserList();
-    }, []);
-    
-    return (
-        <div className='tree'>
-            <AuthProvider>
-                <Card>
-                    <Card.Header>Group List</Card.Header>
-                    <div className="TreeStyle" style={{fontFamily: "Segoe UI", padding: "10px", margin: "10px"}}>
-                    {userlist && userlist.map((user, index) => (
-                        <Tree content={<Link to="/lab" state={{ "lab": user.group_dn }} style={{textDecoration: 'none', color: "#242424"}} className="TreeStyle">{user.group_dn}</Link>} type="Group" key={index}>
-                            {user.member_uids.map((memberUid, index) => (
-                                <Tree content={<Link to="/user" state={{ "user": memberUid }} style={{textDecoration: 'none', color: "#242424"}}>{memberUid}</Link>} type="User" key={index}/>
-                            ))}
-                        </Tree>
-                    ))}
-                    </div>
-                </Card>
+import './Tree.css';
 
-            </AuthProvider>
+const TreeView = () => {
+  const { userlist, getUserList } = useContext(AuthContext);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    getUserList();
+  }, []);
+
+  const toggleGroup = (groupDn) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupDn]: !prev[groupDn]
+    }));
+  };
+
+  const handleGroupClick = (e, groupDn) => {
+    // 避免箭頭點擊也觸發跳轉
+    if (e.target.closest('.arrow')) return;
+    navigate('/lab', { state: { lab: groupDn } });
+  };
+
+  const ArrowIcon = ({ expanded }) => (
+    <svg
+      className="arrow"
+      viewBox="0 0 24 24"
+      style={{
+        transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+        fill: '#888'
+      }}
+    >
+      <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
+    </svg>
+  );
+
+  return (
+    <div className="tree-container">
+      {userlist && userlist.map((user, index) => (
+        <div key={index}>
+          <div
+            className="group-row"
+            onClick={(e) => handleGroupClick(e, user.group_dn)}
+          >
+            <div onClick={() => toggleGroup(user.group_dn)}>
+              <ArrowIcon expanded={expandedGroups[user.group_dn]} />
+            </div>
+            <span className="group-label">{user.group_dn}</span>
+          </div>
+
+          {expandedGroups[user.group_dn] && (
+            <div className="member-list">
+              {user.member_uids.map((uid, idx) => (
+                <Link
+                  key={idx}
+                  to="/user"
+                  state={{ user: uid }}
+                  className="member-item"
+                >
+                  {uid}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
-    );
-}
+      ))}
+    </div>
+  );
+};
+
 export default TreeView;
