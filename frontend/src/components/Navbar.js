@@ -20,7 +20,7 @@ function Navbar() {
         <li className="nav-logo">
           <Link to="/">
             <img
-              src="https://www.cgu.edu.tw/Uploads/Logo/226cbf55-707f-4b74-88eb-61a390e760e2.png"
+              src="/static/aic.png"
               alt="CUG AI Centre"
               className="nav-logo-img"
             />

@@ -290,7 +290,7 @@ function Lab() {
 
         <Link to="/add/user" state={{ group: state.lab }} className="link-with-icon">
           <img
-            src="https://www.cgu.edu.tw/Uploads/upload/ae164021-14c4-43cc-9672-a0e740843bae.png"
+            src="/static/add-user.png"
             alt="Add New Icon"
             className="icon"
           />
@@ -301,7 +301,7 @@ function Lab() {
           <>
             <span onClick={handleMultipleRemove} className="link-with-icon" style={{ cursor: 'pointer' }}>
               <img
-                src="https://www.cgu.edu.tw/Uploads/upload/2cf1239c-f4b0-4e20-ba3d-307f9ddb6d0d.png"
+                src="/static/remove-user.png"
                 alt="Remove Icon"
                 className="icon"
               />
@@ -310,7 +310,7 @@ function Lab() {
 
             <span onClick={handleMultipleDelete} className="link-with-icon" style={{ cursor: 'pointer' }}>
               <img
-                src="https://www.cgu.edu.tw/Uploads/upload/64f74f69-6c8f-43f1-8fe6-55c850f68a1d.png"
+                src="/static/delete-user.png"
                 alt="Delete Icon"
                 className="icon"
               />
@@ -321,7 +321,7 @@ function Lab() {
 
         <span onClick={handleExport} className="link-with-icon" style={{ cursor: 'pointer' }}>
           <img
-            src="https://www.cgu.edu.tw/Uploads/upload/dda8f7ac-8876-43d0-940d-4eb084fd9ad8.png"
+            src="/static/export.png"
             alt="Export Icon"
             className="icon"
           />
@@ -330,7 +330,7 @@ function Lab() {
 
         <Link to="import" state={{ lab: state.lab }} className="link-with-icon">
           <img
-            src="https://www.cgu.edu.tw/Uploads/upload/7fc516af-0adb-4f48-a11d-e5065576fa8e.png"
+            src="/static/folder.png"
             alt="Import Icon"
             className="icon"
           />
@@ -339,7 +339,7 @@ function Lab() {
 
         <Link to="/edit/group" state={{ lab: state.lab }} className="link-with-icon">
           <img
-            src="https://www.cgu.edu.tw/Uploads/upload/ee935aa7-7672-4350-b860-9ce3c4e4582f.png"
+            src="/static/edit.png"
             alt="Edit Icon"
             className="icon"
           />
@@ -443,7 +443,7 @@ function Lab() {
                       style={{ cursor: 'pointer' }}
                     >
                       <img
-                        src="https://www.cgu.edu.tw/Uploads/upload/2cf1239c-f4b0-4e20-ba3d-307f9ddb6d0d.png"
+                        src="/static/remove-user.png"
                         alt="Remove Icon"
                         className="icon"
                       />
@@ -451,7 +451,7 @@ function Lab() {
                     </span>
                     <Link to="/user" state={{ user: memberUid }} className="link-with-icon">
                       <img
-                        src="https://www.cgu.edu.tw/Uploads/upload/ee935aa7-7672-4350-b860-9ce3c4e4582f.png"
+                        src="/static/edit.png"
                         alt="Edit Icon"
                         className="icon"
                       />
@@ -510,7 +510,7 @@ function Lab() {
                       style={{ cursor: 'pointer' }}
                     >
                       <img
-                        src="https://www.cgu.edu.tw/Uploads/upload/64f74f69-6c8f-43f1-8fe6-55c850f68a1d.png"
+                        src="/static/delete-user.png"
                         alt="Delete Icon"
                         className="icon"
                       />
@@ -518,7 +518,7 @@ function Lab() {
                     </span>
                     <Link to="/password" state={{ user: memberUid }} className="link-with-icon">
                       <img
-                        src="https://www.cgu.edu.tw/Uploads/upload/edd13300-5c0a-4304-be20-026bee3b9138.png"
+                        src="/static/password.png"
                         alt="Change Password Icon"
                         className="icon"
                       />
@@ -534,7 +534,7 @@ function Lab() {
       <div className="delete-group-container">
         <span onClick={deleteGroup} className="link-with-icon" style={{ cursor: 'pointer' }}>
           <img
-            src="https://www.cgu.edu.tw/Uploads/upload/0e801b6c-938f-4926-a005-b43ea832806a.png"
+            src="/static/delete-user.png"
             alt="Delete Group Icon"
             className="icon"
           />

@@ -4,6 +4,7 @@ cp -f ../frontend/build/index.html frontend/templates/frontend/
 rm -rf static
 mkdir static
 cp -a ../frontend/build/* static/
+cp -a ../frontend/icons/* static/
 rm -f static/index.html
 
 sed -i 's/"\/manifest.json"/"{% static "\/manifest.json" %}"/' frontend/templates/frontend/index.html 
