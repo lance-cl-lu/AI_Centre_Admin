@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import './Lab.css';
 
 function Lab() {
   const location = useLocation();
@@ -282,7 +281,7 @@ function Lab() {
       <div className="button-group">
         <Link to="/insert" state={{ group: state.lab }} className="link-with-icon">
           <img
-            src="https://www.cgu.edu.tw/Uploads/upload/a2b6632c-c69c-4f98-adfc-212ed310cb4f.png"
+            src="/static/add-user.png"
             alt="Add Existed Icon"
             className="icon"
           />
