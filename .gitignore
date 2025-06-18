@@ -4,6 +4,8 @@ AI_LDAP_admin/api/__pycache__/*
 AI_LDAP_admin/frontend/migrations/__init__.py
 AI_LDAP_admin/frontend/templates/frontend/*
 AI_LDAP_admin/static/*
+frontend/static
+frontend/static.tgz
 
 # pkg and bin directories currently contain build artifacts
 # only so we exclude them.
