@@ -1523,7 +1523,7 @@ def import_lab_user(request):
                 failed_user.append({user['username']: "email is exist in database"})
                 userinfo.remove(user)
                 continue
-                        # if user is exist in kubeflow
+            # if user is exist in kubeflow
             if get_profile_by_email(user['email']) is not None:
                 failed_user.append({user['username']: "email is exist in kubeflow"})
                 userinfo.remove(user)
