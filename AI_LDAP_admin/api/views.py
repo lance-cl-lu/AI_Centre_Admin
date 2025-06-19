@@ -766,7 +766,10 @@ def adduser(request):
     try:
         conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
         for entry in conn.entries:
-            return Response(status=500, data={"message": "Username is exist from ldap and the email is {}, username is {}".format(entry.mail.value, entry.cn.value)})
+            # 刪除該 entry
+            conn.delete(entry.entry_dn)
+            # 不 return，繼續執行
+            #return Response(status=500, data={"message": "Username is exist from ldap and the email is {}, username is {}".format(entry.mail.value, entry.cn.value)})
     except:
         pass
         
@@ -1520,21 +1523,26 @@ def import_lab_user(request):
                 failed_user.append({user['username']: "email is exist in database"})
                 userinfo.remove(user)
                 continue
-            # if user is exist in ldap
-            try:
-                conn = connectLDAP()
-                conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
-                for entry in conn.entries:
-                    failed_user.append({user['username']: "username is exist in ldap"})
-                    userinfo.remove(user)
-                    continue
-            except:
-                pass
-            # if user is exist in kubeflow
+                        # if user is exist in kubeflow
             if get_profile_by_email(user['email']) is not None:
                 failed_user.append({user['username']: "email is exist in kubeflow"})
                 userinfo.remove(user)
                 continue
+
+            # if user is exist in ldap, Lance - must check in the last step, because if user is exist in ldap, it will be deleted
+            try:
+                conn = connectLDAP()
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
+                for entry in conn.entries:
+                    #. failed_user.append({user['username']: "username is exist in ldap"})
+                    # userinfo.remove(user)
+                    # continue
+                    # 刪除該 entry
+                    conn.delete(entry.entry_dn)
+                    # 不 pass，繼續執行
+            except:
+                pass
+
         # add user into django, ldap, and kubeflow
         for user in userinfo:
             # convert cpu value to correct format, from 8800m remove m and devide to 8 ,  if more than 1100
