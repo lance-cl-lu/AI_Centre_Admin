@@ -441,10 +441,12 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
 
     if str(memoryStr) != '0Gi':
         memoryIntStr = memoryStr[:-2]
-        memorydecimal = float(memoryIntStr)
-        memorydecimal = memorydecimal/10
+        # memorydecimal = float(memoryIntStr)
+        # memorydecimal = memorydecimal/10
+        # memoryinteger = float(memoryIntStr)
+        # memoryfinal = memorydecimal+memoryinteger
         memoryinteger = float(memoryIntStr)
-        memoryfinal = memorydecimal+memoryinteger
+        memoryfinal = memoryinteger + 2 # add 2Gi to the memory
         resourceQuotaSpec["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
         
     if str(gpu) != '0':
@@ -713,6 +715,22 @@ def editlab(request):
         groupDefaultQuota.save()
     else:
         GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+
+    ### get the user info from database
+    for user in User.objects.filter(groups=group):
+        profileName = get_profile_by_email(user.email)
+        replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
+        permission = get_permission(user.username, labname)
+        print("permission = ", permission)
+        manager = 'user'
+        if permission == 'admin':
+            manager = 'manager'
+        elif permission == 'user':
+            manager = 'user'
+        print("manager = ", manager)
+        profileName = get_profile_by_email(user.email)
+        replace_profile_user(profileName, manager,cpuQuota,gpuQuota,memQuota)
+
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
 @api_view(['POST'])
@@ -1091,7 +1109,8 @@ def change_user_info(request):
                 manager = 'manager'
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
-            print("manager = ", manager)    
+            print("manager = ", manager) 
+            profileName = get_profile_by_email(user_obj.email)
             replace_profile_user(profileName, manager,cpu_quota,gpu_quota,mem_quota)
         return Response(status=200)
     except:
