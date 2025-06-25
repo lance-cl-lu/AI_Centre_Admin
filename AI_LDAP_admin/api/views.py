@@ -703,6 +703,19 @@ def editlab(request):
         return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")
     if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
         return Response(status=500, data="gpuVendor is not valid")
+    
+    try:
+        groupDefaultQuota = GroupDefaultQuota.objects.get(labname=Group.objects.get(name=labname))
+        defaultCpuQuota = groupDefaultQuota.cpu_quota
+        defaultMemQuota = groupDefaultQuota.mem_quota
+        defaultGpuQuota = groupDefaultQuota.gpu_quota
+        defaultGpuVendor = groupDefaultQuota.gpu_vendor
+    except:
+        defaultCpuQuota = 0
+        defaultMemQuota = 0
+        defaultGpuQuota = 0
+        defaultGpuVendor = "NVIDIA"
+    
     group = Group.objects.get(name=labname)
     if group is None:
         return Response(status=500, data="lab is not exist")
@@ -721,17 +734,61 @@ def editlab(request):
     ### get the user info from database
     for user in User.objects.filter(groups=group):
         profileName = get_profile_by_email(user.email)
-        replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
-        permission = get_permission(user.username, labname)
-        print("permission = ", permission)
-        manager = 'user'
-        if permission == 'admin':
-            manager = 'manager'
-        elif permission == 'user':
+        
+        profile = get_profile_content(profileName)
+        userMemory = ""
+        userCpu = ""
+        userGpu = ""
+        if profile is not None:
+            # print(profileName)
+            # add try error control below
+            try:
+                userCpu = profile["metadata"]["annotations"]["cpu"]
+            except:
+                try:
+                    userCpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+                except:
+                    userCpu = "0"
+
+            try:
+                userGpu = profile["metadata"]["annotations"]["gpu"]
+            except:
+                try:
+                    userGpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+                except:
+                    userGpu = "0"
+
+            try:
+                userMemory = profile["metadata"]["annotations"]["memory"]
+            except:
+                try:
+                    userMemory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                    userMemory = userMemory[:-2]
+                except:
+                    userMemory = "0"
+                    
+        else:
+            print("Profile not found")
+            userMemory = "0"
+            userCpu = "0"
+            userGpu = "0"
+
+        print("cpu = {}, gpu = {}, memory = {}".format(userCpu, userGpu, userMemory))
+        print("defaultCpuQuota = {}, defaultMemQuota = {}, defaultGpuQuota = {}".format(defaultCpuQuota, defaultMemQuota, defaultGpuQuota))
+
+        # 新增檢查：只有當 user 與 default quota 不相等時才執行後續動作
+        if str(userCpu) == str(defaultCpuQuota) and str(userGpu) == str(defaultGpuQuota) and str(userMemory) == str(defaultMemQuota):
+            replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
+            permission = get_permission(user.username, labname)
+            print("permission = ", permission)
             manager = 'user'
-        print("manager = ", manager)
-        profileName = get_profile_by_email(user.email)
-        replace_profile_user(profileName, manager,cpuQuota,gpuQuota,memQuota)
+            if permission == 'admin':
+                manager = 'manager'
+            elif permission == 'user':
+                manager = 'user'
+            print("manager = ", manager)
+            profileName = get_profile_by_email(user.email)
+            replace_profile_user(profileName, manager, str(cpuQuota), str(gpuQuota), str(memQuota))
 
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
@@ -1113,7 +1170,7 @@ def change_user_info(request):
                 manager = 'user'
             print("manager = ", manager) 
             profileName = get_profile_by_email(user_obj.email)
-            replace_profile_user(profileName, manager,cpu_quota,gpu_quota,mem_quota)
+            replace_profile_user(profileName, manager, str(cpu_quota), str(gpu_quota), str(mem_quota))
         return Response(status=200)
     except:
         return Response(status=500)
