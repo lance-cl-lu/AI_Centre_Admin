@@ -380,10 +380,12 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
 
     if memoryStr != '0Gi':
         memoryIntStr = memoryStr[:-2]
-        memorydecimal = float(memoryIntStr)
-        memorydecimal = memorydecimal/10
+        # memorydecimal = float(memoryIntStr)
+        # memorydecimal = memorydecimal/10
+        # memoryinteger = float(memoryIntStr)
+        # memoryfinal = memorydecimal+memoryinteger
         memoryinteger = float(memoryIntStr)
-        memoryfinal = memorydecimal+memoryinteger
+        memoryfinal = memoryinteger + 2 # add 2Gi to the memory
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
     
     if gpu != '0' or gpu != 0:
