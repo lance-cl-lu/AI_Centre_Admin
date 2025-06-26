@@ -16,42 +16,56 @@ function LabImport() {
 
         const fileInput = document.getElementById('file');
         if (!fileInput.files[0]) {
-        alert('Please select an Excel file');
-        return;
+            alert('Please select an Excel file');
+            return;
         }
 
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
         formData.append('lab', lab);
 
-        try {
-        const response = await fetch('/api/ldap/lab/excel/import/', {
-            method: 'POST',
-            headers: {
-            // No need for Content-Type when sending FormData
-            // 'Content-Type': 'application/json',
-            },
-            body: formData,
+        // 顯示 loading dialog
+        Swal.fire({
+            title: 'Uploading...',
+            text: 'Please wait while uploading the Excel file.',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
         });
 
-        if (response.status === 200) {
-            Swal.fire({
-                title: 'Excel added successfully',
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false,
+        try {
+            const response = await fetch('/api/ldap/lab/excel/import/', {
+                method: 'POST',
+                headers: {
+                    // No need for Content-Type when sending FormData
+                    // 'Content-Type': 'application/json',
+                },
+                body: formData,
             });
-            setTimeout(() => {
-                window.history.back();
-            }, 2000);
-        } else {
-            // alert error message
-            let data = await response.json();
-            alert(data['message']);
-        }
+
+            // 關閉 loading dialog
+            Swal.close();
+
+            if (response.status === 200) {
+                Swal.fire({
+                    title: 'Excel added successfully',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false,
+                });
+                setTimeout(() => {
+                    window.history.back();
+                }, 2000);
+            } else {
+                // alert error message
+                let data = await response.json();
+                alert(data['message']);
+            }
         } catch (error) {
-        console.error('Error adding Excel:', error);
-        alert('An error occurred while adding Excel');
+            Swal.close();
+            console.error('Error adding Excel:', error);
+            alert('An error occurred while adding Excel');
         }
     };
     const handeCancel = () => {
