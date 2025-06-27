@@ -24,5 +24,5 @@ kubectl exec -n ldap ${POD} -- sh -c "cd /;rm -rf /static; tar xzvf static.tgz; 
 kubectl exec -n ldap ${POD} -- sh -c "cd /;cp -f index.html /code/frontend/templates/frontend/"
 
 rm -f static.tgz
-rm -rf static
+# rm -rf static
 exit 0

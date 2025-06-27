@@ -99,6 +99,15 @@ function AddUser() {
         }
         
         if(e.target[6].value===e.target[7].value){
+            // 顯示 loading dialog
+            Swal.fire({
+                title: 'Submitting...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
             let response = await fetch('/api/ldap/user/add/', {
                 method: 'POST',
                 headers: {
@@ -119,6 +128,9 @@ function AddUser() {
                     "gpu_vendor":e.target[12].value,
                 }),
             });
+
+            Swal.close(); // 關閉 loading dialog
+
             if(response.status===200){
                 Swal.fire({
                     title: 'User created successfully',
@@ -127,11 +139,9 @@ function AddUser() {
                     timer: 2000
                 })
                 setTimeout(() => {
-                    // previous page
                     window.history.back();
                 }, 2000);
             } else if(response.status===500){ 
-                // get message from response
                 let data = await response.json();
                 Swal.fire({
                     title: data['message'],
@@ -139,14 +149,24 @@ function AddUser() {
                     timer: 10000,
                     timerProgressBar: true,
                 })
-                // clear the password
                 e.target[6].value = '';
                 e.target[7].value = '';
             } else {
-                alert('User create error');
+                Swal.fire({
+                    title: 'User create error',
+                    icon: 'error',
+                    timer: 3000,
+                    timerProgressBar: true,
+                });
             }
+            
         } else {
-            alert('Passwords do not match');
+            Swal.fire({
+                title: 'Passwords do not match',
+                icon: 'error',
+                timer: 2000,
+                timerProgressBar: true,
+            });
         }
     }
 
