@@ -96,11 +96,20 @@ function Lab() {
       reverseButtons: true
     }).then((result) => {
       if (result.isConfirmed) {
+        // 顯示 loading
+        Swal.fire({
+          title: 'Deleting...',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
         fetch("/api/ldap/lab/delete/", {
           method: "POST",
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lab: state.lab })
         }).then((response) => {
+          Swal.close(); // 關閉 loading
           if (response.status === 200) {
             Swal.fire({
               title: 'Deleted!',
@@ -476,11 +485,20 @@ function Lab() {
                           reverseButtons: true
                         }).then((result) => {
                           if (result.isConfirmed) {
+                            // 顯示 loading
+                            Swal.fire({
+                              title: 'Deleting...',
+                              allowOutsideClick: false,
+                              didOpen: () => {
+                                Swal.showLoading();
+                              }
+                            });
                             fetch("/api/ldap/user/delete/", {
                               method: "POST",
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ username: memberUid })
                             }).then((response) => {
+                              Swal.close(); // 關閉 loading
                               if (response.status === 200) {
                                 Swal.fire({
                                   title: 'Deleted!',

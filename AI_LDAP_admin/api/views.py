@@ -1661,7 +1661,10 @@ def import_lab_user(request):
                 # add user into kubeflow's profile
                 k8s_password = row[1].value
                 k8s_name = row[3].value + ' ' + row[4].value
-                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'], fullname=k8s_name, password=k8s_password)
+                manager = 'user'
+                if user['permission'] == 'admin':
+                    manager = 'manager'
+                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=manager, fullname=k8s_name, password=k8s_password)
             except:
                 # if user is not added into kubeflow, remove the user from database
                 print(traceback.format_exc())
