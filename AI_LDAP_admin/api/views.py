@@ -881,7 +881,8 @@ def adduser(request):
             #return Response(status=500, data={"message": "Username is exist from ldap and the email is {}, username is {}".format(entry.mail.value, entry.cn.value)})
     except:
         pass
-        
+    conn.unbind()
+
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
     k8s_date = str(datetime.datetime.now())
@@ -965,7 +966,7 @@ def syschronize_ldap(requset):
     account_list = []
     for entry in conn.entries:
         account_list.append(entry.entry_gidNumber)
-        conn.unbind()
+    conn.unbind()
     # get the user with corresponding group
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
@@ -1060,6 +1061,7 @@ def deleteUserModel(username):
     k8s_email = user_obj.email    
     User.objects.get(username=username).delete()
     delete_profile(profileName, k8s_email, k8s_name)
+    conn.unbind()
 
 @api_view(['POST'])
 def user_delete(request):
@@ -1167,6 +1169,8 @@ def change_user_info(request):
             conn.modify(entry.entry_dn, {'givenName':[(MODIFY_REPLACE, [firstname])]})
             conn.modify(entry.entry_dn, {'sn':[(MODIFY_REPLACE, [lastname])]})
             conn.modify(entry.entry_dn, {'mail': [(MODIFY_REPLACE, [email])]})
+        conn.unbind()
+            
         user = User.objects.get(username=username)
         user.first_name = firstname
         user.last_name = lastname
@@ -1316,6 +1320,7 @@ def excel(request):
                 'userPassword': ldap_md5.hash(row[2].value), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
                 'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
                 'shadowExpire': '99999', 'Description': [row[1].value]})
+            conn.unbind()
             # add user into database
             if row[6].value == 'admin':
                 UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=row[1].value))
@@ -1653,6 +1658,7 @@ def import_lab_user(request):
                     # 刪除該 entry
                     conn.delete(entry.entry_dn)
                     # 不 pass，繼續執行
+                conn.unbind()    
             except:
                 pass
 
@@ -1739,6 +1745,7 @@ def db_ldap_check(request):
     ldap_user = []
     for entry in conn.entries:
         ldap_user.append(entry.cn.value)
+    conn.unbind()
     django_user = []
     for user in User.objects.all():
         django_user.append(user.username)
@@ -1858,6 +1865,7 @@ def remove_multiple_user_from_lab(request):
         conn.search('dc={},ou=users,dc=example,dc=org'.format(user), '(objectclass=posixAccount)', attributes=['Description'])
         for entry in conn.entries:
             conn.modify(entry.entry_dn, {'Description': [(MODIFY_DELETE, [group])]})
+    conn.unbind()        
     return Response(status=200)
 
 @api_view(['GET'])
