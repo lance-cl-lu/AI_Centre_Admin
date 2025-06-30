@@ -561,6 +561,7 @@ def get_group_corresponding_user(request):
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
     print("detail_obj = ", detail_obj)
     print(len(detail_obj))
+
     if len(detail_obj) == 1:
         # print(detail_obj[0].permission)
         if detail_obj[0].permission == 0:
@@ -569,9 +570,20 @@ def get_group_corresponding_user(request):
                     continue
                 User.objects.filter(groups=group)
                 user_list = []
+                # check ldap is exist or not
+                conn = connectLDAP()
                 for user in User.objects.filter(groups=group):
-                    user_list.append(user.username)
+                    try:
+                        found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
+                        if not found or len(conn.entries) == 0:
+                            print(f"LDAP search: user '{user.username}' not found.")
+                        else:
+                            print(f"LDAP search: user '{user.username}' found.")
+                            user_list.append(user.username)
+                    except Exception as e:
+                        print(f"LDAP search error: {e}")
                 group_list.append({"group_dn": group.name, "member_uids": user_list})
+                conn.unbind()
             return Response(group_list, status=200)
         elif detail_obj[0].permission == 1:
             # get only the group that user is in
@@ -580,10 +592,21 @@ def get_group_corresponding_user(request):
                     continue
                 User.objects.filter(groups=group_item.labname)
                 user_list = []
+                # check ldap is exist or not
+                conn = connectLDAP()
                 for user in User.objects.filter(groups=group_item.labname):
-                    user_list.append(user.username)
+                    try:
+                        found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
+                        if not found or len(conn.entries) == 0:
+                            print(f"LDAP search: user '{user.username}' not found.")
+                        else:
+                            print(f"LDAP search: user '{user.username}' found.")
+                            user_list.append(user.username)
+                    except Exception as e:
+                        print(f"LDAP search error: {e}")
                 group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
                 print("group_list = ", group_list)
+                conn.unbind()
             return Response(group_list, status=200)
         return Response(group_list, status=200)
     else:
@@ -593,6 +616,7 @@ def get_group_corresponding_user(request):
 
             # if root user, get all group
             print(group_item.permission)
+            conn = connectLDAP()
             if group_item.permission == 0:
                 for group in Group.objects.all():
                     if(group.name == 'root'):
@@ -600,15 +624,32 @@ def get_group_corresponding_user(request):
                     User.objects.filter(groups=group)
                     user_list = []
                     for user in User.objects.filter(groups=group):
-                        user_list.append(user.username)
+                        try:
+                            found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*']) 
+                            if not found or len(conn.entries) == 0:
+                                print(f"LDAP search: user '{user.username}' not found.")
+                            else:
+                                print(f"LDAP search: user '{user.username}' found.")                       
+                                user_list.append(user.username)
+                        except Exception as e:
+                            print(f"LDAP search error: {e}")                                
                     group_list.append({"group_dn": group.name, "member_uids": user_list})
                 return Response(group_list, status=200)
             
             User.objects.filter(groups=group_item.labname)
             user_list = []
             for user in User.objects.filter(groups=group_item.labname):
-                user_list.append(user.username)
-            group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list}) 
+                try:
+                    found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*']) 
+                    if not found or len(conn.entries) == 0:
+                        print(f"LDAP search: user '{user.username}' not found.")
+                    else:
+                        print(f"LDAP search: user '{user.username}' found.") 
+                        user_list.append(user.username)
+                except Exception as e:
+                    print(f"LDAP search error: {e}")                          
+            group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
+            conn.unbind()
         return Response(group_list, status=200)            
     return Response(group_list, status=200)
 
