@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import AuthContext from "../context/AuthContext";
 import Swal from 'sweetalert2';
 
 function Lab() {

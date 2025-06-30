@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useContext } from 'react'
 //import jwt_decode from "jwt-decode";
 import './User.css'
 import { Button, Form, FloatingLabel } from 'react-bootstrap';
@@ -6,10 +6,13 @@ import { useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2'
 import Toast from 'react-bootstrap/Toast';
 import WarningIcon from '@mui/icons-material/Warning';
+import AuthContext from "../../context/AuthContext";
 
 function AddUser() {
+    let {user} = useContext(AuthContext);
     const [lab, setLab] = useState([]);
-    const [isGPUQuotaDisabled, setIsGPUQuotaDisabled] = useState(true); // State to manage GPUQuota disabled state
+    const [isGPUQuotaDisabled, setIsGPUQuotaDisabled] = useState(true);
+    const [permission, setPermission] = useState("user"); // 新增 permission 狀態
     const group = useLocation().state['group'];
     console.log(group);
     //const state = useLocation().state; 
@@ -26,6 +29,7 @@ function AddUser() {
             },
             body: JSON.stringify({
                 labname: document.getElementById('addUserGroup').value,
+                user: user.username, // 加入這一行
             }),
         })
         .then(response => response.json())
@@ -34,6 +38,7 @@ function AddUser() {
             document.getElementById('memQuota').value = data['mem_quota'];
             document.getElementById('GPUQuota').value = data['gpu_quota'];
             document.getElementById('GPUVendor').value = data['gpu_vendor'];
+            setPermission(data['permission']); // 設定 permission
         })
         .catch((error) => {
             console.error('Error:', error);
@@ -206,7 +211,11 @@ function AddUser() {
                         </Form.Control>
                     </Form.Group>
                     <Form.Group className="mb-3" controlId="formBasicEmail" style={{display:"flex", justifyContent:"space-evenly"}}>
-                        <Form.Check type="checkbox" label="Is Group Manager" />
+                        <Form.Check
+                            type="checkbox"
+                            label="Is Group Manager"
+                            disabled={permission !== "root"}
+                        />
                     </Form.Group>
                     <Form.Group className="mb-3" controlId="formBasicPassword"  style={{display:"flex", justifyContent:"space-evenly", alignItems:"center", margin:"12px"}}>
                         <Form.Label style={{width:"20%"}}>Password</Form.Label>

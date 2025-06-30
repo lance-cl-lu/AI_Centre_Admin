@@ -557,10 +557,12 @@ def get_group_corresponding_user(request):
     user = data['user']
     group_list = []
     user_obj = User.objects.get(username=user)
+    print("user_obj = ", user_obj)
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+    print("detail_obj = ", detail_obj)
     print(len(detail_obj))
     if len(detail_obj) == 1:
-        print(detail_obj[0].permission)
+        # print(detail_obj[0].permission)
         if detail_obj[0].permission == 0:
             for group in Group.objects.all():
                 if(group.name == 'root'):
@@ -581,6 +583,7 @@ def get_group_corresponding_user(request):
                 for user in User.objects.filter(groups=group_item.labname):
                     user_list.append(user.username)
                 group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
+                print("group_list = ", group_list)
             return Response(group_list, status=200)
         return Response(group_list, status=200)
     else:
@@ -624,6 +627,9 @@ def get_all_user_permission(user, labname):
 def get_lab_info(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
+    # user = data['user']
+    print("labname = ", labname)
+    # print("user = ", user)
     ### get the group info from database
     group = Group.objects.get(name=labname)
     ### get the user info from database
@@ -796,18 +802,44 @@ def editlab(request):
 def get_default_values(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['labname']
+    user = data['user']
+    print("labname = ", labname)
+    print("user = ", user)
+    user_obj = User.objects.get(username=user)
+    detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+    print("detail_obj = ", detail_obj)
+    permission = 'user'
+    if len(detail_obj) == 1:
+        if detail_obj[0].permission == 0:
+             permission = 'root'
+        elif detail_obj[0].permission == 1:
+            permission = 'admin'
+        elif detail_obj[0].permission == 2:
+            permission = 'user'
+    
+    print("permission = ", permission)
+
     try:
         groupDefaultQuota = GroupDefaultQuota.objects.get(labname=Group.objects.get(name=labname))
         cpuQuota = groupDefaultQuota.cpu_quota
         memQuota = groupDefaultQuota.mem_quota
         gpuQuota = groupDefaultQuota.gpu_quota
         gpuVendor = groupDefaultQuota.gpu_vendor
+        permission = permission
     except:
         cpuQuota = 0
         memQuota = 0
         gpuQuota = 0
         gpuVendor = "NVIDIA"
-    return Response({"cpu_quota": cpuQuota, "mem_quota": memQuota, "gpu_quota": gpuQuota, "gpu_vendor": gpuVendor}, status=200)
+        permission = 'user'
+
+    return Response({
+        "cpu_quota": cpuQuota,
+        "mem_quota": memQuota,
+        "gpu_quota": gpuQuota,
+        "gpu_vendor": gpuVendor,
+        "permission": permission   # <--- 加上這行
+    }, status=200)
 
 @api_view(['POST'])
 def adduser(request):
@@ -1032,6 +1064,8 @@ def deleteUserModel(username):
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
+    group_list = get_user_all_groups(data['username'])
+    print("group_list = ", group_list)
     deleteUserModel(data['username'])
     return Response(status=200)
 
@@ -1363,6 +1397,7 @@ def export_ldap(request):
             #    memory = "0"
         else:
             print("Profile not found")
+           
             memory = "0"
             cpu = "0"
             gpu = "0"
@@ -1707,8 +1742,15 @@ def db_ldap_check(request):
     django_user = []
     for user in User.objects.all():
         django_user.append(user.username)
+    # Lance fix TypeError: unhashable type: 'list'
+    ldap_user = [u[0] if isinstance(u, list) else u for u in ldap_user]
+    django_user = [u[0] if isinstance(u, list) else u for u in django_user]
+    print("ldap_user = ", ldap_user)
+    print("django_user = ", django_user)
+    # find the user in ldap but not in django
     unsycho_user = list(set(ldap_user) - set(django_user))
     if unsycho_user != []:
+        print("unsycho_user = ", unsycho_user)
         return Response(unsycho_user, status=200)
     return Response(status=200)
 
