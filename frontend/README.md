@@ -14,7 +14,7 @@ In the project directory, you can run:
 Check Node.js version — currently v18.19.1.
 
 ### `npm i`
-Check Node.js version — currently v18.19.1.
+Install Modules.
 
 ### `npm version`
 Check Node.js version — currently v18.19.1.
