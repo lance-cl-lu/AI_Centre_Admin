@@ -1,11 +1,45 @@
-import React, { useState, useEffect} from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import "./User.css";
 import { Col, Form, ListGroup, Row, FloatingLabel } from 'react-bootstrap';
-import { Button, Card, Box } from '@chakra-ui/react';
+import { Button, Card, Box, Spinner } from '@chakra-ui/react';
 import jwt_decode from "jwt-decode";
 import ListNoteBook from './ListNoteBook';
 import Swal from 'sweetalert2';
+
+// TODO: 之後改成串接 K8s/Prometheus 的即時使用量資料。
+const buildFallbackUsageData = () => {
+    const formatPeriod = (date) => `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    return [
+        {
+            period: formatPeriod(now),
+            cpuHours: 1345,
+            cpuCost: 1345,
+            gpuHours: 2234,
+            gpuCost: 2222,
+            totalCost: 3567,
+        },
+        {
+            period: formatPeriod(lastMonth),
+            cpuHours: 1280,
+            cpuCost: 1280,
+            gpuHours: 2015,
+            gpuCost: 2015,
+            totalCost: 3295,
+        },
+        {
+            period: formatPeriod(twoMonthsAgo),
+            cpuHours: 1175,
+            cpuCost: 1175,
+            gpuHours: 1890,
+            gpuCost: 1890,
+            totalCost: 3065,
+        },
+    ];
+};
 
 function User() {
     let state = useLocation().state;
@@ -15,6 +49,34 @@ function User() {
     let memoryQuota = 0;
     let gpuQuota = 0;
     const [ userPermission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
+    const [usageVisible, setUsageVisible] = useState(false);
+    const [usageLoading, setUsageLoading] = useState(false);
+    const [usageError, setUsageError] = useState('');
+    const [usageRecords, setUsageRecords] = useState([]);
+    const [selectedUsagePeriod, setSelectedUsagePeriod] = useState('');
+    const usageFetchAbort = useRef(null);
+    const usageFallbackRef = useRef(buildFallbackUsageData());
+    const [usageNotice, setUsageNotice] = useState('');
+    useEffect(() => {
+        if (usageFetchAbort.current) {
+            usageFetchAbort.current.abort();
+            usageFetchAbort.current = null;
+        }
+        setUsageVisible(false);
+        setUsageLoading(false);
+        setUsageError('');
+        setUsageRecords([]);
+        setSelectedUsagePeriod('');
+        setUsageNotice('');
+    }, [state?.user]);
+    useEffect(() => {
+        return () => {
+            if (usageFetchAbort.current) {
+                usageFetchAbort.current.abort();
+                usageFetchAbort.current = null;
+            }
+        }
+    }, []);
     useEffect(() => {
         getuserinfo();
     }, [state]);
@@ -231,6 +293,151 @@ function User() {
             document.getElementById("listNotebook").style.display === "block" ? document.getElementById("listNotebook").style.display = "none" : document.getElementById("listNotebook").style.display = "block";
         }
     }
+    const applyUsageRecords = (records) => {
+        setUsageRecords(records);
+        setSelectedUsagePeriod(records && records.length ? records[0].period : '');
+    };
+    const toNumber = (value) => {
+        if (value === null || value === undefined) {
+            return 0;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const cleaned = value.replace(/[^0-9.-]+/g, '');
+            const parsed = Number(cleaned);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+        return 0;
+    };
+    const normaliseUsagePayload = (payload) => {
+        if (!payload || typeof payload !== 'object') {
+            return [];
+        }
+        if (Array.isArray(payload)) {
+            return payload;
+        }
+        if (Array.isArray(payload.records)) {
+            return payload.records;
+        }
+        if (payload.records && typeof payload.records === 'object') {
+            return Object.entries(payload.records).map(([key, value]) => ({ period: key, ...value }));
+        }
+        if (Array.isArray(payload.data)) {
+            return payload.data;
+        }
+        if (payload.data && typeof payload.data === 'object') {
+            return Object.entries(payload.data).map(([key, value]) => ({ period: key, ...value }));
+        }
+        if (Array.isArray(payload.result)) {
+            return payload.result;
+        }
+        if (payload.result && typeof payload.result === 'object') {
+            return Object.entries(payload.result).map(([key, value]) => ({ period: key, ...value }));
+        }
+        return [];
+    };
+    const normaliseUsageRecord = (record, index) => {
+        const period = record.period || record.month || record.date || record.time || record.label || `Period ${index + 1}`;
+        const cpuHours = toNumber(record.cpu_hours ?? record.cpuHours ?? record.cpu_hour ?? record.cpuHour ?? record.cpu);
+        const cpuCost = toNumber(record.cpu_cost_ntd ?? record.cpuCost ?? record.cpu_cost ?? record.cpuCostNtd ?? record.cpu_ntd);
+        const gpuHours = toNumber(record.gpu_hours ?? record.gpuHours ?? record.gpu_hour ?? record.gpuHour ?? record.gpu);
+        const gpuCost = toNumber(record.gpu_cost_ntd ?? record.gpuCost ?? record.gpu_cost ?? record.gpuCostNtd ?? record.gpu_ntd);
+        const totalCostRaw = record.total_cost_ntd ?? record.totalCost ?? record.total_cost ?? record.total_ntd ?? record.total;
+        const totalCost = toNumber(totalCostRaw) || cpuCost + gpuCost;
+        return {
+            period,
+            cpuHours,
+            cpuCost,
+            gpuHours,
+            gpuCost,
+            totalCost,
+        };
+    };
+    const loadUsage = async () => {
+        if (!state?.user) {
+            setUsageError('No user is selected.');
+            setUsageNotice('');
+            applyUsageRecords([]);
+            return;
+        }
+        if (usageFetchAbort.current) {
+            usageFetchAbort.current.abort();
+        }
+        const controller = new AbortController();
+        usageFetchAbort.current = controller;
+        setUsageLoading(true);
+        setUsageError('');
+        setUsageNotice('');
+        try {
+            const response = await fetch('/api/user/usage/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username: state.user }),
+                signal: controller.signal,
+            });
+            const responseText = await response.text();
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            if (!responseText) {
+                throw new Error('Empty usage payload');
+            }
+            let payload = null;
+            try {
+                payload = JSON.parse(responseText);
+            } catch (parseError) {
+                throw new Error('Invalid usage payload');
+            }
+            if (payload.error) {
+                throw new Error(payload.error);
+            }
+            const rawRecords = normaliseUsagePayload(payload);
+            const mappedRecords = rawRecords.map((record, index) => normaliseUsageRecord(record, index)).filter((record) => record.period);
+            if (!mappedRecords.length) {
+                throw new Error('No usage data returned.');
+            }
+            applyUsageRecords(mappedRecords);
+            setUsageNotice('');
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                return;
+            }
+            console.warn('Failed to load usage data, fallback to mock data.', error);
+            setUsageError('');
+            setUsageNotice('暫以示意資料呈現，後續將串接 K8s/Prometheus 資料。');
+            const fallbackRecords = usageFallbackRef.current;
+            if (fallbackRecords && fallbackRecords.length) {
+                applyUsageRecords(fallbackRecords);
+            } else {
+                applyUsageRecords([]);
+            }
+        } finally {
+            if (!controller.signal.aborted) {
+                setUsageLoading(false);
+            }
+            if (usageFetchAbort.current === controller) {
+                usageFetchAbort.current = null;
+            }
+        }
+    };
+    const handleUsageButtonClick = () => {
+        const nextVisible = !usageVisible;
+        setUsageVisible(nextVisible);
+        if (nextVisible && usageRecords.length === 0 && !usageLoading) {
+            loadUsage();
+        }
+    };
+    const formatNumber = (value, maximumFractionDigits = 0) => {
+        return toNumber(value).toLocaleString(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits,
+        });
+    };
+    const selectedUsageRecord = usageRecords.find((record) => record.period === selectedUsagePeriod) || usageRecords[0];
     return (
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
@@ -337,11 +544,68 @@ function User() {
                     <Button colorScheme='red' onClick={deleteUser} className='buttom-button'>Delete</Button>
                     <Button colorScheme='blackAlpha' className='buttom-button'>{user? <Link to='/password' state={state} style={{textDecoration:"none", color:"#fff"}}>Change Password</Link>: null}</Button>
                     <Button colorScheme='yellow' className='buttom-button' onClick={handleShowNotebooks()} style={{display:"none"}} id="showNotebooks">Notebook</Button>
+                    <Button colorScheme='cyan' className='buttom-button' onClick={handleUsageButtonClick}>Usage</Button>
                     <Button colorScheme='orange' className='buttom-button' onClick={() => window.history.back()}> Cancel and Back</Button>
                 </Box>
                 <Card className="card-css" id="listNotebook" style={{display:"none"}}>
                     <ListNoteBook user={state.user}/>
                 </Card>
+                {usageVisible && (
+                    <Card className="card-css usage-card">
+                        <div className="usage-card-header">
+                            <Form.Select
+                                className="usage-select"
+                                value={selectedUsagePeriod || ''}
+                                onChange={(event) => setSelectedUsagePeriod(event.target.value)}
+                                disabled={usageRecords.length === 0 || usageLoading}
+                            >
+                                {usageRecords.length === 0 ? (
+                                    <option value="">No usage data</option>
+                                ) : (
+                                    usageRecords.map((record) => (
+                                        <option key={record.period} value={record.period}>
+                                            {record.period}
+                                        </option>
+                                    ))
+                                )}
+                            </Form.Select>
+                        </div>
+                        <div className="usage-card-body">
+                            {usageLoading ? (
+                                <div className="usage-loading">
+                                    <Spinner size='sm' style={{ marginRight: '8px' }} />
+                                    Loading usage…
+                                </div>
+                            ) : usageError ? (
+                                <div className="usage-error">{usageError}</div>
+                            ) : usageRecords.length === 0 ? (
+                                <div className="usage-empty">No usage data available.</div>
+                            ) : (
+                                <>
+                                    {usageNotice && (
+                                        <div className="usage-notice">{usageNotice}</div>
+                                    )}
+                                    <div className="usage-metrics">
+                                        <div className="usage-metric-row">
+                                            <span className="usage-metric-label">CPU:</span>
+                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.cpuHours, 2)} hours</span>
+                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.cpuCost)} NTD</span>
+                                        </div>
+                                        <div className="usage-metric-row">
+                                            <span className="usage-metric-label">GPU:</span>
+                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.gpuHours, 2)} hours</span>
+                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.gpuCost)} NTD</span>
+                                        </div>
+                                        <div className="usage-metric-row usage-total">
+                                            <span className="usage-metric-label">Total:</span>
+                                            <span className="usage-metric-value usage-total-value">{formatNumber(selectedUsageRecord?.totalCost)} NTD</span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </Card>
+                )}
         </div>
 
     )

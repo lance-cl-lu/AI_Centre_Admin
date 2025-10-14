@@ -4,6 +4,7 @@ import json, random
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
 from django.core.files.storage import default_storage
+import os
 
 from passlib.hash import ldap_md5
 
@@ -22,6 +23,7 @@ from email.mime.text import MIMEText
 import yaml
 import zipfile
 import humps
+import requests
 
 # traceback
 import traceback    

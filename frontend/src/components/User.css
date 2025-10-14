@@ -27,3 +27,56 @@ input, select {
 .alert-btn {
     margin: 10px;
 }
+.usage-card {
+    margin-top: 16px;
+    padding: 16px;
+}
+.usage-card-header {
+    margin-bottom: 12px;
+    max-width: 240px;
+}
+.usage-select {
+    width: 100%;
+}
+.usage-card-body {
+    font-size: 0.95rem;
+}
+.usage-loading,
+.usage-error,
+.usage-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.usage-error {
+    color: #b00020;
+}
+.usage-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.usage-metric-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.usage-metric-label {
+    font-weight: 600;
+    min-width: 56px;
+}
+.usage-metric-value {
+    flex: 1;
+}
+.usage-total-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.usage-total {
+    margin-top: 4px;
+}
+.usage-notice {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 8px;
+}
