@@ -6,8 +6,9 @@ import { Button, Card, Box, Spinner } from '@chakra-ui/react';
 import jwt_decode from "jwt-decode";
 import ListNoteBook from './ListNoteBook';
 import Swal from 'sweetalert2';
+import { promQueryRange, buildNamespaceQuery, buildNamespacePattern } from '../api/prometheus';
 
-// TODO: 之後改成串接 K8s/Prometheus 的即時使用量資料。
+// Fallback mock data when Prometheus data is unavailable.
 const buildFallbackUsageData = () => {
     const formatPeriod = (date) => `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}`;
     const now = new Date();
@@ -39,6 +40,87 @@ const buildFallbackUsageData = () => {
             totalCost: 3065,
         },
     ];
+};
+
+const createMonthlyPeriods = (count = 3, now = new Date()) => {
+    const periods = [];
+    const base = new Date(now);
+    for (let index = 0; index < count; index += 1) {
+        const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - index, 1, 0, 0, 0));
+        let end;
+        if (index === 0) {
+            end = new Date(base);
+        } else {
+            end = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - index + 1, 1, 0, 0, 0));
+        }
+        const label = `${start.getUTCFullYear()}/${String(start.getUTCMonth() + 1).padStart(2, '0')}`;
+        periods.push({
+            label,
+            start,
+            end,
+        });
+    }
+    return periods;
+};
+
+const secondsFromDate = (date) => Math.floor(date.getTime() / 1000);
+
+const extractSeriesValues = (rangeData) => {
+    if (!rangeData || !Array.isArray(rangeData.result) || !rangeData.result.length) {
+        return [];
+    }
+    const [series] = rangeData.result;
+    if (!series || !Array.isArray(series.values)) {
+        return [];
+    }
+    return series.values
+        .map(([timestamp, value]) => [Number(timestamp), Number(value)])
+        .filter(([, value]) => Number.isFinite(value));
+};
+
+const getValueAtOrBefore = (values, targetSeconds) => {
+    let candidate = null;
+    for (let index = 0; index < values.length; index += 1) {
+        const [timestamp, value] = values[index];
+        if (timestamp <= targetSeconds) {
+            candidate = value;
+        } else {
+            break;
+        }
+    }
+    if (candidate === null && values.length) {
+        candidate = values[0][1];
+    }
+    return candidate;
+};
+
+const computeDiffWithinRange = (values, startDate, endDate) => {
+    if (!values || !values.length) {
+        return 0;
+    }
+    const startSeconds = secondsFromDate(startDate);
+    const endSeconds = secondsFromDate(endDate);
+    const startValue = getValueAtOrBefore(values, startSeconds);
+    const endValue = getValueAtOrBefore(values, endSeconds);
+    if (startValue === null || endValue === null) {
+        return 0;
+    }
+    const diff = endValue - startValue;
+    return Number.isFinite(diff) && diff > 0 ? diff : 0;
+};
+
+const minutesToHours = (minutes) => {
+    if (!Number.isFinite(minutes)) {
+        return 0;
+    }
+    return minutes / 60;
+};
+
+const usageRecordHasData = (record) => {
+    return ['cpuHours', 'cpuCost', 'gpuHours', 'gpuCost', 'totalCost'].some((key) => {
+        const value = record[key];
+        return Number.isFinite(value) && value > 0;
+    });
 };
 
 function User() {
@@ -311,50 +393,6 @@ function User() {
         }
         return 0;
     };
-    const normaliseUsagePayload = (payload) => {
-        if (!payload || typeof payload !== 'object') {
-            return [];
-        }
-        if (Array.isArray(payload)) {
-            return payload;
-        }
-        if (Array.isArray(payload.records)) {
-            return payload.records;
-        }
-        if (payload.records && typeof payload.records === 'object') {
-            return Object.entries(payload.records).map(([key, value]) => ({ period: key, ...value }));
-        }
-        if (Array.isArray(payload.data)) {
-            return payload.data;
-        }
-        if (payload.data && typeof payload.data === 'object') {
-            return Object.entries(payload.data).map(([key, value]) => ({ period: key, ...value }));
-        }
-        if (Array.isArray(payload.result)) {
-            return payload.result;
-        }
-        if (payload.result && typeof payload.result === 'object') {
-            return Object.entries(payload.result).map(([key, value]) => ({ period: key, ...value }));
-        }
-        return [];
-    };
-    const normaliseUsageRecord = (record, index) => {
-        const period = record.period || record.month || record.date || record.time || record.label || `Period ${index + 1}`;
-        const cpuHours = toNumber(record.cpu_hours ?? record.cpuHours ?? record.cpu_hour ?? record.cpuHour ?? record.cpu);
-        const cpuCost = toNumber(record.cpu_cost_ntd ?? record.cpuCost ?? record.cpu_cost ?? record.cpuCostNtd ?? record.cpu_ntd);
-        const gpuHours = toNumber(record.gpu_hours ?? record.gpuHours ?? record.gpu_hour ?? record.gpuHour ?? record.gpu);
-        const gpuCost = toNumber(record.gpu_cost_ntd ?? record.gpuCost ?? record.gpu_cost ?? record.gpuCostNtd ?? record.gpu_ntd);
-        const totalCostRaw = record.total_cost_ntd ?? record.totalCost ?? record.total_cost ?? record.total_ntd ?? record.total;
-        const totalCost = toNumber(totalCostRaw) || cpuCost + gpuCost;
-        return {
-            period,
-            cpuHours,
-            cpuCost,
-            gpuHours,
-            gpuCost,
-            totalCost,
-        };
-    };
     const loadUsage = async () => {
         if (!state?.user) {
             setUsageError('No user is selected.');
@@ -371,42 +409,69 @@ function User() {
         setUsageError('');
         setUsageNotice('');
         try {
-            const response = await fetch('/api/user/usage/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ username: state.user }),
+            const namespace = state.user;
+            const namespacePattern = buildNamespacePattern(namespace);
+            const now = new Date();
+            const periods = createMonthlyPeriods(3, now);
+            const rangeStart = periods[periods.length - 1].start;
+            const rangeEnd = new Date(periods[0].end);
+            const queryOptions = {
+                start: rangeStart,
+                end: rangeEnd,
+                step: '1d',
                 signal: controller.signal,
+            };
+            const [cpuCostRange, cpuTimeRange, gpuCostRange, gpuTimeRange] = await Promise.all([
+                promQueryRange({
+                    query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern),
+                    ...queryOptions,
+                }),
+                promQueryRange({
+                    query: buildNamespaceQuery('namespace_cpu_cost_time', namespacePattern),
+                    ...queryOptions,
+                }),
+                promQueryRange({
+                    query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern),
+                    ...queryOptions,
+                }),
+                promQueryRange({
+                    query: buildNamespaceQuery('namespace_gpu_cost_time', namespacePattern),
+                    ...queryOptions,
+                }),
+            ]);
+            const cpuCostValues = extractSeriesValues(cpuCostRange);
+            const cpuTimeValues = extractSeriesValues(cpuTimeRange);
+            const gpuCostValues = extractSeriesValues(gpuCostRange);
+            const gpuTimeValues = extractSeriesValues(gpuTimeRange);
+            const records = periods.map(({ label, start, end }) => {
+                const cpuCostDelta = computeDiffWithinRange(cpuCostValues, start, end);
+                const gpuCostDelta = computeDiffWithinRange(gpuCostValues, start, end);
+                const cpuMinutes = computeDiffWithinRange(cpuTimeValues, start, end);
+                const gpuMinutes = computeDiffWithinRange(gpuTimeValues, start, end);
+                const cpuHours = minutesToHours(cpuMinutes);
+                const gpuHours = minutesToHours(gpuMinutes);
+                const totalCost = cpuCostDelta + gpuCostDelta;
+                return {
+                    period: label,
+                    cpuHours,
+                    cpuCost: cpuCostDelta,
+                    gpuHours,
+                    gpuCost: gpuCostDelta,
+                    totalCost,
+                };
             });
-            const responseText = await response.text();
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+            applyUsageRecords(records);
+            const hasData = records.some(usageRecordHasData);
+            if (hasData) {
+                setUsageNotice('資料來源：Prometheus namespace_cpu_cost / namespace_gpu_cost 指標。');
+            } else {
+                setUsageNotice('Prometheus 尚未回報此使用者的使用紀錄，顯示為 0。');
             }
-            if (!responseText) {
-                throw new Error('Empty usage payload');
-            }
-            let payload = null;
-            try {
-                payload = JSON.parse(responseText);
-            } catch (parseError) {
-                throw new Error('Invalid usage payload');
-            }
-            if (payload.error) {
-                throw new Error(payload.error);
-            }
-            const rawRecords = normaliseUsagePayload(payload);
-            const mappedRecords = rawRecords.map((record, index) => normaliseUsageRecord(record, index)).filter((record) => record.period);
-            if (!mappedRecords.length) {
-                throw new Error('No usage data returned.');
-            }
-            applyUsageRecords(mappedRecords);
-            setUsageNotice('');
         } catch (error) {
             if (error.name === 'AbortError') {
                 return;
             }
-            console.warn('Failed to load usage data, fallback to mock data.', error);
+            console.warn('Failed to load usage data from Prometheus, fallback to mock data.', error);
             setUsageError('');
             setUsageNotice('暫以示意資料呈現，後續將串接 K8s/Prometheus 資料。');
             const fallbackRecords = usageFallbackRef.current;
@@ -515,24 +580,28 @@ function User() {
                                 </Form.Select>
                             </FloatingLabel>
                         </Form.Group>
-                    </Form.Group>
-                    <Form.Group as={Col} style={{width:"50%"}}>
-                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', alignItems:"start"}}>
-                            <Form.Label column sm="2" style={{width:"20%"}}>
-                                Current Group:
-                            </Form.Label>
-                            <Form.Group as={Col} style={{width:"80%"}}>
+                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
+                            <Form.Label column sm="2">Permission</Form.Label>
+                            <Form.Group style={{width:"100%"}}>
                                 <ListGroup>
-                                { permissions && Object.keys(permissions).map((key, index) => {
-                                    return (
-                                        <ListGroup.Item key={index} style={{border:"none", padding:"0px", display:"flex", flexWrap:"nowrap", alignItems:"center", justifyContent:"space-evenly"}}>
-                                            <Form.Label column sm="2" style={{width:"90%"}}>
-                                                {permissions[key].groupname}
-                                            </Form.Label>
-                                            <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={permissions[key].groupname} style={{width:"10%"}}/>
+                                {permissions && permissions.length > 0 ? (
+                                    permissions.map((permission, index) => (
+                                        <ListGroup.Item className='ListGroupItem' key={index} style={{display:"flex", justifyContent:"space-between", alignItems:"center", margin:"1px auto", width:"80%", borderRadius:"10px"}}>
+                                            <span>{permission.groupname}</span>
+                                            <Form.Check
+                                                type="switch"
+                                                id={permission.groupname}
+                                                className="form-check-input"
+                                                defaultChecked={permission.permission === "admin"}
+                                                disabled
+                                            />
                                         </ListGroup.Item>
-                                    )
-                                })}
+                                    ))
+                                ) : (
+                                    <ListGroup.Item className='ListGroupItem' style={{display:"flex", justifyContent:"center", alignItems:"center", margin:"1px auto", width:"80%", borderRadius:"10px"}}>
+                                        No Permission
+                                    </ListGroup.Item>
+                                )}
                                 </ListGroup>
                         </Form.Group>
 
