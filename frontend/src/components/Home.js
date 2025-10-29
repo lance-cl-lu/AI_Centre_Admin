@@ -1,7 +1,7 @@
 import React, {useState, useEffect, useContext, useRef} from "react";
 import AuthContext from "../context/AuthContext";
 import { PieChart } from 'react-minimal-pie-chart';
-import { Card } from 'react-bootstrap';
+import { Card, Row, Col } from 'react-bootstrap';
 import './Home.css'
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -317,205 +317,273 @@ function Home() {
   return (
     <div className="Home">
       <div className="jumbotron">
-      <motion.div
+        <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{
             duration: 0.8,
             delay: 0.6,
-            ease: [0, 0.71, 0.2, 1.01]
+            ease: [0, 0.71, 0.2, 1.01],
           }}
         >
-        <div className="pie">
-          <div className="piediv">
-            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}>??# of users: <CountUp end={user_num} duration={5}/></h2>
-            <PieChart className="PieStyle"
-              data={PieData2}
-              labelStyle={{
-                textAlign: "center"
-              }}
-
-            />
+          <div className="pie">
+            <div className="piediv">
+              <h2 style={{ marginTop: '5%', fontFamily: 'Bahnschrift light' }}>
+                ??# of users: <CountUp end={user_num} duration={5} />
+              </h2>
+              <PieChart
+                className="PieStyle"
+                data={PieData2}
+                labelStyle={{
+                  textAlign: 'center',
+                }}
+              />
+            </div>
+            <div className="piediv">
+              <h2 style={{ marginTop: '5%', fontFamily: 'Bahnschrift light' }}>
+                ??# of labs: <CountUp end={lab_num} duration={5} />
+              </h2>
+              <PieChart
+                className="PieStyle"
+                data={PieData}
+                labelStyle={{
+                  textAlign: 'center',
+                }}
+              />
+            </div>
           </div>
-          <div className="piediv">
-            <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}>??# of labs: <CountUp end={lab_num} duration={5}/></h2>
-            <PieChart className="PieStyle"
-              data={PieData}
-              labelStyle={{
-                textAlign: "center"
-              }}
-
-            />
-          </div>
-        </div>
         </motion.div>
-      </div>
-      <div className="cardRow" style={{marginTop:"-20px"}}>
-        <Card className="cardItem">
+
+        <Card className="text-center mt-4">
+          <Card.Header>Kubeflow</Card.Header>
           <Card.Body>
             <Card.Title>AI Center LDAP管理平台</Card.Title>
             <Card.Text>
-              CGU LDAP management platform provides features the faculty needs to facilitate the permission of AI center users.
+              CGU LDAP management platform provides features the faculty needs to
+              facilitate the permission of AI center users.
             </Card.Text>
-            <a href={KUBEFLOW_HTTP} className="btn btn-primary" target="_blank" rel="noreferrer">Kubeflow dashboard</a>
+            <a
+              href={KUBEFLOW_HTTP}
+              className="btn btn-primary"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Kubeflow dashboard
+            </a>
           </Card.Body>
         </Card>
-        <Card className="cardItem">
-          <Card.Body>
-            <Card.Title>平台介紹</Card.Title>
-            <Card.Text>
-              The CGU AI Center website is designed for the management of the AI Center's exclusive environment and is managing the information about the AI Center's users and permissions.
-            </Card.Text>
-            <Link to="/lab" state={{"lab": null}} className="btn btn-primary">Lab</Link>
-          </Card.Body>
-        </Card>
-        <Card className="cardItem">
-          <Card.Body>
-            <Card.Title>通知總覽</Card.Title>
-            <Card.Text>
-            CGU AI Center has the following data not yet synchronized with LDAP:
-            </Card.Text>
-              <ul style={{marginTop: "1vh", height: "7vh", overflowY: "auto"}}>
-              {
-                unsych_list.map((msg, index) => (
-                  <li key={index} style={{fontSize: "12px", marginBottom: "5px"}}>{msg["message"]}</li>
-                ))
-              }
-              </ul>
-            <Link to="/notification" className="btn btn-primary">通知細項</Link>
-          </Card.Body>
-        </Card>
-      </div>
 
-      <div className="searchArea">
-        <div className="searchBar">
-          <div className="searchTitle">
-            <h2>查詢命名空間使用紀錄（即時）</h2>
-            <span>查詢指定命名空間在指定時間點的用量或成本</span>
-          </div>
-          <div className="searchBody">
-            <div className="searchRow">
-              <label style={{width: '10%'}}>Namespace</label>
-              <input
-                style={{width: '40%'}}
-                value={nsFixed}
-                onChange={(event) => setNsFixed(event.target.value)}
-                placeholder="teacher0001 或留空表示全部"
-              />
-              <label style={{width: '10%'}}>Metric</label>
-              <select
-                style={{width: '20%'}}
-                value={metricFixed}
-                onChange={(event) => setMetricFixed(event.target.value)}
-              >
-                <option value="namespace_cpu_cost">CPU</option>
-                <option value="namespace_gpu_cost">GPU</option>
-                <option value="namespace_total_cost">Total</option>
-              </select>
-            </div>
-            <div className="searchRow">
-              <label style={{width: '10%'}}>Time</label>
-              <input
-                style={{width: '40%'}}
-                value={timeFixed}
-                onChange={(event) => setTimeFixed(event.target.value)}
-                placeholder="YYYY-MM-DD HH:MM:SS 或 now"
-              />
-              <button className="searchBtn" onClick={handleFixedQuery} disabled={fixedLoading}>
-                {fixedLoading ? '查詢中…' : '查詢'}
-              </button>
-            </div>
-            {fixedError && (
-              <div className="searchError">{fixedError}</div>
-            )}
-            <pre className="searchResult">{fixedOutput}</pre>
-          </div>
-        </div>
+        <Row xs={1} md={2} className="g-3 mt-3">
+          <Col>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>平台介紹</Card.Title>
+                <Card.Text>
+                  The CGU AI Center website manages user information and
+                  permissions for the AI Center&apos;s exclusive environment.
+                </Card.Text>
+                <Link
+                  to="/lab"
+                  state={{ lab: null }}
+                  className="btn btn-primary"
+                >
+                  Lab
+                </Link>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>通知總覽</Card.Title>
+                <Card.Text>
+                  CGU AI Center has the following data not yet synchronized with
+                  LDAP:
+                </Card.Text>
+                <ul style={{ marginTop: '1vh', maxHeight: '120px', overflowY: 'auto' }}>
+                  {unsych_list.map((msg, index) => (
+                    <li
+                      key={index}
+                      style={{ fontSize: '12px', marginBottom: '5px' }}
+                    >
+                      {msg.message}
+                    </li>
+                  ))}
+                </ul>
+                <Link to="/notification" className="btn btn-primary">
+                  通知細項
+                </Link>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
 
-        <div className="searchBar">
-          <div className="searchTitle">
-            <h2>查詢命名空間使用變化（區段）</h2>
-            <span>查詢指定命名空間在區間內的成本差異</span>
-          </div>
-          <div className="searchBody">
-            <div className="searchRow">
-              <label style={{width: '10%'}}>Namespace</label>
-              <input
-                style={{width: '40%'}}
-                value={rangeNs}
-                onChange={(event) => setRangeNs(event.target.value)}
-                placeholder="teacher0001 或留空表示全部"
-              />
-              <label style={{width: '10%'}}>Metric</label>
-              <select
-                style={{width: '20%'}}
-                value={rangeMetric}
-                onChange={(event) => setRangeMetric(event.target.value)}
-              >
-                <option value="namespace_cpu_cost">CPU</option>
-                <option value="namespace_gpu_cost">GPU</option>
-                <option value="namespace_total_cost">Total</option>
-              </select>
+        <Card className="mt-4">
+          <Card.Header>Usage 查詢（Namespace Cost）</Card.Header>
+          <Card.Body className="text-start">
+            <div className="row">
+              <div className="col-md-6 mb-4">
+                <h5>固定時間查詢</h5>
+                <div className="mb-3">
+                  <label className="form-label">Namespace</label>
+                  <input
+                    className="form-control"
+                    value={nsFixed}
+                    onChange={(event) => setNsFixed(event.target.value)}
+                    placeholder="teacher0001 或留空表示全部"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Metric</label>
+                  <select
+                    className="form-select"
+                    value={metricFixed}
+                    onChange={(event) => setMetricFixed(event.target.value)}
+                  >
+                    <option value="namespace_cpu_cost">CPU</option>
+                    <option value="namespace_gpu_cost">GPU</option>
+                    <option value="namespace_total_cost">Total</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Time</label>
+                  <input
+                    className="form-control"
+                    value={timeFixed}
+                    onChange={(event) => setTimeFixed(event.target.value)}
+                    placeholder="YYYY-MM-DD HH:MM:SS 或 now"
+                  />
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleFixedQuery}
+                  disabled={fixedLoading}
+                >
+                  {fixedLoading ? '查詢中…' : '查詢'}
+                </button>
+                <pre
+                  className="mt-3 p-3 bg-light border"
+                  style={{ minHeight: '120px' }}
+                >
+                  {fixedError ? `ERROR: ${fixedError}` : fixedOutput}
+                </pre>
+              </div>
+              <div className="col-md-6 mb-4">
+                <h5>區間查詢 (max-min)</h5>
+                <div className="mb-3">
+                  <label className="form-label">Namespace</label>
+                  <input
+                    className="form-control"
+                    value={rangeNs}
+                    onChange={(event) => setRangeNs(event.target.value)}
+                    placeholder="teacher0001 或留空表示全部"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Metric</label>
+                  <select
+                    className="form-select"
+                    value={rangeMetric}
+                    onChange={(event) => setRangeMetric(event.target.value)}
+                  >
+                    <option value="namespace_cpu_cost">CPU</option>
+                    <option value="namespace_gpu_cost">GPU</option>
+                    <option value="namespace_total_cost">Total</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Start</label>
+                  <input
+                    className="form-control"
+                    value={rangeStart}
+                    onChange={(event) => setRangeStart(event.target.value)}
+                    placeholder="YYYY-MM-DD HH:MM:SS"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">End</label>
+                  <input
+                    className="form-control"
+                    value={rangeEnd}
+                    onChange={(event) => setRangeEnd(event.target.value)}
+                    placeholder="YYYY-MM-DD HH:MM:SS"
+                  />
+                </div>
+                <div className="mb-3 d-flex gap-2 flex-wrap">
+                  <button
+                    className="btn btn-outline-secondary"
+                    type="button"
+                    onClick={handleSetLastMonth}
+                  >
+                    上個月
+                  </button>
+                  <button
+                    className="btn btn-outline-secondary"
+                    type="button"
+                    onClick={handleSetThisMonth}
+                  >
+                    本月至今
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleRangeQuery}
+                    disabled={rangeLoading}
+                  >
+                    {rangeLoading ? '查詢中…' : '查詢區間'}
+                  </button>
+                </div>
+                <pre
+                  className="mt-3 p-3 bg-light border"
+                  style={{ minHeight: '160px' }}
+                >
+                  {rangeError ? `ERROR: ${rangeError}` : rangeOutput}
+                </pre>
+              </div>
             </div>
-            <div className="searchRow">
-              <label style={{width: '10%'}}>Start</label>
-              <input
-                style={{width: '40%'}}
-                value={rangeStart}
-                onChange={(event) => setRangeStart(event.target.value)}
-                placeholder="YYYY-MM-DD HH:MM:SS"
-              />
-              <label style={{width: '10%'}}>End</label>
-              <input
-                style={{width: '40%'}}
-                value={rangeEnd}
-                onChange={(event) => setRangeEnd(event.target.value)}
-                placeholder="YYYY-MM-DD HH:MM:SS"
-              />
-            </div>
-            <div className="searchRow">
-              <button className="searchBtn" onClick={handleSetLastMonth}>上個月</button>
-              <button className="searchBtn" onClick={handleSetThisMonth}>這個月</button>
-              <button className="searchBtn" onClick={handleRangeQuery} disabled={rangeLoading}>
-                {rangeLoading ? '查詢中…' : '查詢'}
-              </button>
-            </div>
-            {rangeError && (
-              <div className="searchError">{rangeError}</div>
-            )}
-            <pre className="searchResult">{rangeOutput}</pre>
-          </div>
-        </div>
-      </div>
-      
-      <div className="cardRow">
-        <Card className="cardItem">
-          <Card.Body>
-            <Card.Title>新增使用者</Card.Title>
-            <Card.Text>
-              Add new users to the AI center by clicking the button below.
-            </Card.Text>
-            <Link to="/add" className="btn btn-primary">新增</Link>
           </Card.Body>
         </Card>
-        <Card className="cardItem">
-          <Card.Body>
-            <Card.Title>查詢資料</Card.Title>
-            <Card.Text>
-              Search for user or lab information in the platform.
-            </Card.Text>
-            <Link to="/search" className="btn btn-primary">搜尋</Link>
-          </Card.Body>
-        </Card>
-        <Card className="cardItem">
-          <Card.Body>
-            <Card.Title>管理Lab</Card.Title>
-            <Card.Text>
-              Manage lab resources and configurations for users.
-            </Card.Text>
-            <Link to="/lab" className="btn btn-primary">管理</Link>
-          </Card.Body>
-        </Card>
+
+        <Row xs={1} md={3} className="g-3 mt-4">
+          <Col>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>新增使用者</Card.Title>
+                <Card.Text>
+                  Add new users to the AI center by clicking the button below.
+                </Card.Text>
+                <Link to="/add" className="btn btn-primary">
+                  新增
+                </Link>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>查詢資料</Card.Title>
+                <Card.Text>
+                  Search for user or lab information in the platform.
+                </Card.Text>
+                <Link to="/search" className="btn btn-primary">
+                  搜尋
+                </Link>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col>
+            <Card className="h-100">
+              <Card.Body>
+                <Card.Title>管理Lab</Card.Title>
+                <Card.Text>
+                  Manage lab resources and configurations for users.
+                </Card.Text>
+                <Link to="/lab" className="btn btn-primary">
+                  管理
+                </Link>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       </div>
     </div>
   );

@@ -503,6 +503,9 @@ function User() {
         });
     };
     const selectedUsageRecord = usageRecords.find((record) => record.period === selectedUsagePeriod) || usageRecords[0];
+    const permissionList = Array.isArray(permissions)
+        ? permissions
+        : Object.values(permissions || {});
     return (
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
@@ -580,32 +583,31 @@ function User() {
                                 </Form.Select>
                             </FloatingLabel>
                         </Form.Group>
-                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
-                            <Form.Label column sm="2">Permission</Form.Label>
-                            <Form.Group style={{width:"100%"}}>
+                    </Form.Group>
+                    <Form.Group as={Col} style={{width:"50%"}}>
+                        <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', alignItems:"start"}}>
+                            <Form.Label column sm="2" style={{width:"20%"}}>
+                                Current Group:
+                            </Form.Label>
+                            <Form.Group as={Col} style={{width:"80%"}}>
                                 <ListGroup>
-                                {permissions && permissions.length > 0 ? (
-                                    permissions.map((permission, index) => (
-                                        <ListGroup.Item className='ListGroupItem' key={index} style={{display:"flex", justifyContent:"space-between", alignItems:"center", margin:"1px auto", width:"80%", borderRadius:"10px"}}>
-                                            <span>{permission.groupname}</span>
-                                            <Form.Check
-                                                type="switch"
-                                                id={permission.groupname}
-                                                className="form-check-input"
-                                                defaultChecked={permission.permission === "admin"}
-                                                disabled
-                                            />
+                                {permissionList && permissionList.length > 0 ? (
+                                    permissionList.map((permission, index) => (
+                                        <ListGroup.Item className='ListGroupItem' key={index} style={{border:"none", padding:"0px", display:"flex", flexWrap:"nowrap", alignItems:"center", justifyContent:"space-evenly"}}>
+                                            <Form.Label column sm="2" style={{width:"90%"}}>
+                                                {permission.groupname}
+                                            </Form.Label>
+                                            <Form.Check type="checkbox" defaultChecked={permission.permission === "admin"} disabled id={permission.groupname} style={{width:"10%"}}/>
                                         </ListGroup.Item>
                                     ))
                                 ) : (
-                                    <ListGroup.Item className='ListGroupItem' style={{display:"flex", justifyContent:"center", alignItems:"center", margin:"1px auto", width:"80%", borderRadius:"10px"}}>
+                                    <ListGroup.Item className='ListGroupItem' style={{border:"none", padding:"0px", display:"flex", justifyContent:"center", alignItems:"center", margin:"1px auto", width:"80%", borderRadius:"10px"}}>
                                         No Permission
                                     </ListGroup.Item>
                                 )}
                                 </ListGroup>
+                            </Form.Group>
                         </Form.Group>
-
-                    </Form.Group>
                     </Form.Group>
                 </Form>
                 <Box style={{display:"flex", alignItems:"center", marginTop:"16px", justifyContent:"center"}}>
