@@ -102,11 +102,16 @@ const computeDiffWithinRange = (values, startDate, endDate) => {
     const endSeconds = secondsFromDate(endDate);
     const startValue = getValueAtOrBefore(values, startSeconds);
     const endValue = getValueAtOrBefore(values, endSeconds);
-    if (startValue === null || endValue === null) {
+    if (endValue === null) {
         return 0;
     }
-    const diff = endValue - startValue;
-    return Number.isFinite(diff) && diff > 0 ? diff : 0;
+    if (startValue !== null) {
+        const diff = endValue - startValue;
+        if (Number.isFinite(diff) && diff > 0) {
+            return diff;
+        }
+    }
+    return Number.isFinite(endValue) && endValue > 0 ? endValue : 0;
 };
 
 const minutesToHours = (minutes) => {
@@ -421,28 +426,40 @@ function User() {
                 step: '1d',
                 signal: controller.signal,
             };
-            const [cpuCostRange, cpuTimeRange, gpuCostRange, gpuTimeRange] = await Promise.all([
-                promQueryRange({
-                    query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern),
-                    ...queryOptions,
-                }),
-                promQueryRange({
-                    query: buildNamespaceQuery('namespace_cpu_cost_time', namespacePattern),
-                    ...queryOptions,
-                }),
-                promQueryRange({
-                    query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern),
-                    ...queryOptions,
-                }),
-                promQueryRange({
-                    query: buildNamespaceQuery('namespace_gpu_cost_time', namespacePattern),
-                    ...queryOptions,
-                }),
-            ]);
-            const cpuCostValues = extractSeriesValues(cpuCostRange);
-            const cpuTimeValues = extractSeriesValues(cpuTimeRange);
-            const gpuCostValues = extractSeriesValues(gpuCostRange);
-            const gpuTimeValues = extractSeriesValues(gpuTimeRange);
+            const queryConfigs = [
+                { key: 'cpuCost', metric: 'namespace_cpu_cost' },
+                { key: 'cpuTime', metric: 'namespace_cpu_cost_time' },
+                { key: 'gpuCost', metric: 'namespace_gpu_cost' },
+                { key: 'gpuTime', metric: 'namespace_gpu_cost_time' },
+            ];
+            const queryResults = await Promise.allSettled(
+                queryConfigs.map(({ metric }) =>
+                    promQueryRange({
+                        query: buildNamespaceQuery(metric, namespacePattern),
+                        ...queryOptions,
+                    })
+                )
+            );
+            const ranges = {};
+            const missingMetrics = [];
+            queryResults.forEach((result, index) => {
+                const { key, metric } = queryConfigs[index];
+                if (result.status === 'fulfilled') {
+                    ranges[key] = result.value;
+                } else {
+                    ranges[key] = null;
+                    missingMetrics.push(metric);
+                    console.warn(`Prometheus query failed for ${metric}`, result.reason);
+                }
+            });
+            const successfulCount = queryResults.filter((result) => result.status === 'fulfilled').length;
+            if (successfulCount === 0) {
+                throw new Error('All Prometheus usage queries failed.');
+            }
+            const cpuCostValues = extractSeriesValues(ranges.cpuCost);
+            const cpuTimeValues = extractSeriesValues(ranges.cpuTime);
+            const gpuCostValues = extractSeriesValues(ranges.gpuCost);
+            const gpuTimeValues = extractSeriesValues(ranges.gpuTime);
             const records = periods.map(({ label, start, end }) => {
                 const cpuCostDelta = computeDiffWithinRange(cpuCostValues, start, end);
                 const gpuCostDelta = computeDiffWithinRange(gpuCostValues, start, end);
@@ -463,7 +480,11 @@ function User() {
             applyUsageRecords(records);
             const hasData = records.some(usageRecordHasData);
             if (hasData) {
-                setUsageNotice('資料來源：Prometheus namespace_cpu_cost / namespace_gpu_cost 指標。');
+                if (missingMetrics.length) {
+                    setUsageNotice(`資料來源：Prometheus；部分指標 (${missingMetrics.join(', ')}) 尚未回報，已以 0 顯示。`);
+                } else {
+                    setUsageNotice('資料來源：Prometheus namespace_cpu_cost / namespace_gpu_cost 指標。');
+                }
             } else {
                 setUsageNotice('Prometheus 尚未回報此使用者的使用紀錄，顯示為 0。');
             }
