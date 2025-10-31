@@ -119,6 +119,56 @@ const filterNamespaces = (namespaces, keyword) => {
   }
 };
 
+const NamespacePicker = ({
+  selectId,
+  selected,
+  onSelect,
+  keyword,
+  onKeywordChange,
+  filteredOptions,
+  includeAllOption,
+}) => {
+  const trimmedKeyword = keyword.trim();
+  const showAllOption = includeAllOption && !trimmedKeyword;
+  const previewItems = filteredOptions.slice(0, 10);
+  return (
+    <>
+      <div className="d-flex flex-column flex-md-row gap-2">
+        <select
+          id={selectId}
+          className="form-select"
+          value={selected}
+          onChange={(event) => onSelect(event.target.value)}
+        >
+          {showAllOption && <option value="">全部 Namespace</option>}
+          {filteredOptions.map((namespace) => (
+            <option key={namespace} value={namespace}>
+              {namespace}
+            </option>
+          ))}
+        </select>
+        <input
+          className="form-control"
+          value={keyword}
+          onChange={(event) => onKeywordChange(event.target.value)}
+          placeholder="Search Namespace"
+        />
+      </div>
+      <div className="mt-2">
+        <span>User Filter:</span>
+        <ul className="list-unstyled mb-0 small">
+          {filteredOptions.length === 0 ? (
+            <li>無符合項目</li>
+          ) : (
+            previewItems.map((namespace) => <li key={namespace}>{namespace}</li>)
+          )}
+          {filteredOptions.length > previewItems.length ? <li>...</li> : null}
+        </ul>
+      </div>
+    </>
+  );
+};
+
 const getNamespaceKey = (metricInfo = {}) => {
   return metricInfo.exported_namespace || metricInfo.namespace || JSON.stringify(metricInfo);
 };
@@ -447,6 +497,14 @@ function Home() {
   const [rangeLoading, setRangeLoading] = useState(false);
   const fixedQueryAbort = useRef(null);
   const rangeQueryAbort = useRef(null);
+  const fixedSearchTrimmed = useMemo(
+    () => fixedSearchKeyword.trim(),
+    [fixedSearchKeyword],
+  );
+  const rangeSearchTrimmed = useMemo(
+    () => rangeSearchKeyword.trim(),
+    [rangeSearchKeyword],
+  );
   const filteredFixedNamespaces = useMemo(
     () => filterNamespaces(namespaceOptions, fixedSearchKeyword),
     [namespaceOptions, fixedSearchKeyword],
@@ -455,6 +513,40 @@ function Home() {
     () => filterNamespaces(namespaceOptions, rangeSearchKeyword),
     [namespaceOptions, rangeSearchKeyword],
   );
+  useEffect(() => {
+    setNsFixed((current) => {
+      if (!fixedSearchTrimmed) {
+        return current;
+      }
+      if (!filteredFixedNamespaces.length) {
+        return '';
+      }
+      const exactMatch = filteredFixedNamespaces.find(
+        (item) => item.toLowerCase() === fixedSearchTrimmed.toLowerCase(),
+      );
+      if (exactMatch) {
+        return exactMatch;
+      }
+      return filteredFixedNamespaces[0] || '';
+    });
+  }, [fixedSearchTrimmed, filteredFixedNamespaces]);
+  useEffect(() => {
+    setRangeNs((current) => {
+      if (!rangeSearchTrimmed) {
+        return current;
+      }
+      if (!filteredRangeNamespaces.length) {
+        return '';
+      }
+      const exactMatch = filteredRangeNamespaces.find(
+        (item) => item.toLowerCase() === rangeSearchTrimmed.toLowerCase(),
+      );
+      if (exactMatch) {
+        return exactMatch;
+      }
+      return filteredRangeNamespaces[0] || '';
+    });
+  }, [rangeSearchTrimmed, filteredRangeNamespaces]);
   useEffect(() => {
     fetch('/api/home/', { // 'http://localhost:31190/api/ldap/home/
       method: 'GET',
@@ -497,7 +589,7 @@ function Home() {
   }, []);
 
 
-  const [ unsych_list, setUnsych_list ] = useState([]);
+  const [unsyncList, setUnsyncList] = useState([]);
   useEffect(() => {
     fetch('/api/check/syschronize/', {
       method: 'GET',
@@ -507,7 +599,7 @@ function Home() {
     })
     .then(response => response.json())
     .then(data => {
-      setUnsych_list(data);
+      setUnsyncList(data);
     })
     .catch((error) => {
       console.error('Error: User Exist');
@@ -760,7 +852,7 @@ function Home() {
                   LDAP:
                 </Card.Text>
                 <ul style={{ marginTop: '1vh', maxHeight: '120px', overflowY: 'auto' }}>
-                  {unsych_list.map((msg, index) => (
+                  {unsyncList.map((msg, index) => (
                     <li
                       key={index}
                       style={{ fontSize: '12px', marginBottom: '5px' }}
@@ -784,40 +876,18 @@ function Home() {
               <div className="col-md-6 mb-4">
                 <h5>固定時間查詢</h5>
                 <div className="mb-3">
-                  <label className="form-label">Namespace</label>
-                  <div className="d-flex flex-column flex-md-row gap-2">
-                    <select
-                      className="form-select"
-                      value={nsFixed}
-                      onChange={(event) => setNsFixed(event.target.value)}
-                    >
-                      <option value="">全部 Namespace</option>
-                      {filteredFixedNamespaces.map((namespace) => (
-                        <option key={namespace} value={namespace}>
-                          {namespace}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="form-control"
-                      value={fixedSearchKeyword}
-                      onChange={(event) => setFixedSearchKeyword(event.target.value)}
-                      placeholder="Search Namespace"
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <span>User Filter:</span>
-                    <ul className="list-unstyled mb-0 small">
-                      {filteredFixedNamespaces.length === 0 ? (
-                        <li>無符合項目</li>
-                      ) : (
-                        filteredFixedNamespaces.slice(0, 10).map((namespace) => (
-                          <li key={namespace}>{namespace}</li>
-                        ))
-                      )}
-                      {filteredFixedNamespaces.length > 10 ? <li>...</li> : null}
-                    </ul>
-                  </div>
+                  <label className="form-label" htmlFor="fixed-namespace-select">
+                    Namespace
+                  </label>
+                  <NamespacePicker
+                    selectId="fixed-namespace-select"
+                    selected={nsFixed}
+                    onSelect={setNsFixed}
+                    keyword={fixedSearchKeyword}
+                    onKeywordChange={setFixedSearchKeyword}
+                    filteredOptions={filteredFixedNamespaces}
+                    includeAllOption
+                  />
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Metric</label>
@@ -857,40 +927,18 @@ function Home() {
               <div className="col-md-6 mb-4">
                 <h5>區間查詢 (max-min)</h5>
                 <div className="mb-3">
-                  <label className="form-label">Namespace</label>
-                  <div className="d-flex flex-column flex-md-row gap-2">
-                    <select
-                      className="form-select"
-                      value={rangeNs}
-                      onChange={(event) => setRangeNs(event.target.value)}
-                    >
-                      <option value="">全部 Namespace</option>
-                      {filteredRangeNamespaces.map((namespace) => (
-                        <option key={namespace} value={namespace}>
-                          {namespace}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="form-control"
-                      value={rangeSearchKeyword}
-                      onChange={(event) => setRangeSearchKeyword(event.target.value)}
-                      placeholder="Search Namespace"
-                    />
-                  </div>
-                  <div className="mt-2">
-                    <span>User Filter:</span>
-                    <ul className="list-unstyled mb-0 small">
-                      {filteredRangeNamespaces.length === 0 ? (
-                        <li>無符合項目</li>
-                      ) : (
-                        filteredRangeNamespaces.slice(0, 10).map((namespace) => (
-                          <li key={namespace}>{namespace}</li>
-                        ))
-                      )}
-                      {filteredRangeNamespaces.length > 10 ? <li>...</li> : null}
-                    </ul>
-                  </div>
+                  <label className="form-label" htmlFor="range-namespace-select">
+                    Namespace
+                  </label>
+                  <NamespacePicker
+                    selectId="range-namespace-select"
+                    selected={rangeNs}
+                    onSelect={setRangeNs}
+                    keyword={rangeSearchKeyword}
+                    onKeywordChange={setRangeSearchKeyword}
+                    filteredOptions={filteredRangeNamespaces}
+                    includeAllOption
+                  />
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Metric</label>
