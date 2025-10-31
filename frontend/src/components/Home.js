@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useContext, useRef} from "react";
+import React, {useState, useEffect, useContext, useRef, useMemo} from "react";
 import AuthContext from "../context/AuthContext";
 import { PieChart } from 'react-minimal-pie-chart';
 import { Card, Row, Col } from 'react-bootstrap';
@@ -102,6 +102,326 @@ const summariseSeriesDiff = (values) => {
   };
 };
 
+const filterNamespaces = (namespaces, keyword) => {
+  if (!Array.isArray(namespaces) || !namespaces.length) {
+    return [];
+  }
+  const trimmed = (keyword || '').trim();
+  if (!trimmed) {
+    return namespaces;
+  }
+  try {
+    const regex = new RegExp(trimmed, 'i');
+    return namespaces.filter((item) => regex.test(item));
+  } catch (error) {
+    const lower = trimmed.toLowerCase();
+    return namespaces.filter((item) => item.toLowerCase().includes(lower));
+  }
+};
+
+const getNamespaceKey = (metricInfo = {}) => {
+  return metricInfo.exported_namespace || metricInfo.namespace || JSON.stringify(metricInfo);
+};
+
+const buildNamespaceMetricInfo = (metricInfo = {}) => {
+  const namespaceValue = metricInfo.exported_namespace || metricInfo.namespace;
+  if (namespaceValue) {
+    return { exported_namespace: namespaceValue };
+  }
+  return { ...metricInfo };
+};
+
+const combineInstantNamespaceResults = (...datasets) => {
+  const map = new Map();
+  datasets.forEach((dataset) => {
+    if (!dataset || !Array.isArray(dataset.result)) {
+      return;
+    }
+    dataset.result.forEach((item) => {
+      const metricInfo = item.metric || {};
+      const key = getNamespaceKey(metricInfo);
+      if (!map.has(key)) {
+        map.set(key, {
+          metric: buildNamespaceMetricInfo(metricInfo),
+          sum: 0,
+          timestamp: null,
+          hasValue: false,
+        });
+      }
+      const entry = map.get(key);
+      const [rawTimestamp, rawValue] = item.value || [];
+      const timestamp = Number(rawTimestamp);
+      const numericValue = Number(rawValue);
+      if (Number.isFinite(numericValue)) {
+        entry.sum += numericValue;
+        entry.hasValue = true;
+      }
+      if (Number.isFinite(timestamp)) {
+        if (entry.timestamp === null || timestamp > entry.timestamp) {
+          entry.timestamp = timestamp;
+        }
+      }
+    });
+  });
+  const result = [];
+  map.forEach((entry) => {
+    if (!entry.hasValue) {
+      return;
+    }
+    const timestamp = entry.timestamp !== null ? entry.timestamp : Math.floor(Date.now() / 1000);
+    result.push({
+      metric: entry.metric,
+      value: [timestamp, entry.sum.toString()],
+    });
+  });
+  return {
+    result,
+  };
+};
+
+const combineRangeNamespaceResults = (...datasets) => {
+  const map = new Map();
+  datasets.forEach((dataset) => {
+    if (!dataset || !Array.isArray(dataset.result)) {
+      return;
+    }
+    dataset.result.forEach((series) => {
+      const metricInfo = series.metric || {};
+      const key = getNamespaceKey(metricInfo);
+      if (!map.has(key)) {
+        map.set(key, {
+          metric: buildNamespaceMetricInfo(metricInfo),
+          values: new Map(),
+        });
+      }
+      const entry = map.get(key);
+      (series.values || []).forEach(([rawTimestamp, rawValue]) => {
+        const timestamp = Number(rawTimestamp);
+        const numericValue = Number(rawValue);
+        if (!Number.isFinite(timestamp) || !Number.isFinite(numericValue)) {
+          return;
+        }
+        const previous = entry.values.get(timestamp) || 0;
+        entry.values.set(timestamp, previous + numericValue);
+      });
+    });
+  });
+  const result = [];
+  map.forEach((entry) => {
+    if (!entry.values.size) {
+      return;
+    }
+    const sortedValues = Array.from(entry.values.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([timestamp, sum]) => [timestamp, sum.toString()]);
+    result.push({
+      metric: entry.metric,
+      values: sortedValues,
+    });
+  });
+  return {
+    result,
+  };
+};
+
+const TIME_METRIC_MAP = {
+  namespace_cpu_cost: ['namespace_cpu_cost_time'],
+  namespace_gpu_cost: ['namespace_gpu_cost_time'],
+  namespace_total_cost: ['namespace_cpu_cost_time', 'namespace_gpu_cost_time'],
+};
+
+const fetchFixedNamespaceMetric = async ({
+  metric,
+  namespacePattern,
+  time,
+  signal,
+}) => {
+  const query = buildNamespaceQuery(metric, namespacePattern);
+  const data = await promQuery({
+    query,
+    time,
+    signal,
+  });
+  if (
+    metric !== 'namespace_total_cost'
+    || (data && Array.isArray(data.result) && data.result.length)
+  ) {
+    return data;
+  }
+  const [cpuData, gpuData] = await Promise.all([
+    promQuery({
+      query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern),
+      time,
+      signal,
+    }).catch(() => null),
+    promQuery({
+      query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern),
+      time,
+      signal,
+    }).catch(() => null),
+  ]);
+  return combineInstantNamespaceResults(cpuData, gpuData);
+};
+
+const fetchFixedNamespaceTimeMetric = async ({
+  metric,
+  namespacePattern,
+  time,
+  signal,
+}) => {
+  const metricNames = TIME_METRIC_MAP[metric];
+  if (!Array.isArray(metricNames) || !metricNames.length) {
+    return null;
+  }
+  const datasets = await Promise.all(
+    metricNames.map((metricName) =>
+      promQuery({
+        query: buildNamespaceQuery(metricName, namespacePattern),
+        time,
+        signal,
+      }).catch(() => null),
+    ),
+  );
+  return combineInstantNamespaceResults(...datasets);
+};
+
+const fetchRangeNamespaceMetric = async ({
+  metric,
+  namespacePattern,
+  start,
+  end,
+  step,
+  signal,
+}) => {
+  const query = buildNamespaceQuery(metric, namespacePattern);
+  const data = await promQueryRange({
+    query,
+    start,
+    end,
+    step,
+    signal,
+  });
+  if (
+    metric !== 'namespace_total_cost'
+    || (data && Array.isArray(data.result) && data.result.length)
+  ) {
+    return data;
+  }
+  const [cpuData, gpuData] = await Promise.all([
+    promQueryRange({
+      query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern),
+      start,
+      end,
+      step,
+      signal,
+    }).catch(() => null),
+    promQueryRange({
+      query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern),
+      start,
+      end,
+      step,
+      signal,
+    }).catch(() => null),
+  ]);
+  return combineRangeNamespaceResults(cpuData, gpuData);
+};
+
+const fetchRangeNamespaceTimeMetric = async ({
+  metric,
+  namespacePattern,
+  start,
+  end,
+  step,
+  signal,
+}) => {
+  const metricNames = TIME_METRIC_MAP[metric];
+  if (!Array.isArray(metricNames) || !metricNames.length) {
+    return null;
+  }
+  const datasets = await Promise.all(
+    metricNames.map((metricName) =>
+      promQueryRange({
+        query: buildNamespaceQuery(metricName, namespacePattern),
+        start,
+        end,
+        step,
+        signal,
+      }).catch(() => null),
+    ),
+  );
+  return combineRangeNamespaceResults(...datasets);
+};
+
+const buildInstantNamespaceSummary = (costData, timeData) => {
+  const map = new Map();
+  const ingest = (dataset, key) => {
+    if (!dataset || !Array.isArray(dataset.result)) {
+      return;
+    }
+    dataset.result.forEach((item) => {
+      const metricInfo = item.metric || {};
+      const namespaceLabel =
+        metricInfo.exported_namespace || metricInfo.namespace || '(unknown)';
+      if (!namespaceLabel) {
+        return;
+      }
+      const [rawTimestamp, rawValue] = item.value || [];
+      const numericValue = Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        return;
+      }
+      const timestamp = Number(rawTimestamp);
+      const entry = map.get(namespaceLabel) || {
+        namespaceLabel,
+        cost: null,
+        time: null,
+        timestamp: null,
+      };
+      entry[key] = numericValue;
+      if (Number.isFinite(timestamp)) {
+        entry.timestamp =
+          entry.timestamp === null ? timestamp : Math.max(entry.timestamp, timestamp);
+      }
+      map.set(namespaceLabel, entry);
+    });
+  };
+  ingest(costData, 'cost');
+  ingest(timeData, 'time');
+  return Array.from(map.values());
+};
+
+const buildRangeNamespaceSummary = (costData, timeData) => {
+  const map = new Map();
+  const ingest = (dataset, key) => {
+    if (!dataset || !Array.isArray(dataset.result)) {
+      return;
+    }
+    dataset.result.forEach((series) => {
+      const metricInfo = series.metric || {};
+      const namespaceLabel =
+        metricInfo.exported_namespace || metricInfo.namespace || '(unknown)';
+      if (!namespaceLabel) {
+        return;
+      }
+      const entry = map.get(namespaceLabel) || {
+        namespaceLabel,
+        costValues: [],
+        timeValues: [],
+      };
+      const values = normaliseRangeValues(series);
+      if (key === 'costValues') {
+        entry.costValues = values;
+      } else if (key === 'timeValues') {
+        entry.timeValues = values;
+      }
+      map.set(namespaceLabel, entry);
+    });
+  };
+  ingest(costData, 'costValues');
+  ingest(timeData, 'timeValues');
+  return Array.from(map.values());
+};
+
 
 function Home() {
   let {user} = useContext(AuthContext);
@@ -109,13 +429,16 @@ function Home() {
   let [lab_num, setLab_num] = useState(0);
   const [PieData, setPieData] = useState([]);
   const [PieData2, setPieData2] = useState([]);
-  const [nsFixed, setNsFixed] = useState('teacher0001');
+  const [namespaceOptions, setNamespaceOptions] = useState([]);
+  const [nsFixed, setNsFixed] = useState('');
+  const [fixedSearchKeyword, setFixedSearchKeyword] = useState('');
   const [metricFixed, setMetricFixed] = useState('namespace_cpu_cost');
   const [timeFixed, setTimeFixed] = useState('now');
   const [fixedOutput, setFixedOutput] = useState('請查詢…');
   const [fixedError, setFixedError] = useState('');
   const [fixedLoading, setFixedLoading] = useState(false);
-  const [rangeNs, setRangeNs] = useState('teacher0001');
+  const [rangeNs, setRangeNs] = useState('');
+  const [rangeSearchKeyword, setRangeSearchKeyword] = useState('');
   const [rangeMetric, setRangeMetric] = useState('namespace_cpu_cost');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
@@ -124,6 +447,14 @@ function Home() {
   const [rangeLoading, setRangeLoading] = useState(false);
   const fixedQueryAbort = useRef(null);
   const rangeQueryAbort = useRef(null);
+  const filteredFixedNamespaces = useMemo(
+    () => filterNamespaces(namespaceOptions, fixedSearchKeyword),
+    [namespaceOptions, fixedSearchKeyword],
+  );
+  const filteredRangeNamespaces = useMemo(
+    () => filterNamespaces(namespaceOptions, rangeSearchKeyword),
+    [namespaceOptions, rangeSearchKeyword],
+  );
   useEffect(() => {
     fetch('/api/home/', { // 'http://localhost:31190/api/ldap/home/
       method: 'GET',
@@ -135,13 +466,19 @@ function Home() {
     .then(data => {
       setUser_num(data.user_num);
       setLab_num(data.lab_num);
-      setPieData(data.lab_list.map((lab, index) => {
+      setPieData((data.lab_list || []).map((lab) => {
         return { title: lab, value: 1, color: getRandomBlueShade() }
       }))
-      setPieData2(data.user_list.map((user, index) => {
+      const users = Array.isArray(data.user_list) ? data.user_list : [];
+      setNamespaceOptions(users);
+      setPieData2(users.map((user) => {
         return { title: user, value: 1, color: getRandomOrangeShade() }
       }))
-    }) 
+      if (users.length) {
+        setNsFixed((prev) => prev || users[0]);
+        setRangeNs((prev) => prev || users[0]);
+      }
+    })
     .catch((error) => {
       console.error('Error:', error);
     }
@@ -181,7 +518,7 @@ function Home() {
 
   const pad = (n) => n.toString().padStart(2, '0');
   const fmt = (date) => {
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T`
       + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   };
 
@@ -195,33 +532,38 @@ function Home() {
     const controller = new AbortController();
     fixedQueryAbort.current = controller;
     try {
-      const namespacePattern = buildNamespacePattern(namespaceInput);
-      const query = buildNamespaceQuery(metricFixed, namespacePattern);
       const timeValue = parseDateTimeInput(timeFixed);
       if (timeFixed && timeValue === null) {
         throw new Error('時間格式錯誤，請使用 YYYY-MM-DD HH:MM:SS 或 now');
       }
-      const data = await promQuery({
-        query,
-        time: timeValue || undefined,
-        signal: controller.signal,
-      });
-      if (!data || !Array.isArray(data.result) || !data.result.length) {
+      const namespacePattern = buildNamespacePattern(namespaceInput);
+      const [costData, timeData] = await Promise.all([
+        fetchFixedNamespaceMetric({
+          metric: metricFixed,
+          namespacePattern,
+          time: timeValue || undefined,
+          signal: controller.signal,
+        }),
+        fetchFixedNamespaceTimeMetric({
+          metric: metricFixed,
+          namespacePattern,
+          time: timeValue || undefined,
+          signal: controller.signal,
+        }),
+      ]);
+      const summaries = buildInstantNamespaceSummary(costData, timeData);
+      if (!summaries.length) {
         setFixedOutput('No data');
         return;
       }
-      const lines = data.result.map((item) => {
-        const metricInfo = item.metric || {};
-        const namespaceLabel = metricInfo.exported_namespace || metricInfo.namespace || '(unknown)';
-        const [timestamp, rawValue] = item.value || [];
-        const numericValue = Number(rawValue);
-        const valueText = Number.isFinite(numericValue)
-          ? formatMetricValue(numericValue, 2)
-          : rawValue;
-        const timeText = timestamp !== undefined
-          ? formatTimestamp(Number(timestamp))
-          : '未知時間';
-        return `${namespaceLabel} ${valueText} (at ${timeText})`;
+      const lines = summaries.map((entry) => {
+        const costText =
+          entry.cost !== null ? formatMetricValue(entry.cost, 2) : '無費用資料';
+        const timeTextValue =
+          entry.time !== null ? formatMetricValue(entry.time, 2) : '無時間資料';
+        const timestampText =
+          entry.timestamp !== null ? formatTimestamp(entry.timestamp) : '未知時間';
+        return `${entry.namespaceLabel} 費用 ${costText} / 時間 ${timeTextValue} (at ${timestampText})`;
       });
       setFixedOutput(lines.join('\n'));
     } catch (error) {
@@ -257,27 +599,44 @@ function Home() {
         throw new Error('結束時間需晚於開始時間');
       }
       const namespacePattern = buildNamespacePattern(namespaceInput);
-      const query = buildNamespaceQuery(rangeMetric, namespacePattern);
-      const data = await promQueryRange({
-        query,
-        start: startDate,
-        end: endDate,
-        step: '6h',
-        signal: controller.signal,
-      });
+      const [costData, timeData] = await Promise.all([
+        fetchRangeNamespaceMetric({
+          metric: rangeMetric,
+          namespacePattern,
+          start: startDate,
+          end: endDate,
+          step: '6h',
+          signal: controller.signal,
+        }),
+        fetchRangeNamespaceTimeMetric({
+          metric: rangeMetric,
+          namespacePattern,
+          start: startDate,
+          end: endDate,
+          step: '6h',
+          signal: controller.signal,
+        }),
+      ]);
       const header = `區間: ${startDate.toLocaleString()} → ${endDate.toLocaleString()}`;
-      if (!data || !Array.isArray(data.result) || !data.result.length) {
+      const summaries = buildRangeNamespaceSummary(costData, timeData);
+      if (!summaries.length) {
         setRangeOutput(`${header}\nNo data`);
         return;
       }
-      const lines = data.result.map((series) => {
-        const namespaceLabel = series.metric?.exported_namespace || series.metric?.namespace || '(unknown)';
-        const values = normaliseRangeValues(series);
-        const summary = summariseSeriesDiff(values);
-        const diffText = formatMetricValue(summary.diff, 2);
-        const maxText = `max ${formatMetricValue(summary.maxValue, 2)} at ${formatTimestamp(summary.maxTimestamp)}`;
-        const minText = `min ${formatMetricValue(summary.minValue, 2)} at ${formatTimestamp(summary.minTimestamp)}`;
-        return `${namespaceLabel} ${diffText} (${maxText}, ${minText})`;
+      const lines = summaries.map((entry) => {
+        const costSummary = summariseSeriesDiff(entry.costValues);
+        const costSection =
+          entry.costValues && entry.costValues.length
+            ? `費用 ${formatMetricValue(costSummary.diff, 2)} (max ${formatMetricValue(costSummary.maxValue, 2)} at ${formatTimestamp(costSummary.maxTimestamp)}, min ${formatMetricValue(costSummary.minValue, 2)} at ${formatTimestamp(costSummary.minTimestamp)})`
+            : '費用資料缺失';
+        const timeSection =
+          entry.timeValues && entry.timeValues.length
+            ? (() => {
+                const timeSummary = summariseSeriesDiff(entry.timeValues);
+                return `時間 ${formatMetricValue(timeSummary.diff, 2)} (max ${formatMetricValue(timeSummary.maxValue, 2)} at ${formatTimestamp(timeSummary.maxTimestamp)}, min ${formatMetricValue(timeSummary.minValue, 2)} at ${formatTimestamp(timeSummary.minTimestamp)})`;
+              })()
+            : '時間資料缺失';
+        return `${entry.namespaceLabel} ${costSection} / ${timeSection}`;
       });
       setRangeOutput([header, ...lines].join('\n'));
     } catch (error) {
@@ -426,12 +785,39 @@ function Home() {
                 <h5>固定時間查詢</h5>
                 <div className="mb-3">
                   <label className="form-label">Namespace</label>
-                  <input
-                    className="form-control"
-                    value={nsFixed}
-                    onChange={(event) => setNsFixed(event.target.value)}
-                    placeholder="teacher0001 或留空表示全部"
-                  />
+                  <div className="d-flex flex-column flex-md-row gap-2">
+                    <select
+                      className="form-select"
+                      value={nsFixed}
+                      onChange={(event) => setNsFixed(event.target.value)}
+                    >
+                      <option value="">全部 Namespace</option>
+                      {filteredFixedNamespaces.map((namespace) => (
+                        <option key={namespace} value={namespace}>
+                          {namespace}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="form-control"
+                      value={fixedSearchKeyword}
+                      onChange={(event) => setFixedSearchKeyword(event.target.value)}
+                      placeholder="Search Namespace"
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <span>User Filter:</span>
+                    <ul className="list-unstyled mb-0 small">
+                      {filteredFixedNamespaces.length === 0 ? (
+                        <li>無符合項目</li>
+                      ) : (
+                        filteredFixedNamespaces.slice(0, 10).map((namespace) => (
+                          <li key={namespace}>{namespace}</li>
+                        ))
+                      )}
+                      {filteredFixedNamespaces.length > 10 ? <li>...</li> : null}
+                    </ul>
+                  </div>
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Metric</label>
@@ -472,12 +858,39 @@ function Home() {
                 <h5>區間查詢 (max-min)</h5>
                 <div className="mb-3">
                   <label className="form-label">Namespace</label>
-                  <input
-                    className="form-control"
-                    value={rangeNs}
-                    onChange={(event) => setRangeNs(event.target.value)}
-                    placeholder="teacher0001 或留空表示全部"
-                  />
+                  <div className="d-flex flex-column flex-md-row gap-2">
+                    <select
+                      className="form-select"
+                      value={rangeNs}
+                      onChange={(event) => setRangeNs(event.target.value)}
+                    >
+                      <option value="">全部 Namespace</option>
+                      {filteredRangeNamespaces.map((namespace) => (
+                        <option key={namespace} value={namespace}>
+                          {namespace}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="form-control"
+                      value={rangeSearchKeyword}
+                      onChange={(event) => setRangeSearchKeyword(event.target.value)}
+                      placeholder="Search Namespace"
+                    />
+                  </div>
+                  <div className="mt-2">
+                    <span>User Filter:</span>
+                    <ul className="list-unstyled mb-0 small">
+                      {filteredRangeNamespaces.length === 0 ? (
+                        <li>無符合項目</li>
+                      ) : (
+                        filteredRangeNamespaces.slice(0, 10).map((namespace) => (
+                          <li key={namespace}>{namespace}</li>
+                        ))
+                      )}
+                      {filteredRangeNamespaces.length > 10 ? <li>...</li> : null}
+                    </ul>
+                  </div>
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Metric</label>
@@ -495,18 +908,22 @@ function Home() {
                   <label className="form-label">Start</label>
                   <input
                     className="form-control"
+                    type="datetime-local"
+                    step="1"
                     value={rangeStart}
                     onChange={(event) => setRangeStart(event.target.value)}
-                    placeholder="YYYY-MM-DD HH:MM:SS"
+                    placeholder="YYYY-MM-DDTHH:MM:SS"
                   />
                 </div>
                 <div className="mb-3">
                   <label className="form-label">End</label>
                   <input
                     className="form-control"
+                    type="datetime-local"
+                    step="1"
                     value={rangeEnd}
                     onChange={(event) => setRangeEnd(event.target.value)}
-                    placeholder="YYYY-MM-DD HH:MM:SS"
+                    placeholder="YYYY-MM-DDTHH:MM:SS"
                   />
                 </div>
                 <div className="mb-3 d-flex gap-2 flex-wrap">
