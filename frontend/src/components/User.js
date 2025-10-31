@@ -677,22 +677,33 @@ function User() {
                                     {usageNotice && (
                                         <div className="usage-notice">{usageNotice}</div>
                                     )}
-                                    <div className="usage-metrics">
-                                        <div className="usage-metric-row">
-                                            <span className="usage-metric-label">CPU:</span>
-                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.cpuHours, 2)} hours</span>
-                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.cpuCost)} NTD</span>
-                                        </div>
-                                        <div className="usage-metric-row">
-                                            <span className="usage-metric-label">GPU:</span>
-                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.gpuHours, 2)} hours</span>
-                                            <span className="usage-metric-value">{formatNumber(selectedUsageRecord?.gpuCost)} NTD</span>
-                                        </div>
-                                        <div className="usage-metric-row usage-total">
-                                            <span className="usage-metric-label">Total:</span>
-                                            <span className="usage-metric-value usage-total-value">{formatNumber(selectedUsageRecord?.totalCost)} NTD</span>
-                                        </div>
-                                    </div>
+                                    <table className="usage-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Resource</th>
+                                                <th>Hours</th>
+                                                <th>Cost (NTD)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <th scope="row">CPU</th>
+                                                <td>{formatNumber(selectedUsageRecord?.cpuHours, 2)} hours</td>
+                                                <td>{formatNumber(selectedUsageRecord?.cpuCost)} NTD</td>
+                                            </tr>
+                                            <tr>
+                                                <th scope="row">GPU</th>
+                                                <td>{formatNumber(selectedUsageRecord?.gpuHours, 2)} hours</td>
+                                                <td>{formatNumber(selectedUsageRecord?.gpuCost)} NTD</td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="usage-total-row">
+                                                <td colSpan={2}>Total</td>
+                                                <td className="usage-total-value">{formatNumber(selectedUsageRecord?.totalCost)} NTD</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
                                 </>
                             )}
                         </div>
