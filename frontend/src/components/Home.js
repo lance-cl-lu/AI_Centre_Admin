@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useContext, useRef, useMemo} from "react";
+import React, {useState, useEffect, useContext, useRef, useMemo, useCallback} from "react";
 import AuthContext from "../context/AuthContext";
 import { PieChart } from 'react-minimal-pie-chart';
 import { Card, Row, Col } from 'react-bootstrap';
@@ -440,6 +440,14 @@ const buildInstantNamespaceSummary = (costData, timeData) => {
   return Array.from(map.values());
 };
 
+const readJsonSafely = async (response) => {
+  try {
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+};
+
 const buildRangeNamespaceSummary = (costData, timeData) => {
   const map = new Map();
   const ingest = (dataset, key) => {
@@ -495,6 +503,17 @@ function Home() {
   const [rangeOutput, setRangeOutput] = useState('請查詢…');
   const [rangeError, setRangeError] = useState('');
   const [rangeLoading, setRangeLoading] = useState(false);
+  const initialCostState = {
+    cpuCostPerMinute: '',
+    gpuCostPerMinute: '',
+  };
+  const [costForm, setCostForm] = useState(initialCostState);
+  const [costOriginal, setCostOriginal] = useState(initialCostState);
+  const [costLoading, setCostLoading] = useState(false);
+  const [costSaving, setCostSaving] = useState(false);
+  const [costMessage, setCostMessage] = useState('');
+  const [costError, setCostError] = useState('');
+  const [costEditMode, setCostEditMode] = useState(false);
   const fixedQueryAbort = useRef(null);
   const rangeQueryAbort = useRef(null);
   const fixedSearchTrimmed = useMemo(
@@ -588,6 +607,40 @@ function Home() {
     };
   }, []);
 
+  const fetchCostConfig = useCallback(async () => {
+    setCostLoading(true);
+    setCostError('');
+    setCostMessage('');
+    try {
+      const response = await fetch('/api/node-resource-monitor/config/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok) {
+        const message = data?.detail || data?.error || '無法取得費率設定。';
+        throw new Error(message);
+      }
+      const next = {
+        cpuCostPerMinute: data?.cpuCostPerMinute ?? '',
+        gpuCostPerMinute: data?.gpuCostPerMinute ?? '',
+      };
+      setCostOriginal(next);
+      setCostForm(next);
+      setCostEditMode(false);
+    } catch (error) {
+      setCostError(error.message || '無法取得費率設定。');
+    } finally {
+      setCostLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCostConfig();
+  }, [fetchCostConfig]);
+
 
   const [unsyncList, setUnsyncList] = useState([]);
   useEffect(() => {
@@ -607,6 +660,84 @@ function Home() {
     );
   }, []);
 
+
+  const handleCostInputChange = (event) => {
+    const { name, value } = event.target;
+    setCostForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+
+  const beginCostEdit = () => {
+    setCostForm(costOriginal);
+    setCostEditMode(true);
+    setCostError('');
+    setCostMessage('');
+  };
+
+  const cancelCostEdit = () => {
+    setCostForm(costOriginal);
+    setCostEditMode(false);
+    setCostError('');
+    setCostMessage('');
+  };
+
+  const handleCostSubmit = async (event) => {
+    event.preventDefault();
+    if (!costEditMode) {
+      return;
+    }
+    setCostError('');
+    setCostMessage('');
+    const payload = {};
+    if (costForm.cpuCostPerMinute !== '') {
+      payload.cpuCostPerMinute = costForm.cpuCostPerMinute;
+    }
+    if (costForm.gpuCostPerMinute !== '') {
+      payload.gpuCostPerMinute = costForm.gpuCostPerMinute;
+    }
+    if (!Object.keys(payload).length) {
+      setCostError('請輸入至少一個費率數值。');
+      return;
+    }
+    setCostSaving(true);
+    try {
+      const response = await fetch('/api/node-resource-monitor/config/', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await readJsonSafely(response);
+      if (!response.ok) {
+        const firstError =
+          (data?.errors && Object.values(data.errors).find(Boolean)) || null;
+        const detail =
+          (typeof firstError === 'string'
+            ? firstError
+            : Array.isArray(firstError)
+              ? firstError[0]
+              : null) ||
+          data?.detail ||
+          '費率更新失敗。';
+        throw new Error(detail);
+      }
+      const next = {
+        cpuCostPerMinute: data?.cpuCostPerMinute ?? '',
+        gpuCostPerMinute: data?.gpuCostPerMinute ?? '',
+      };
+      setCostOriginal(next);
+      setCostForm(next);
+      setCostEditMode(false);
+      setCostMessage('費率已更新，新的設定將立即生效。');
+    } catch (error) {
+      setCostError(error.message || '費率更新失敗。');
+    } finally {
+      setCostSaving(false);
+    }
+  };
 
   const pad = (n) => n.toString().padStart(2, '0');
   const fmt = (date) => {
@@ -868,6 +999,117 @@ function Home() {
             </Card>
           </Col>
         </Row>
+
+        <Card className="mt-4">
+          <Card.Header>Node Resource Monitor 費率設定</Card.Header>
+          <Card.Body className="text-start">
+            <p className="text-muted small mb-3">
+              直接更新 `node-resource-monitor-config` ConfigMap（namespace: cgu）中的
+              CPU/GPU 每分鐘費率，變更後新的計費將立即採用最新設定。
+            </p>
+            <div className="mb-2 small text-muted">
+              <strong>目前 CPU：</strong>
+              {costOriginal.cpuCostPerMinute !== ''
+                ? `$${costOriginal.cpuCostPerMinute} / min`
+                : '尚未設定'}
+              ，<strong>目前 GPU：</strong>
+              {costOriginal.gpuCostPerMinute !== ''
+                ? `$${costOriginal.gpuCostPerMinute} / min`
+                : '尚未設定'}
+            </div>
+            <form onSubmit={handleCostSubmit}>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="form-label" htmlFor="cpu-cost-input">
+                    CPU 費率（每分鐘）
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text">$</span>
+                    <input
+                      id="cpu-cost-input"
+                      name="cpuCostPerMinute"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="form-control"
+                      value={costForm.cpuCostPerMinute}
+                      onChange={handleCostInputChange}
+                      disabled={!costEditMode || costLoading || costSaving}
+                    />
+                    <span className="input-group-text">/ min</span>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label" htmlFor="gpu-cost-input">
+                    GPU 費率（每分鐘）
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text">$</span>
+                    <input
+                      id="gpu-cost-input"
+                      name="gpuCostPerMinute"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="form-control"
+                      value={costForm.gpuCostPerMinute}
+                      onChange={handleCostInputChange}
+                      disabled={!costEditMode || costLoading || costSaving}
+                    />
+                    <span className="input-group-text">/ min</span>
+                  </div>
+                </div>
+              </div>
+              <div className="d-flex flex-wrap gap-2 mt-3 align-items-center">
+                {costEditMode ? (
+                  <>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={costSaving}
+                    >
+                      {costSaving ? '儲存中…' : '儲存費率'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={cancelCostEdit}
+                      disabled={costSaving}
+                    >
+                      取消
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={beginCostEdit}
+                    disabled={costLoading}
+                  >
+                    編輯費率
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={fetchCostConfig}
+                  disabled={costLoading || costSaving}
+                >
+                  重新讀取
+                </button>
+              </div>
+              {costLoading ? (
+                <div className="text-muted small mt-2">讀取費率中…</div>
+              ) : null}
+              {costError ? (
+                <div className="text-danger small mt-2">{costError}</div>
+              ) : null}
+              {costMessage ? (
+                <div className="text-success small mt-2">{costMessage}</div>
+              ) : null}
+            </form>
+          </Card.Body>
+        </Card>
 
         <Card className="mt-4">
           <Card.Header>Usage 查詢（Namespace Cost）</Card.Header>
