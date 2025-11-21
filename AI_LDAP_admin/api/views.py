@@ -36,9 +36,17 @@ def send_email_gmail(subject, message, destination):
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
     context = ssl.create_default_context() 
-    with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
-        server.login(my_mail, my_password)
-        server.sendmail(my_mail, destination, msg.as_string())
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, destination, msg.as_string())
+        print(f'Email sent successfully to {destination}')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+    except Exception as e:
+        print(f'Failed to send email to {destination}: {e}')
 
 def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
     add_account_email_title = '帳號啟用通知信 ( Account Activation Notification )'
