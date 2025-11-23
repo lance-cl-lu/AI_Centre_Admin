@@ -11,6 +11,8 @@ def send_email_gmail(subject, message, destination):
     port = 465
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
+    my_mail2 = 'support02@twentyfouri.com'
+    my_password2 = 'rqgn hsmt pbnl gmau'
     context = ssl.create_default_context()
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
@@ -19,9 +21,18 @@ def send_email_gmail(subject, message, destination):
         print(f'Email sent successfully to {destination}')
     except smtplib.SMTPAuthenticationError as e:
         print(f'Authentication failed: {e}')
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
     except smtplib.SMTPException as e:
         print(f'SMTP error occurred: {e}')
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
     except Exception as e:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
         print(f'Failed to send email to {destination}: {e}')
 
 email_body = """<pre> 
@@ -318,7 +329,7 @@ email_body1 = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
         '<ul>' \
         '<li style="font-weight: 400;" aria-level="1"><strong>使用者名稱</strong><span style="font-weight: 400;">：</span>'\
         '<span style="font-weight: 400;">' + k8s_account + '</span></li>' \
-        '<li style="font-weight: 400;" aria-level="1"><strong>密碼</strong>'\
+        '<li style="font-weight: 400}" aria-level="1"><strong>密碼</strong>'\
         '<span style="font-weight: 400;">：</span><span style="font-weight: 400;">' + k8s_password +'</span></li>' \
         '</ul>' \
         '<p><span style="font-weight: 400;">為了確保您的帳號安全，請您在首次登入後立即修改密碼。</span></p>' \

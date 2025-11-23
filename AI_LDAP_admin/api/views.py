@@ -35,7 +35,9 @@ def send_email_gmail(subject, message, destination):
     port = 465
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
-    context = ssl.create_default_context() 
+    my_mail2 = 'support02@twentyfouri.com'
+    my_password2 = 'rqgn hsmt pbnl gmau'
+    context = ssl.create_default_context()
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
             server.login(my_mail, my_password)
@@ -43,9 +45,18 @@ def send_email_gmail(subject, message, destination):
         print(f'Email sent successfully to {destination}')
     except smtplib.SMTPAuthenticationError as e:
         print(f'Authentication failed: {e}')
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
     except smtplib.SMTPException as e:
         print(f'SMTP error occurred: {e}')
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
     except Exception as e:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
         print(f'Failed to send email to {destination}: {e}')
 
 def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
