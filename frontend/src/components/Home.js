@@ -503,6 +503,10 @@ function Home() {
   const [rangeOutput, setRangeOutput] = useState('請查詢…');
   const [rangeError, setRangeError] = useState('');
   const [rangeLoading, setRangeLoading] = useState(false);
+  const [activeUsageTab, setActiveUsageTab] = useState('fixed');
+  const [fixedRows, setFixedRows] = useState([]);
+  const [rangeRows, setRangeRows] = useState([]);
+  const [rangeWindowLabel, setRangeWindowLabel] = useState('');
   const initialCostState = {
     cpuCostPerMinute: '',
     gpuCostPerMinute: '',
@@ -748,6 +752,8 @@ function Home() {
   const handleFixedQuery = async () => {
     const namespaceInput = nsFixed.trim() || '.*';
     setFixedError('');
+    setFixedRows([]);
+    setFixedOutput('');
     setFixedLoading(true);
     if (fixedQueryAbort.current) {
       fixedQueryAbort.current.abort();
@@ -777,24 +783,24 @@ function Home() {
       const summaries = buildInstantNamespaceSummary(costData, timeData);
       if (!summaries.length) {
         setFixedOutput('No data');
+        setFixedRows([]);
         return;
       }
-      const lines = summaries.map((entry) => {
-        const costText =
-          entry.cost !== null ? formatMetricValue(entry.cost, 2) : '無費用資料';
-        const timeTextValue =
-          entry.time !== null ? formatMetricValue(entry.time, 2) : '無時間資料';
-        const timestampText =
-          entry.timestamp !== null ? formatTimestamp(entry.timestamp) : '未知時間';
-        return `${entry.namespaceLabel} 費用 ${costText} / 時間 ${timeTextValue} (at ${timestampText})`;
-      });
-      setFixedOutput(lines.join('\n'));
+      const rows = summaries.map((entry) => ({
+        namespaceLabel: entry.namespaceLabel,
+        cost: entry.cost,
+        time: entry.time,
+        timestamp: entry.timestamp,
+      }));
+      setFixedRows(rows);
+      setFixedOutput('');
     } catch (error) {
       if (error.name === 'AbortError') {
         return;
       }
       setFixedError(error.message || '查詢失敗');
       setFixedOutput('');
+      setFixedRows([]);
     } finally {
       setFixedLoading(false);
       if (fixedQueryAbort.current === controller) {
@@ -806,6 +812,9 @@ function Home() {
   const handleRangeQuery = async () => {
     const namespaceInput = rangeNs.trim() || '.*';
     setRangeError('');
+    setRangeRows([]);
+    setRangeWindowLabel('');
+    setRangeOutput('');
     setRangeLoading(true);
     if (rangeQueryAbort.current) {
       rangeQueryAbort.current.abort();
@@ -843,30 +852,30 @@ function Home() {
       const header = `區間: ${startDate.toLocaleString()} → ${endDate.toLocaleString()}`;
       const summaries = buildRangeNamespaceSummary(costData, timeData);
       if (!summaries.length) {
-        setRangeOutput(`${header}\nNo data`);
+        setRangeWindowLabel(header);
+        setRangeRows([]);
+        setRangeOutput('No data');
         return;
       }
-      const lines = summaries.map((entry) => {
-        const costSummary = summariseSeriesDiff(entry.costValues);
-        const costSection =
-          entry.costValues && entry.costValues.length
-            ? `費用 ${formatMetricValue(costSummary.diff, 2)} (max ${formatMetricValue(costSummary.maxValue, 2)} at ${formatTimestamp(costSummary.maxTimestamp)}, min ${formatMetricValue(costSummary.minValue, 2)} at ${formatTimestamp(costSummary.minTimestamp)})`
-            : '費用資料缺失';
-        const timeSection =
-          entry.timeValues && entry.timeValues.length
-            ? (() => {
-                const timeSummary = summariseSeriesDiff(entry.timeValues);
-                return `時間 ${formatMetricValue(timeSummary.diff, 2)} (max ${formatMetricValue(timeSummary.maxValue, 2)} at ${formatTimestamp(timeSummary.maxTimestamp)}, min ${formatMetricValue(timeSummary.minValue, 2)} at ${formatTimestamp(timeSummary.minTimestamp)})`;
-              })()
-            : '時間資料缺失';
-        return `${entry.namespaceLabel} ${costSection} / ${timeSection}`;
+      const rows = summaries.map((entry) => {
+        const hasCost = entry.costValues && entry.costValues.length;
+        const hasTime = entry.timeValues && entry.timeValues.length;
+        return {
+          namespaceLabel: entry.namespaceLabel,
+          costSummary: hasCost ? summariseSeriesDiff(entry.costValues) : null,
+          timeSummary: hasTime ? summariseSeriesDiff(entry.timeValues) : null,
+        };
       });
-      setRangeOutput([header, ...lines].join('\n'));
+      setRangeWindowLabel(header);
+      setRangeRows(rows);
+      setRangeOutput('');
     } catch (error) {
       if (error.name === 'AbortError') {
         return;
       }
       setRangeError(error.message || '查詢失敗');
+      setRangeRows([]);
+      setRangeWindowLabel('');
       setRangeOutput('');
     } finally {
       setRangeLoading(false);
@@ -1114,139 +1123,300 @@ function Home() {
         <Card className="mt-4">
           <Card.Header>Usage 查詢（Namespace Cost）</Card.Header>
           <Card.Body className="text-start">
-            <div className="row">
-              <div className="col-md-6 mb-4">
-                <h5>固定時間查詢</h5>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="fixed-namespace-select">
-                    Namespace
-                  </label>
-                  <NamespacePicker
-                    selectId="fixed-namespace-select"
-                    selected={nsFixed}
-                    onSelect={setNsFixed}
-                    keyword={fixedSearchKeyword}
-                    onKeywordChange={setFixedSearchKeyword}
-                    filteredOptions={filteredFixedNamespaces}
-                    includeAllOption
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Metric</label>
-                  <select
-                    className="form-select"
-                    value={metricFixed}
-                    onChange={(event) => setMetricFixed(event.target.value)}
-                  >
-                    <option value="namespace_cpu_cost">CPU</option>
-                    <option value="namespace_gpu_cost">GPU</option>
-                    <option value="namespace_total_cost">Total</option>
-                  </select>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Time</label>
-                  <input
-                    className="form-control"
-                    value={timeFixed}
-                    onChange={(event) => setTimeFixed(event.target.value)}
-                    placeholder="YYYY-MM-DD HH:MM:SS 或 now"
-                  />
-                </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleFixedQuery}
-                  disabled={fixedLoading}
-                >
-                  {fixedLoading ? '查詢中…' : '查詢'}
-                </button>
-                <pre
-                  className="mt-3 p-3 bg-light border"
-                  style={{ minHeight: '120px' }}
-                >
-                  {fixedError ? `ERROR: ${fixedError}` : fixedOutput}
-                </pre>
-              </div>
-              <div className="col-md-6 mb-4">
-                <h5>區間查詢 (max-min)</h5>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="range-namespace-select">
-                    Namespace
-                  </label>
-                  <NamespacePicker
-                    selectId="range-namespace-select"
-                    selected={rangeNs}
-                    onSelect={setRangeNs}
-                    keyword={rangeSearchKeyword}
-                    onKeywordChange={setRangeSearchKeyword}
-                    filteredOptions={filteredRangeNamespaces}
-                    includeAllOption
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Metric</label>
-                  <select
-                    className="form-select"
-                    value={rangeMetric}
-                    onChange={(event) => setRangeMetric(event.target.value)}
-                  >
-                    <option value="namespace_cpu_cost">CPU</option>
-                    <option value="namespace_gpu_cost">GPU</option>
-                    <option value="namespace_total_cost">Total</option>
-                  </select>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Start</label>
-                  <input
-                    className="form-control"
-                    type="datetime-local"
-                    step="1"
-                    value={rangeStart}
-                    onChange={(event) => setRangeStart(event.target.value)}
-                    placeholder="YYYY-MM-DDTHH:MM:SS"
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">End</label>
-                  <input
-                    className="form-control"
-                    type="datetime-local"
-                    step="1"
-                    value={rangeEnd}
-                    onChange={(event) => setRangeEnd(event.target.value)}
-                    placeholder="YYYY-MM-DDTHH:MM:SS"
-                  />
-                </div>
-                <div className="mb-3 d-flex gap-2 flex-wrap">
-                  <button
-                    className="btn btn-outline-secondary"
-                    type="button"
-                    onClick={handleSetLastMonth}
-                  >
-                    上個月
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary"
-                    type="button"
-                    onClick={handleSetThisMonth}
-                  >
-                    本月至今
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleRangeQuery}
-                    disabled={rangeLoading}
-                  >
-                    {rangeLoading ? '查詢中…' : '查詢區間'}
-                  </button>
-                </div>
-                <pre
-                  className="mt-3 p-3 bg-light border"
-                  style={{ minHeight: '160px' }}
-                >
-                  {rangeError ? `ERROR: ${rangeError}` : rangeOutput}
-                </pre>
-              </div>
+            <div className="usage-tabs">
+              <button
+                type="button"
+                className={`usage-tab-btn ${activeUsageTab === 'fixed' ? 'active' : ''}`}
+                onClick={() => setActiveUsageTab('fixed')}
+              >
+                固定時間查詢
+              </button>
+              <button
+                type="button"
+                className={`usage-tab-btn ${activeUsageTab === 'range' ? 'active' : ''}`}
+                onClick={() => setActiveUsageTab('range')}
+              >
+                區間查詢 (max-min)
+              </button>
             </div>
+
+            {activeUsageTab === 'fixed' ? (
+              <div className="usage-panel">
+                <div className="usage-form-grid">
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="fixed-namespace-select">
+                      Namespace
+                    </label>
+                    <NamespacePicker
+                      selectId="fixed-namespace-select"
+                      selected={nsFixed}
+                      onSelect={setNsFixed}
+                      keyword={fixedSearchKeyword}
+                      onKeywordChange={setFixedSearchKeyword}
+                      filteredOptions={filteredFixedNamespaces}
+                      includeAllOption
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Metric</label>
+                    <select
+                      className="form-select"
+                      value={metricFixed}
+                      onChange={(event) => setMetricFixed(event.target.value)}
+                    >
+                      <option value="namespace_cpu_cost">CPU</option>
+                      <option value="namespace_gpu_cost">GPU</option>
+                      <option value="namespace_total_cost">Total</option>
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Time</label>
+                    <input
+                      className="form-control"
+                      value={timeFixed}
+                      onChange={(event) => setTimeFixed(event.target.value)}
+                      placeholder="YYYY-MM-DD HH:MM:SS 或 now"
+                    />
+                  </div>
+                  <div className="d-flex gap-2 flex-wrap">
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      onClick={handleFixedQuery}
+                      disabled={fixedLoading}
+                    >
+                      {fixedLoading ? '查詢中…' : '查詢'}
+                    </button>
+                  </div>
+                </div>
+                <div className="usage-results">
+                  {fixedLoading ? (
+                    <div className="usage-loading">查詢中…</div>
+                  ) : null}
+                  {fixedError ? (
+                    <div className="usage-error">{fixedError}</div>
+                  ) : null}
+                  {!fixedLoading && !fixedError ? (
+                    fixedRows.length ? (
+                      <table className="usage-table usage-table-compact">
+                        <thead>
+                          <tr>
+                            <th>Namespace</th>
+                            <th>費用</th>
+                            <th>時間</th>
+                            <th>查詢時間</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fixedRows.map((row) => (
+                            <tr key={row.namespaceLabel}>
+                              <th scope="row">{row.namespaceLabel}</th>
+                              <td>
+                                {row.cost !== null
+                                  ? formatMetricValue(row.cost, 2)
+                                  : '無資料'}
+                              </td>
+                              <td>
+                                {row.time !== null
+                                  ? formatMetricValue(row.time, 2)
+                                  : '無資料'}
+                              </td>
+                              <td>
+                                {row.timestamp !== null
+                                  ? formatTimestamp(row.timestamp)
+                                  : '未知時間'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="usage-empty">{fixedOutput || '請查詢…'}</div>
+                    )
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="usage-panel">
+                <div className="usage-form-grid">
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="range-namespace-select">
+                      Namespace
+                    </label>
+                    <NamespacePicker
+                      selectId="range-namespace-select"
+                      selected={rangeNs}
+                      onSelect={setRangeNs}
+                      keyword={rangeSearchKeyword}
+                      onKeywordChange={setRangeSearchKeyword}
+                      filteredOptions={filteredRangeNamespaces}
+                      includeAllOption
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Metric</label>
+                    <select
+                      className="form-select"
+                      value={rangeMetric}
+                      onChange={(event) => setRangeMetric(event.target.value)}
+                    >
+                      <option value="namespace_cpu_cost">CPU</option>
+                      <option value="namespace_gpu_cost">GPU</option>
+                      <option value="namespace_total_cost">Total</option>
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Start</label>
+                    <input
+                      className="form-control"
+                      type="datetime-local"
+                      step="1"
+                      value={rangeStart}
+                      onChange={(event) => setRangeStart(event.target.value)}
+                      placeholder="YYYY-MM-DDTHH:MM:SS"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">End</label>
+                    <input
+                      className="form-control"
+                      type="datetime-local"
+                      step="1"
+                      value={rangeEnd}
+                      onChange={(event) => setRangeEnd(event.target.value)}
+                      placeholder="YYYY-MM-DDTHH:MM:SS"
+                    />
+                  </div>
+                  <div className="mb-3 d-flex gap-2 flex-wrap">
+                    <button
+                      className="btn btn-outline-secondary"
+                      type="button"
+                      onClick={handleSetLastMonth}
+                    >
+                      上個月
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary"
+                      type="button"
+                      onClick={handleSetThisMonth}
+                    >
+                      本月至今
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      onClick={handleRangeQuery}
+                      disabled={rangeLoading}
+                    >
+                      {rangeLoading ? '查詢中…' : '查詢區間'}
+                    </button>
+                  </div>
+                </div>
+                <div className="usage-results">
+                  {rangeWindowLabel ? (
+                    <div className="usage-notice">{rangeWindowLabel}</div>
+                  ) : null}
+                  {rangeLoading ? (
+                    <div className="usage-loading">查詢中…</div>
+                  ) : null}
+                  {rangeError ? (
+                    <div className="usage-error">{rangeError}</div>
+                  ) : null}
+                  {!rangeLoading && !rangeError ? (
+                    rangeRows.length ? (
+                      <table className="usage-table usage-table-compact">
+                        <thead>
+                          <tr>
+                            <th>Namespace</th>
+                            <th>費用增量</th>
+                            <th>費用最大值</th>
+                            <th>費用最小值</th>
+                            <th>時間增量</th>
+                            <th>時間最大值</th>
+                            <th>時間最小值</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rangeRows.map((row) => (
+                            <tr key={row.namespaceLabel}>
+                              <th scope="row">{row.namespaceLabel}</th>
+                              <td>
+                                {row.costSummary
+                                  ? formatMetricValue(row.costSummary.diff, 2)
+                                  : '無資料'}
+                              </td>
+                              <td>
+                                {row.costSummary ? (
+                                  <div className="usage-cell">
+                                    <span className="usage-cell-value">
+                                      {formatMetricValue(row.costSummary.maxValue, 2)}
+                                    </span>
+                                    <span className="usage-cell-time">
+                                      {formatTimestamp(row.costSummary.maxTimestamp)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  '無資料'
+                                )}
+                              </td>
+                              <td>
+                                {row.costSummary ? (
+                                  <div className="usage-cell">
+                                    <span className="usage-cell-value">
+                                      {formatMetricValue(row.costSummary.minValue, 2)}
+                                    </span>
+                                    <span className="usage-cell-time">
+                                      {formatTimestamp(row.costSummary.minTimestamp)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  '無資料'
+                                )}
+                              </td>
+                              <td>
+                                {row.timeSummary
+                                  ? formatMetricValue(row.timeSummary.diff, 2)
+                                  : '無資料'}
+                              </td>
+                              <td>
+                                {row.timeSummary ? (
+                                  <div className="usage-cell">
+                                    <span className="usage-cell-value">
+                                      {formatMetricValue(row.timeSummary.maxValue, 2)}
+                                    </span>
+                                    <span className="usage-cell-time">
+                                      {formatTimestamp(row.timeSummary.maxTimestamp)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  '無資料'
+                                )}
+                              </td>
+                              <td>
+                                {row.timeSummary ? (
+                                  <div className="usage-cell">
+                                    <span className="usage-cell-value">
+                                      {formatMetricValue(row.timeSummary.minValue, 2)}
+                                    </span>
+                                    <span className="usage-cell-time">
+                                      {formatTimestamp(row.timeSummary.minTimestamp)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  '無資料'
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="usage-empty">{rangeOutput || '請查詢…'}</div>
+                    )
+                  ) : null}
+                </div>
+              </div>
+            )}
           </Card.Body>
         </Card>
 
