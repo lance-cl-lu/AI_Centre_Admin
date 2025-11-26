@@ -533,6 +533,45 @@ def replace_profile_user(name,user,cpu,gpu,memory):
             )
             print(api_response)
 
+def replace_profile_user_delete_date(name, date):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    api = client.CustomObjectsApi()
+    # 只抓單一 profile，避免直接操作 list 物件
+    try:
+        profile = api.get_cluster_custom_object(group, version, plural, name)
+    except Exception as e:
+        print(f"[delete_date] 取 profile 失敗: {e}")
+        return False
+
+    annotations = profile.get('metadata', {}).get('annotations', {}) or {}
+    # 全部轉成字串，避免型別錯誤
+    annotations = {k: str(v) for k, v in annotations.items()}
+    annotations['delete_date'] = str(date)
+
+    patch_body = {
+        "metadata": {
+            "annotations": annotations
+        }
+    }
+
+    try:
+        resp = api.patch_cluster_custom_object(
+            group=group,
+            version=version,
+            plural=plural,
+            name=name,
+            body=patch_body
+        )
+        print("[delete_date] 更新成功:", resp.get('metadata', {}).get('annotations'))
+        return True
+    except Exception as e:
+        print(f"[delete_date] 更新失敗: {e}")
+        return False
+
 
 def get_gid():
     while True:
@@ -602,12 +641,14 @@ def get_group_corresponding_user(request):
                     except Exception as e:
                         print(f"LDAP search error: {e}")
                 group_list.append({"group_dn": group.name, "member_uids": user_list})
-                conn.unbind()
+                conn.unbind()         
             return Response(group_list, status=200)
         elif detail_obj[0].permission == 1:
             # get only the group that user is in
             for group_item in detail_obj:
                 if(group_item.labname.name == 'root'):
+                    continue
+                if(group_item.labname.name == 'TRASH'):
                     continue
                 User.objects.filter(groups=group_item.labname)
                 user_list = []
@@ -720,6 +761,14 @@ def get_lab_info(request):
     }
     return Response(data, status=200)
 
+def create_group(labname):
+    try:
+        Group.objects.get(name=labname)
+        return False
+    except:
+        group = Group.objects.create(name=labname)
+        return True
+    
 @api_view(['POST'])
 def addlab(request):
     data = json.loads(request.body.decode('utf-8'))
@@ -1102,7 +1151,7 @@ def get_user_info(request):
     }
     return Response(data, status=200)
 
-def deleteUserModel(username):
+def deleteUserModelPermanent(username):
     user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
     conn = connectLDAP()
@@ -1123,6 +1172,28 @@ def deleteUserModel(username):
     delete_profile(profileName, k8s_email, k8s_name)
     conn.unbind()
 
+def deleteUserModel(username):
+    user_obj = User.objects.get(username=username)
+    profileName = get_profile_by_email(user_obj.email)
+    conn = connectLDAP()
+
+    ## delete the user memberUID from the group
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    for entry in conn.entries:
+        try:
+            conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
+        except:
+            pass
+    conn.unbind()
+
+    for group in user_obj.groups.all():
+        User.objects.get(username=username).groups.remove(Group.objects.get(name=group.name))
+        UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=group.name)).delete()
+    UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
+    user_obj.groups.add(Group.objects.get(name="TRASH"))
+    k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
+    replace_profile_user_delete_date(username, k8s_date)
+    
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
@@ -1172,6 +1243,20 @@ def user_group_num(requset):
     group_num = len(Group.objects.all())
     # return the number of group and user
     data = {'lab_num': group_num, 'lab_list': group_list, 'user_num': user_num, 'user_list': user_list}
+
+    # 建立 TRASH group (如果不存在)
+    try:
+        Group.objects.get(name="TRASH")
+    except:
+        group = Group.objects.create(name="TRASH")
+        GroupDefaultQuota.objects.create(
+            labname=group, 
+            cpu_quota=0, 
+            mem_quota=0, 
+            gpu_quota=0, 
+            gpu_vendor="NVIDIA"
+        )
+
     return JsonResponse(data, safe=False)
 
 
@@ -1326,7 +1411,7 @@ def excel(request):
 
                 for group_obj in User.objects.get(username=row[0].value).groups.all():
                     if group_obj.name == row[1].value:
-                        # check password is correct or not
+                        # check password is correct or not                        
                         if User.objects.get(username=row[0].value).check_password(row[2].value) is False:
                             if User.objects.get(username=row[0].value).password == row[2].value:
                                 print("user {} password is correct".format(row[0].value))
@@ -1732,12 +1817,6 @@ def import_lab_user(request):
             if float(user['cpu_quota']) > 1100:
                 user['cpu_quota'] = str(float(user['cpu_quota'])/1100)
             print("After check2", user['cpu_quota'])
-            try:
-                if int(user['mem_quota']) > 1100:
-                    user['mem_quota'] = str(float(user['mem_quota'])/1100)
-            except:
-                user['mem_quota'] = '0'
-            
             try:
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
