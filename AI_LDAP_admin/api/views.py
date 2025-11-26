@@ -1175,22 +1175,27 @@ def deleteUserModelPermanent(username):
 def deleteUserModel(username):
     user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
-    conn = connectLDAP()
 
-    ## delete the user memberUID from the group
-    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
-    for entry in conn.entries:
-        try:
-            conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
-        except:
-            pass
-    conn.unbind()
+    user_obj.set_password("trash123456")
+    user_obj.save()
 
     for group in user_obj.groups.all():
         User.objects.get(username=username).groups.remove(Group.objects.get(name=group.name))
         UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=group.name)).delete()
     UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
     user_obj.groups.add(Group.objects.get(name="TRASH"))
+
+    conn = connectLDAP()
+    ## delete the user memberUID from the group
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+    for entry in conn.entries:
+        try:
+            conn.modify(entry.entry_dn, {'userPassword': [(MODIFY_REPLACE, [user_obj.password.split('$')[1]])]})
+        except:
+            pass
+    conn.unbind()
+
     k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
     replace_profile_user_delete_date(username, k8s_date)
     
