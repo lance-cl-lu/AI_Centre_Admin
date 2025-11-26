@@ -1194,6 +1194,15 @@ def deleteUserModel(username):
     k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
     replace_profile_user_delete_date(username, k8s_date)
     
+    
+@api_view(['POST'])
+def user_delete_permanent(request):
+    data = json.loads(request.body.decode('utf-8'))
+    group_list = get_user_all_groups(data['username'])
+    print("group_list = ", group_list)
+    deleteUserModelPermanent(data['username'])
+    return Response(status=200)
+
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
