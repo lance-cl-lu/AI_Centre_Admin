@@ -494,15 +494,22 @@ def get_lab_info(request):
         user_list.append(user.username)
         # get group default quota and gpu vendor
     try:
-        cpuQuota = GroupDefaultQuota.objects.get(labname=group).cpu_quota
-        memQuota = GroupDefaultQuota.objects.get(labname=group).mem_quota
-        gpuQuota = GroupDefaultQuota.objects.get(labname=group).gpu_quota
-        gpuVendor = GroupDefaultQuota.objects.get(labname=group).gpu_vendor
+        group_quota = GroupDefaultQuota.objects.get(labname=group)
+        cpuQuota = group_quota.cpu_quota
+        memQuota = group_quota.mem_quota
+        gpuQuota = group_quota.gpu_quota
+        gpuVendor = group_quota.gpu_vendor
+        expiryDate = group_quota.expiry_date.isoformat() if group_quota.expiry_date else None
+        remainingDays = group_quota.remaining_days
+        isExpired = group_quota.is_expired
     except:
         cpuQuota = 0
         memQuota = 0
         gpuQuota = 0
         gpuVendor = "NVIDIA"
+        expiryDate = None
+        remainingDays = None
+        isExpired = False
     
     # get the user permission from database
     data = {
@@ -512,6 +519,9 @@ def get_lab_info(request):
         "memQuota": memQuota,
         "gpuQuota": gpuQuota,
         "gpuVendor": gpuVendor,
+        "expiryDate": expiryDate,
+        "remainingDays": remainingDays,
+        "isExpired": isExpired,
         "memberUid": get_all_user_permission(user_list, labname)
     }
     return Response(data, status=200)
@@ -557,6 +567,8 @@ def editlab(request):
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
     gpuVendor = data['gpu_vendor']
+    expiryDate = data.get('expiry_date', None)  # 獲取到期日期，可能為空
+    
     try:
         cpuQuota = int(cpuQuota)
         memQuota = int(memQuota)
@@ -565,6 +577,16 @@ def editlab(request):
         return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")
     if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
         return Response(status=500, data="gpuVendor is not valid")
+    
+    # 驗證日期格式
+    expiry_date_obj = None
+    if expiryDate:
+        try:
+            from datetime import datetime
+            expiry_date_obj = datetime.strptime(expiryDate, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(status=500, data="Invalid expiry date format")
+    
     group = Group.objects.get(name=labname)
     if group is None:
         return Response(status=500, data="lab is not exist")
@@ -576,9 +598,17 @@ def editlab(request):
         groupDefaultQuota.mem_quota = memQuota
         groupDefaultQuota.gpu_quota = gpuQuota
         groupDefaultQuota.gpu_vendor = gpuVendor
+        groupDefaultQuota.expiry_date = expiry_date_obj
         groupDefaultQuota.save()
     else:
-        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+        GroupDefaultQuota.objects.create(
+            labname=group, 
+            cpu_quota=cpuQuota, 
+            mem_quota=memQuota, 
+            gpu_quota=gpuQuota, 
+            gpu_vendor=gpuVendor,
+            expiry_date=expiry_date_obj
+        )
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
 @api_view(['POST'])
