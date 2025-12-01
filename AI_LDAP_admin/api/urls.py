@@ -48,6 +48,12 @@ urlpatterns = [
     path("setNotebook/", set_notebook, name="set_notebook"),
     path("getNotebookYAML/", get_notebook_yaml, name="get_notebook_yaml"),
     path("uploadNotebookYAML/", upload_notebook_yaml, name="upload_notebook_yaml"),
+    
+    # Pending deletion management
+    path("ldap/pending-deletion/", pending_deletion_list, name="pending_deletion_list"),
+    path("ldap/pending-deletion/cancel/", cancel_pending_deletion, name="cancel_pending_deletion"),
+    path("ldap/pending-deletion/add/", move_user_to_pending_deletion, name="move_user_to_pending_deletion"),
+    path("test/", mytest, name="upload_notebook_yaml"),
     # danger for deploy
     # path("ldap/danger/", remove_all_entr, name="danger"),
 ]

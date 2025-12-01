@@ -4,6 +4,8 @@ import json, random
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
 from django.core.files.storage import default_storage
+from django.utils import timezone
+from datetime import timedelta
 
 from passlib.hash import ldap_md5
 
@@ -11,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
-from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
+from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType, PendingDeletion
 from . import urls
 
 from kubernetes import client, config
@@ -494,15 +496,22 @@ def get_lab_info(request):
         user_list.append(user.username)
         # get group default quota and gpu vendor
     try:
-        cpuQuota = GroupDefaultQuota.objects.get(labname=group).cpu_quota
-        memQuota = GroupDefaultQuota.objects.get(labname=group).mem_quota
-        gpuQuota = GroupDefaultQuota.objects.get(labname=group).gpu_quota
-        gpuVendor = GroupDefaultQuota.objects.get(labname=group).gpu_vendor
+        group_quota = GroupDefaultQuota.objects.get(labname=group)
+        cpuQuota = group_quota.cpu_quota
+        memQuota = group_quota.mem_quota
+        gpuQuota = group_quota.gpu_quota
+        gpuVendor = group_quota.gpu_vendor
+        expiryDate = group_quota.expiry_date.isoformat() if group_quota.expiry_date else None
+        remainingDays = group_quota.remaining_days
+        isExpired = group_quota.is_expired
     except:
         cpuQuota = 0
         memQuota = 0
         gpuQuota = 0
         gpuVendor = "NVIDIA"
+        expiryDate = None
+        remainingDays = None
+        isExpired = False
     
     # get the user permission from database
     data = {
@@ -512,6 +521,9 @@ def get_lab_info(request):
         "memQuota": memQuota,
         "gpuQuota": gpuQuota,
         "gpuVendor": gpuVendor,
+        "expiryDate": expiryDate,
+        "remainingDays": remainingDays,
+        "isExpired": isExpired,
         "memberUid": get_all_user_permission(user_list, labname)
     }
     return Response(data, status=200)
@@ -557,6 +569,8 @@ def editlab(request):
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
     gpuVendor = data['gpu_vendor']
+    expiryDate = data.get('expiry_date', None)  # 獲取到期日期，可能為空
+    
     try:
         cpuQuota = int(cpuQuota)
         memQuota = int(memQuota)
@@ -565,6 +579,16 @@ def editlab(request):
         return Response(status=500, data="cpuQuota, memQuota, gpuQuota is not valid")
     if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
         return Response(status=500, data="gpuVendor is not valid")
+    
+    # 驗證日期格式
+    expiry_date_obj = None
+    if expiryDate:
+        try:
+            from datetime import datetime
+            expiry_date_obj = datetime.strptime(expiryDate, '%Y-%m-%d').date()
+        except ValueError:
+            return Response(status=500, data="Invalid expiry date format")
+    
     group = Group.objects.get(name=labname)
     if group is None:
         return Response(status=500, data="lab is not exist")
@@ -576,9 +600,17 @@ def editlab(request):
         groupDefaultQuota.mem_quota = memQuota
         groupDefaultQuota.gpu_quota = gpuQuota
         groupDefaultQuota.gpu_vendor = gpuVendor
+        groupDefaultQuota.expiry_date = expiry_date_obj
         groupDefaultQuota.save()
     else:
-        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+        GroupDefaultQuota.objects.create(
+            labname=group, 
+            cpu_quota=cpuQuota, 
+            mem_quota=memQuota, 
+            gpu_quota=gpuQuota, 
+            gpu_vendor=gpuVendor,
+            expiry_date=expiry_date_obj
+        )
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
 @api_view(['POST'])
@@ -786,6 +818,72 @@ def get_user_info(request):
     }
     return Response(data, status=200)
 
+def add_user_to_pending_deletion(user_obj, removed_groups, reason="manual", removed_by=None):
+    """
+    Add user to pending deletion list and remove from all groups.
+    User will be scheduled for deletion after 30 days.
+    """
+    from .models import DeletedUser, PendingDeletion
+    
+    # Check if user is already in pending deletion
+    existing_pending = PendingDeletion.objects.filter(user=user_obj).first()
+    if existing_pending:
+        return existing_pending
+    
+    # Schedule deletion for 30 days from now
+    scheduled_date = timezone.now() + timedelta(days=30)
+    
+    # Remove user from all groups in Django
+    for group_name in removed_groups:
+        try:
+            group = Group.objects.get(name=group_name)
+            user_obj.groups.remove(group)
+            
+            # Remove UserDetail records
+            UserDetail.objects.filter(uid=user_obj, labname=group).delete()
+        except Group.DoesNotExist:
+            continue
+    
+    # Remove user from LDAP groups
+    conn = connectLDAP()
+    try:
+        # Remove user from all LDAP groups
+        conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+        for entry in conn.entries:
+            try:
+                conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [user_obj.username])]})
+            except:
+                pass
+        
+        # Remove group descriptions from user
+        conn.search('cn={},ou=users,dc=example,dc=org'.format(user_obj.username), '(objectclass=posixAccount)', attributes=['Description'])
+        for entry in conn.entries:
+            for group_name in removed_groups:
+                try:
+                    conn.modify(entry.entry_dn, {'Description': [(MODIFY_DELETE, [group_name])]})
+                except:
+                    pass
+    except Exception as e:
+        print(f"LDAP operation warning: {e}")
+    finally:
+        conn.unbind()
+    
+    # Create pending deletion record
+    pending_deletion = PendingDeletion.objects.create(
+        user=user_obj,
+        username=user_obj.username,
+        email=user_obj.email,
+        first_name=user_obj.first_name,
+        last_name=user_obj.last_name,
+        removed_from_groups=",".join(removed_groups),
+        scheduled_deletion_date=scheduled_date,
+        removal_reason=reason,
+        removed_by=removed_by
+    )
+    
+    print(f"User {user_obj.username} moved to pending deletion, scheduled for {scheduled_date}")
+    return pending_deletion
+
 def deleteUserModel(username):
     user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
@@ -806,9 +904,39 @@ def deleteUserModel(username):
 
 @api_view(['POST'])
 def user_delete(request):
+    """將用戶移動到待刪除狀態，而不是立即刪除"""
     data = json.loads(request.body.decode('utf-8'))
-    deleteUserModel(data['username'])
-    return Response(status=200)
+    username = data['username']
+    
+    try:
+        user_obj = User.objects.get(username=username)
+        
+        # 獲取用戶所屬的所有群組
+        user_groups = [group.name for group in user_obj.groups.all()]
+        
+        # 將用戶移動到待刪除狀態
+        add_user_to_pending_deletion(
+            user_obj=user_obj,
+            removed_groups=user_groups,
+            reason="User deletion requested from user management",
+            removed_by="admin"
+        )
+        
+        return Response({
+            'message': f'User {username} has been moved to pending deletion',
+            'status': 'success'
+        }, status=200)
+        
+    except User.DoesNotExist:
+        return Response({
+            'message': f'User {username} not found',
+            'status': 'error'
+        }, status=404)
+    except Exception as e:
+        return Response({
+            'message': f'Error moving user to pending deletion: {str(e)}',
+            'status': 'error'
+        }, status=500)
 
 @api_view(['POST'])
 def lab_delete(request):
@@ -1474,8 +1602,14 @@ def remove_user_from_lab(request):
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
-            print("group is empty")
-            deleteUserModel(user)
+            print("group is empty - adding to pending deletion")
+            user_obj = User.objects.get(username=user)
+            add_user_to_pending_deletion(
+                user_obj=user_obj,
+                removed_groups=[lab],
+                reason=f"Removed from lab: {lab}",
+                removed_by="admin"
+            )
         else:
             print("group is not empty -", len(group_list))
         return Response(status=200)
@@ -1522,11 +1656,43 @@ def synchronize_db_ldap():
     return True
 @api_view(['POST'])
 def multiple_user_delete(request):
+    """將多個用戶移動到待刪除狀態，而不是立即刪除"""
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
-    for user in users:
-        deleteUserModel(User.objects.get(username=user).username)
-    return Response(status=200)
+    
+    success_users = []
+    failed_users = []
+    
+    for username in users:
+        try:
+            user_obj = User.objects.get(username=username)
+            
+            # 獲取用戶所屬的所有群組
+            user_groups = [group.name for group in user_obj.groups.all()]
+            
+            # 將用戶移動到待刪除狀態
+            add_user_to_pending_deletion(
+                user_obj=user_obj,
+                removed_groups=user_groups,
+                reason="Bulk user deletion requested from user management",
+                removed_by="admin"
+            )
+            
+            success_users.append(username)
+            
+        except User.DoesNotExist:
+            failed_users.append({'username': username, 'error': 'User not found'})
+        except Exception as e:
+            failed_users.append({'username': username, 'error': str(e)})
+    
+    return Response({
+        'message': f'Processed {len(users)} users',
+        'success_count': len(success_users),
+        'success_users': success_users,
+        'failed_count': len(failed_users),
+        'failed_users': failed_users,
+        'status': 'completed'
+    }, status=200)
 
 @api_view(['POST'])
 def remove_multiple_user_from_lab(request):
@@ -1541,8 +1707,14 @@ def remove_multiple_user_from_lab(request):
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
-            print("group is empty")
-            deleteUserModel(user)
+            print("group is empty - adding to pending deletion")
+            user_obj = User.objects.get(username=user)
+            add_user_to_pending_deletion(
+                user_obj=user_obj,
+                removed_groups=[group],
+                reason=f"Removed from group: {group}",
+                removed_by="admin"
+            )
         else:
             print("group is not empty -", len(group_list))
         conn.search('dc={},ou=Groups,dc=example,dc=org'.format(group), '(objectclass=posixGroup)', attributes=['*'])
@@ -1744,3 +1916,86 @@ def upload_notebook_yaml(request):
                 results[content["metadata"]["name"]] = "non-existed, created it"
         
         return JsonResponse({"files": processed_files, "results": results}, status=200)
+@api_view(['GET'])
+def pending_deletion_list(request):
+    """
+    Get list of users pending deletion with days remaining
+    """
+    pending_users = PendingDeletion.objects.all()
+    user_list = []
+    
+    for pending in pending_users:
+        user_data = {
+            'id': pending.id,
+            'username': pending.username,
+            'email': pending.email,
+            'first_name': pending.first_name,
+            'last_name': pending.last_name,
+            'removed_from_groups': pending.removed_from_groups,
+            'removal_date': pending.removal_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'scheduled_deletion_date': pending.scheduled_deletion_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'days_until_deletion': pending.days_until_deletion,
+            'removal_reason': pending.removal_reason,
+            'removed_by': pending.removed_by,
+        }
+        user_list.append(user_data)
+    
+    return Response({
+        'pending_users': user_list,
+        'total_count': len(user_list)
+    }, status=200)
+
+@api_view(['POST'])
+def cancel_pending_deletion(request):
+    """
+    Cancel pending deletion for a user (restore them)
+    """
+    data = json.loads(request.body.decode('utf-8'))
+    pending_id = data['pending_id']
+    
+    try:
+        pending = PendingDeletion.objects.get(id=pending_id)
+        # You can add logic here to restore user to groups if needed
+        pending.delete()
+        return Response({'message': f'Cancelled pending deletion for {pending.username}'}, status=200)
+    except PendingDeletion.DoesNotExist:
+        return Response({'error': 'Pending deletion record not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+def move_user_to_pending_deletion(request):
+    """
+    Move a user to pending deletion instead of immediate deletion.
+    This is used when removing users from groups.
+    """
+    data = json.loads(request.body.decode('utf-8'))
+    username = data['username']
+    removed_groups = data.get('removed_groups', [])
+    reason = data.get('reason', 'manual removal')
+    removed_by = data.get('removed_by', 'admin')
+    
+    try:
+        user_obj = User.objects.get(username=username)
+        
+        # Add to pending deletion
+        pending = add_user_to_pending_deletion(
+            user_obj=user_obj,
+            removed_groups=removed_groups,
+            reason=reason,
+            removed_by=removed_by
+        )
+        
+        return Response({
+            'message': f'User {username} added to pending deletion',
+            'scheduled_deletion_date': pending.scheduled_deletion_date.isoformat(),
+            'days_until_deletion': pending.days_until_deletion
+        }, status=200)
+        
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+def mytest(request):
+    return JsonResponse({"results": "hello world"}, status=200)

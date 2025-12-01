@@ -90,6 +90,7 @@ function Home() {
         <div className="pie">
           <div className="piediv">
             <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of users: <CountUp end={user_num} duration={5}/></h2>
+            {/*
             <PieChart className="PieStyle"
               data={PieData2}
               labelStyle={{
@@ -97,9 +98,11 @@ function Home() {
               }}
 
             />
+            */}
           </div>
           <div className="piediv">
             <h2 style={{marginTop: '5%', fontFamily: 'Bahnschrift light'}}># of labs: <CountUp end={lab_num} duration={5}/></h2>
+            {/*
             <PieChart className="PieStyle" textAnchor="middle" dominantBaseline="middle"
               data={PieData}
               label={({ dataEntry }) => dataEntry.value}
@@ -109,6 +112,7 @@ function Home() {
                 fontFamily: 'comic sans ms'
               })}
             />
+            */}
           </div>
         </div>
         </motion.div>
@@ -122,6 +126,18 @@ function Home() {
             With Kubeflow you can build, deploy, and manage your machine learning workflows on Kubernetes.
             </Card.Text>
             <Link to={KUBEFLOW_HTTP} className="btn btn-primary">Kubernetes Dashboard</Link>
+          </Card.Body>
+        </Card>
+
+        <br/>
+        <Card className="text-center">
+          <Card.Header>用戶管理</Card.Header>
+          <Card.Body>
+            <Card.Title>待刪除用戶監控</Card.Title>
+            <Card.Text>
+              查看已從群組移除且等待刪除的用戶，並管理刪除排程。
+            </Card.Text>
+            <Link to="/pending-deletion" className="btn btn-warning">查看待刪除用戶</Link>
           </Card.Body>
         </Card>
       </div>

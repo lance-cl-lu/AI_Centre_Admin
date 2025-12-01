@@ -32,3 +32,4 @@ flymd.*
 # Files created by Gogland IDE
 .idea/
 
+AI_LDAP_admin/venv/

@@ -25,6 +25,7 @@ import { Grid } from '@chakra-ui/react';
 import ListNoteBook from './components/ListNoteBook';
 import EditGroup from './components/editgroup';
 import Move from "./components/Move"
+import PendingDeletion from './components/PendingDeletion';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -64,6 +65,7 @@ function App() {
                     <Route path="/listnotebook" element={<ListNoteBook/>}/>
                     <Route path="/edit/group" element={<EditGroup/>}/>
                     <Route path="move/" element={<Move/>}/>
+                    <Route path="/pending-deletion" element={<PendingDeletion/>}/>
                     <Route path="*" element={<Home />} />
                   </Routes>
               </div>
