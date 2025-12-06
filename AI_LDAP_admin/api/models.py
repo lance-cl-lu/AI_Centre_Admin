@@ -50,10 +50,28 @@ class GroupDefaultQuota(models.Model):
     mem_quota = models.IntegerField(default=16)
     gpu_quota = models.IntegerField(default=1)
     gpu_vendor = models.CharField(max_length=100, default='NVIDIA', null=True)
-    
+    expiry_date = models.DateField(null=True, blank=True, help_text="群組到期日期")
+
     class Meta:
         unique_together = ('labname',)
         
+    @property
+    def remaining_days(self):
+        """計算剩餘天數"""
+        if not self.expiry_date:
+            return None
+        from datetime import date
+        delta = self.expiry_date - date.today()
+        return delta.days
+        
+    @property
+    def is_expired(self):
+        """檢查是否已到期"""
+        if not self.expiry_date:
+            return False
+        from datetime import date
+        return self.expiry_date <= date.today()
+
     def __str__(self):
         return self.labname.name
         
