@@ -252,6 +252,88 @@ def set_notebook(request):
     return Response( status=200)
     
 @api_view(['POST'])
+def broadcast_email(request):
+    """發送郵件給所有使用者"""
+    data = json.loads(request.body.decode('utf-8'))
+    subject = data.get('subject')
+    content = data.get('content')
+    
+    if not subject or not content:
+        return Response(status=400, data={"message": "Subject and content are required"})
+    
+    # 取得所有使用者的 email
+    users = User.objects.all()
+    email_list = []
+    
+    for user in users:
+        if user.email:
+            email_list.append(user.email)
+    
+    if not email_list:
+        return Response(status=404, data={"message": "No users with email found"})
+    
+    # 發送郵件
+    try:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        # 測試：印出 email 資訊
+        # print("="*50)
+        # print(f"Subject: {subject}")
+        # print(f"Content: {content}")
+        # print(f"Email list ({len(email_list)} users):")
+        # for email in email_list:
+        #    print(f"  - {email}")
+        # print("="*50)
+
+        for email in email_list:
+            send_email_gmail(subject, content, email)
+        
+        return Response(status=200, data={"message": f"Email sent to {len(email_list)} users"})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response(status=500, data={"message": f"Error sending email: {str(e)}"})
+    
+@api_view(['POST'])
+def group_broadcast_email(request):
+    """發送郵件給特定群組的所有成員"""
+    data = json.loads(request.body.decode('utf-8'))
+    lab = data.get('lab')
+    subject = data.get('subject')
+    content = data.get('content')
+    
+    if not lab or not subject or not content:
+        return Response(status=400, data={"message": "Lab, subject and content are required"})
+    
+    # 檢查群組是否存在
+    try:
+        group = Group.objects.get(name=lab)
+    except Group.DoesNotExist:
+        return Response(status=404, data={"message": f"Group {lab} not found"})
+    
+    # 取得該群組所有成員的 email
+    users = User.objects.filter(groups=group)
+    email_list = []
+    
+    for user in users:
+        if user.email:
+            email_list.append(user.email)
+    
+    if not email_list:
+        return Response(status=404, data={"message": f"No users with email in group {lab}"})
+    
+    # 發送郵件
+    try:
+        # 使用你現有的郵件發送機制
+        for email in email_list:
+            send_email_gmail(subject, content, email)
+        
+        return Response(status=200, data={"message": f"Email sent to {len(email_list)} users in group {lab}"})
+    except Exception as e:
+        return Response(status=500, data={"message": f"Error sending email: {str(e)}"})
+    
+@api_view(['POST'])
 def list_notebooks(request):
     data = json.loads(request.body.decode('utf-8'))
     user = data['user']
@@ -1205,7 +1287,7 @@ def user_delete_permanent(request):
     data = json.loads(request.body.decode('utf-8'))
     group_list = get_user_all_groups(data['username'])
     print("group_list = ", group_list)
-    deleteUserModelPermanent(data['username'])
+    # deleteUserModelPermanent(data['username'])
     return Response(status=200)
 
 @api_view(['POST'])
@@ -1984,7 +2066,7 @@ def multiple_user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
     for user in users:
-        deleteUserModel(User.objects.get(username=user).username)
+        deleteUserModelPermanent(User.objects.get(username=user).username)
     return Response(status=200)
 
 @api_view(['POST'])

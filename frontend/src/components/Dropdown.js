@@ -39,6 +39,12 @@ function Dropdown() {
           null
           }
         </li> */}
+        { permission === 'root' ? 
+        <li>
+          <Link to="/broadcast" className="dropdown-item">Broadcast</Link>
+        </li>
+        : null
+        }
         <li>
           <Link to="/" className="dropdown-item" onClick={logoutUser}>
             Logout

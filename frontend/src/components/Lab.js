@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import AuthContext from "../context/AuthContext";
 import Swal from 'sweetalert2';
+import CampaignIcon from '@mui/icons-material/Campaign'; // ← 加入這行
 
 function Lab() {
   const location = useLocation();
@@ -354,6 +355,11 @@ function Lab() {
             className="icon"
           />
           Edit Group
+        </Link>
+
+        <Link to="/group/broadcast" state={{ lab: state.lab }} className="link-with-icon">
+          <CampaignIcon className="icon" style={{ fontSize: '24px' }} />
+          Group Broadcast
         </Link>
       </div>
 

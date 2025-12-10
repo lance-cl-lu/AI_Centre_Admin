@@ -51,6 +51,8 @@ urlpatterns = [
     path("uploadNotebookYAML/", upload_notebook_yaml, name="upload_notebook_yaml"),
     # danger for deploy
     # path("ldap/danger/", remove_all_entr, name="danger"),
+    path("broadcast/", broadcast_email, name="broadcast_email"),
+    path("group/broadcast/", group_broadcast_email, name="group_broadcast_email"),
 ]
 
 # LDAP_IP = '120.126.23.245'
