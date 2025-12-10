@@ -36,9 +36,167 @@ def send_email_gmail(subject, message, destination):
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
     context = ssl.create_default_context() 
-    with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
-        server.login(my_mail, my_password)
-        server.sendmail(my_mail, destination, msg.as_string())
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, destination, msg.as_string())
+        print(f'Email sent successfully to {destination}')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+    except Exception as e:
+        print(f'Failed to send email to {destination}: {e}')
+
+def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
+    add_account_email_title = '帳號啟用通知信 ( Account Activation Notification )'
+    add_account_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
+            '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
+            '<p><span style="font-weight: 400;">感謝您註冊並使用本中心提供之雲端服務，以下為您的帳號資訊：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>使用者名稱</strong><span style="font-weight: 400;">：' + k8s_account + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>初始密碼</strong><span style="font-weight: 400;">：' + k8s_password + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">為保障您的帳號安全，建議您於首次登入後</span><strong>立即變更密碼</strong><span style="font-weight: 400;">。</span></p>'\
+            '<p><span style="font-weight: 400;">此外，我們已為您準備完整的使用手冊，協助您快速上手系統操作。請點選以下連結下載：</span></p>'\
+            '<p><span style="font-weight: 400;"><a href="https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://zh.wikipedia.org/zh-tw/%25E8%25B6%2585%25E6%2596%2587%25E6%259C%25AC%25E4%25BC%25A0%25E8%25BE%2593%25E5%258D%258F%25E8%25AE%25AE&amp;source=gmail&amp;ust=1746025313613000&amp;usg=AOvVaw3wGP8hFGfkeIbNPzuv8l5p">點擊這裡下載使用手冊</a></span></p>'\
+            '<p><span style="font-weight: 400;">若您對此操作有任何疑問，或非本人授權操作，請立即與我們聯繫，我們將盡速為您處理：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">電話：</span><strong>(03) 211-8800 分機 3001</strong></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">信箱：</span><strong>aiplatform@cgu.edu.tw</strong></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">敬祝</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">使用順利、萬事如意</span></p>'\
+            '<p><span style="font-weight: 400;">長庚大學人工智慧中心</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'\
+            '<p>&nbsp;</p>'\
+            '<p>--------------------------------------------------------------------------------</p>'\
+            '<p>&nbsp;</p>'\
+            '<p><span style="font-weight: 400;">Dear ' + k8s_name + ',</span></p>'\
+            '<p><span style="font-weight: 400;">Thank you for registering and using the cloud services provided by our center. Below are your account details:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Username</strong><span style="font-weight: 400;">: ' + k8s_account + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Initial Password</strong><span style="font-weight: 400;">: ' + k8s_password + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">To ensure the security of your account, we strongly recommend changing your password immediately upon your first login.</span></p>'\
+            '<p><span style="font-weight: 400;">We have also prepared a comprehensive user manual to help you get started with the system. You can download it via the following link:</span></p>'\
+            '<p><span style="font-weight: 400;"><a href="https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI&amp;source=gmail&amp;ust=1746082963524000&amp;usg=AOvVaw06m_RAtCuMh0naKiU9sUYV"> download it via click the link</a></span></p>'\
+            '<p><span style="font-weight: 400;">If you have any questions or did not authorize this action, please contact us immediately. We will assist you as soon as possible:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Phone</strong><span style="font-weight: 400;">: (03) 211-8800 ext. 3001</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Email</strong><span style="font-weight: 400;">: aiplatform@cgu.edu.tw</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">Wishing you a smooth and successful experience.</span></p>'\
+            '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
+    send_email_gmail(add_account_email_title, add_account_email_body, destination)
+
+def send_add_group_email(k8s_name, k8s_group, k8s_date, destination):    
+    add_group_email_title = '群組加入通知信 ( Group Membership Notification )'
+    add_group_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
+            '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
+            '<p><span style="font-weight: 400;">您已被加入至本平台中的指定群組，相關資訊如下：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>群組名稱</strong><span style="font-weight: 400;">：' + k8s_group + '&nbsp;</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>加入時間</strong><span style="font-weight: 400;">：' + k8s_date + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">如您尚未熟悉本平台的群組功能，歡迎參閱我們的使用手冊：</span></p>'\
+            '<p><span style="font-weight: 400;"><a href="https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI" target="_blank" rel="noopener" data-saferedirecturl="https://www.google.com/url?q=https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI&amp;source=gmail&amp;ust=1746082963524000&amp;usg=AOvVaw06m_RAtCuMh0naKiU9sUYV">點擊這裡下載使用手冊</a></span></p>'\
+            '<p><span style="font-weight: 400;">若您對此操作有任何疑問，或非本人授權操作，請立即與我們聯繫，我們將盡速為您處理：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">電話：</span><strong>(03) 211-8800 分機 3001</strong></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">信箱：</span><strong>aiplatform@cgu.edu.tw</strong></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">敬祝</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">工作順利、使用愉快</span></p>'\
+            '<p><span style="font-weight: 400;">長庚大學人工智慧中心</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'\
+            '<p>&nbsp;</p>'\
+            '<p>--------------------------------------------------------------------------------</p>'\
+            '<p>&nbsp;</p>'\
+            '<p><span style="font-weight: 400;">Dear ' + k8s_name + ',</span></p>'\
+            '<p><span style="font-weight: 400;">You have been added to a designated group on our platform. The details are as follows:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Group Name</strong><span style="font-weight: 400;">: ' + k8s_group + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Date Joined</strong><span style="font-weight: 400;">: ' + k8s_date + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">If you are not yet familiar with the platform&rsquo;s group features, we encourage you to review our user manual:</span><span style="font-weight: 400;"><br /></span><a href="https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI"><span style="font-weight: 400;">https://drive.google.com/drive/u/2/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI</span></a></p>'\
+            '<p><span style="font-weight: 400;">If you have any questions or did not authorize this action, please contact us immediately. We will assist you promptly:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Phone</strong><span style="font-weight: 400;">: (03) 211-8800 ext. 3001</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Email</strong><span style="font-weight: 400;">: aiplatform@cgu.edu.tw</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">Wishing you success and an enjoyable experience.</span></p>'\
+            '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
+    send_email_gmail(add_group_email_title, add_group_email_body, destination)
+
+def send_delete_group_email(k8s_name, k8s_group, k8s_date, destination): 
+    remove_group_email_title = '群組移除通知信 ( Group Removal Notification )'
+    remove_group_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
+            '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
+            '<p><span style="font-weight: 400;">您已自本平台中的下列群組中移除，相關資訊如下：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>群組名稱</strong><span style="font-weight: 400;">：' + k8s_group + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>移除時間</strong><span style="font-weight: 400;">：' + k8s_date + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">若您對此操作有任何疑問，或認為可能有誤，請即刻聯繫我們：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">電話：</span><strong>(03) 211-8800 分機 3001</strong></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">信箱：</span><strong>aiplatform@cgu.edu.tw</strong></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">我們將誠摯協助您釐清與處理相關事項。</span></p>'\
+            '<p><span style="font-weight: 400;">敬祝</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">一切順心、平安順利</span></p>'\
+            '<p><span style="font-weight: 400;">長庚大學人工智慧中心</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'\
+            '<p>&nbsp;</p>'\
+            '<p>--------------------------------------------------------------------------------</p>'\
+            '<p>&nbsp;</p>'\
+            '<p><span style="font-weight: 400;">Dear ' + k8s_name + ',</span></p>'\
+            '<p><span style="font-weight: 400;">You have been removed from the following group on our platform. Details are as follows:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Group Name</strong><span style="font-weight: 400;">: ' + k8s_group + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Removal Date</strong><span style="font-weight: 400;">: ' + k8s_date + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">If you believe this action was taken in error or have any concerns, please do not hesitate to contact us:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Phone</strong><span style="font-weight: 400;">: (03) 211-8800 ext. 3001</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Email</strong><span style="font-weight: 400;">: aiplatform@cgu.edu.tw</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">We are here to assist you and clarify any issues.</span></p>'\
+            '<p><span style="font-weight: 400;">Wishing you all the best and continued success.</span></p>'\
+            '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
+    send_email_gmail(remove_group_email_title, remove_group_email_body, destination)
+
+def send_delete_account_email(k8s_name, k8s_account, k8s_date, destination):     
+    delete_account_email_title = '帳號刪除通知信 ( Account Deletion Notification )'
+    delete_account_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
+            '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' 您好，</span></p>'\
+            '<p><span style="font-weight: 400;">本信通知您，您的帳號將在指定時間自本平台系統中</span><strong>正式刪除</strong><span style="font-weight: 400;">，相關資訊如下：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>帳號名稱</strong><span style="font-weight: 400;">：' + k8s_account + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>刪除時間</strong><span style="font-weight: 400;">：' + k8s_date + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">自刪除生效時起，您將無法再登入本平台，並將失去所有原有權限及資料存取權。請留意，帳號一經刪除將</span><strong>無法恢復</strong><span style="font-weight: 400;">，相關個人資料與操作紀錄亦將依據資料保留政策一併處理。</span></p>'\
+            '<p><span style="font-weight: 400;">如您認為本次操作有誤，或需進一步協助，歡迎儘速與我們聯繫：</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">電話：</span><strong>(03) 211-8800 分機 3001</strong></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><span style="font-weight: 400;">信箱：</span><strong>aiplatform@cgu.edu.tw</strong></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">感謝您過往對本平台的支持與使用，祝您一切順利。</span></p>'\
+            '<p><span style="font-weight: 400;">此致</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">敬禮</span></p>'\
+            '<p><span style="font-weight: 400;">長庚大學人工智慧中心</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'\
+            '<p>&nbsp;</p>'\
+            '<p>--------------------------------------------------------------------------------</p>'\
+            '<p>&nbsp;</p>'\
+            '<p><span style="font-weight: 400;">Dear ' + k8s_name + ',</span></p>'\
+            '<p><span style="font-weight: 400;">This is to inform you that your account will be </span><strong>officially deleted</strong><span style="font-weight: 400;"> from our platform at the specified time. The details are as follows:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Account Name</strong><span style="font-weight: 400;">: ' + k8s_account + '</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Scheduled Deletion Date</strong><span style="font-weight: 400;">: ' + k8s_date + '</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">Once the deletion takes effect, you will no longer be able to log into the platform, and all existing permissions and data access rights will be revoked.</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">Please note that </span><strong>deleted accounts cannot be restored</strong><span style="font-weight: 400;">, and all related personal data and activity records will be handled in accordance with our data retention policy.</span></p>'\
+            '<p><span style="font-weight: 400;">If you believe this action was taken in error, or if you require further assistance, please contact us as soon as possible:</span></p>'\
+            '<ul>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Phone</strong><span style="font-weight: 400;">: (03) 211-8800 ext. 3001</span></li>'\
+            '<li style="font-weight: 400;" aria-level="1"><strong>Email</strong><span style="font-weight: 400;">: aiplatform@cgu.edu.tw</span></li>'\
+            '</ul>'\
+            '<p><span style="font-weight: 400;">We sincerely thank you for your past support and use of our platform, and we wish you all the best.</span></p>'\
+            '<p><span style="font-weight: 400;">Sincerely,</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">AI Center, Chang Gung University</span><span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></p>'
+    send_email_gmail(delete_account_email_title, delete_account_email_body, destination)
 
 # Define the group, version, and plural for the Profile CRD
 group = 'kubeflow.org'  # CRD 的 Group
@@ -160,7 +318,7 @@ def check_email(email):
             return True
     return False
     
-def delete_profile(name):
+def delete_profile(name, email, fullname):
     if name is None:
         return
     # delete profile
@@ -179,6 +337,11 @@ def delete_profile(name):
         name=name.lower(),
     )
     print(api_response)
+    k8s_account = name
+    k8s_name = fullname
+    k8s_date = str(datetime.datetime.now())
+    # send_email_gmail(email_title, email_body, email)
+    send_delete_account_email(k8s_name, k8s_account, k8s_date, email)
 
 def create_profile(username, email, cpu, gpu, memory, manager, fullname, password):
     try:
@@ -225,10 +388,12 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
 
     if memoryStr != '0Gi':
         memoryIntStr = memoryStr[:-2]
-        memorydecimal = float(memoryIntStr)
-        memorydecimal = memorydecimal/10
+        # memorydecimal = float(memoryIntStr)
+        # memorydecimal = memorydecimal/10
+        # memoryinteger = float(memoryIntStr)
+        # memoryfinal = memorydecimal+memoryinteger
         memoryinteger = float(memoryIntStr)
-        memoryfinal = memorydecimal+memoryinteger
+        memoryfinal = memoryinteger + 2 # add 2Gi to the memory
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
     
     if gpu != '0' or gpu != 0:
@@ -247,29 +412,8 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
     k8s_account = username
     k8s_password = password
     k8s_name = fullname
-    email_title = '您的教學平台帳號已成功建立'
-    email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
-        '<p><span style="font-weight: 400;">親愛的 ' + k8s_name + ' ，</span></p>'\
-        '<p><span style="font-weight: 400;">您好！</span><span style="font-weight: 400;"><br /></span>'\
-        '<span style="font-weight: 400;">感謝您加入我們的服務，以下是您的帳號資訊：</span></p>' \
-        '<ul>' \
-        '<li style="font-weight: 400;" aria-level="1"><strong>使用者名稱</strong><span style="font-weight: 400;">：</span>'\
-        '<span style="font-weight: 400;">' + k8s_account + '</span></li>' \
-        '<li style="font-weight: 400;" aria-level="1"><strong>密碼</strong>'\
-        '<span style="font-weight: 400;">：</span><span style="font-weight: 400;">' + k8s_password +'</span></li>' \
-        '</ul>' \
-        '<p><span style="font-weight: 400;">為了確保您的帳號安全，請您在首次登入後立即修改密碼。</span></p>' \
-        '<p><span style="font-weight: 400;">我們為您準備了一份詳細的使用手冊，幫助您快速熟悉系統功能，您可以透過以下連結查看：</span>'\
-        '<span style="font-weight: 400;"><br /></span><a href="https://drive.google.com/drive/folders/1VbYwBfsxX3XF39TK8bOWix3GxJT-xBNI?usp=sharing">'\
-        '<span style="font-weight: 400;">點擊這裡下載使用手冊</span></a></p>' \
-        '<p><span style="font-weight: 400;">如果您在使用過程中遇到任何問題，歡迎隨時聯繫我們的客服團隊，我們將竭誠為您服務。</span></p>' \
-        '<p><strong>&nbsp;</strong></p>' \
-        '<p><span style="font-weight: 400;">祝您使用愉快！</span></p>' \
-        '<p><strong><br /><span style="font-weight: 400;">此致</span>'\
-        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">長庚大學 AI 中心</span>'\
-        '<span style="font-weight: 400;"><br /></span><span style="font-weight: 400;">aiplatform@cgu.edu.tw</span></strong></p>'
-
-    send_email_gmail(email_title, email_body, email)
+    # send_email_gmail(email_title, email_body, email)
+    send_add_account_email(k8s_name, k8s_account, k8s_password, email)
 
 def get_profile_content(profile_name):
     try:
@@ -307,10 +451,12 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
 
     if str(memoryStr) != '0Gi':
         memoryIntStr = memoryStr[:-2]
-        memorydecimal = float(memoryIntStr)
-        memorydecimal = memorydecimal/10
+        # memorydecimal = float(memoryIntStr)
+        # memorydecimal = memorydecimal/10
+        # memoryinteger = float(memoryIntStr)
+        # memoryfinal = memorydecimal+memoryinteger
         memoryinteger = float(memoryIntStr)
-        memoryfinal = memorydecimal+memoryinteger
+        memoryfinal = memoryinteger + 2 # add 2Gi to the memory
         resourceQuotaSpec["hard"]["requests.memory"] = str(memoryfinal*1000) + 'Mi'
         
     if str(gpu) != '0':
@@ -419,19 +565,33 @@ def get_group_corresponding_user(request):
     user = data['user']
     group_list = []
     user_obj = User.objects.get(username=user)
+    print("user_obj = ", user_obj)
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+    print("detail_obj = ", detail_obj)
     print(len(detail_obj))
+
     if len(detail_obj) == 1:
-        print(detail_obj[0].permission)
+        # print(detail_obj[0].permission)
         if detail_obj[0].permission == 0:
             for group in Group.objects.all():
                 if(group.name == 'root'):
                     continue
                 User.objects.filter(groups=group)
                 user_list = []
+                # check ldap is exist or not
+                conn = connectLDAP()
                 for user in User.objects.filter(groups=group):
-                    user_list.append(user.username)
+                    try:
+                        found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
+                        if not found or len(conn.entries) == 0:
+                            print(f"LDAP search: user '{user.username}' not found.")
+                        else:
+                            print(f"LDAP search: user '{user.username}' found.")
+                            user_list.append(user.username)
+                    except Exception as e:
+                        print(f"LDAP search error: {e}")
                 group_list.append({"group_dn": group.name, "member_uids": user_list})
+                conn.unbind()
             return Response(group_list, status=200)
         elif detail_obj[0].permission == 1:
             # get only the group that user is in
@@ -440,9 +600,21 @@ def get_group_corresponding_user(request):
                     continue
                 User.objects.filter(groups=group_item.labname)
                 user_list = []
+                # check ldap is exist or not
+                conn = connectLDAP()
                 for user in User.objects.filter(groups=group_item.labname):
-                    user_list.append(user.username)
+                    try:
+                        found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
+                        if not found or len(conn.entries) == 0:
+                            print(f"LDAP search: user '{user.username}' not found.")
+                        else:
+                            print(f"LDAP search: user '{user.username}' found.")
+                            user_list.append(user.username)
+                    except Exception as e:
+                        print(f"LDAP search error: {e}")
                 group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
+                print("group_list = ", group_list)
+                conn.unbind()
             return Response(group_list, status=200)
         return Response(group_list, status=200)
     else:
@@ -452,6 +624,7 @@ def get_group_corresponding_user(request):
 
             # if root user, get all group
             print(group_item.permission)
+            conn = connectLDAP()
             if group_item.permission == 0:
                 for group in Group.objects.all():
                     if(group.name == 'root'):
@@ -459,15 +632,32 @@ def get_group_corresponding_user(request):
                     User.objects.filter(groups=group)
                     user_list = []
                     for user in User.objects.filter(groups=group):
-                        user_list.append(user.username)
+                        try:
+                            found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*']) 
+                            if not found or len(conn.entries) == 0:
+                                print(f"LDAP search: user '{user.username}' not found.")
+                            else:
+                                print(f"LDAP search: user '{user.username}' found.")                       
+                                user_list.append(user.username)
+                        except Exception as e:
+                            print(f"LDAP search error: {e}")                                
                     group_list.append({"group_dn": group.name, "member_uids": user_list})
                 return Response(group_list, status=200)
             
             User.objects.filter(groups=group_item.labname)
             user_list = []
             for user in User.objects.filter(groups=group_item.labname):
-                user_list.append(user.username)
-            group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list}) 
+                try:
+                    found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*']) 
+                    if not found or len(conn.entries) == 0:
+                        print(f"LDAP search: user '{user.username}' not found.")
+                    else:
+                        print(f"LDAP search: user '{user.username}' found.") 
+                        user_list.append(user.username)
+                except Exception as e:
+                    print(f"LDAP search error: {e}")                          
+            group_list.append({"group_dn": group_item.labname.name, "member_uids": user_list})
+            conn.unbind()
         return Response(group_list, status=200)            
     return Response(group_list, status=200)
 
@@ -486,6 +676,9 @@ def get_all_user_permission(user, labname):
 def get_lab_info(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
+    # user = data['user']
+    print("labname = ", labname)
+    # print("user = ", user)
     ### get the group info from database
     group = Group.objects.get(name=labname)
     ### get the user info from database
@@ -494,22 +687,15 @@ def get_lab_info(request):
         user_list.append(user.username)
         # get group default quota and gpu vendor
     try:
-        group_quota = GroupDefaultQuota.objects.get(labname=group)
-        cpuQuota = group_quota.cpu_quota
-        memQuota = group_quota.mem_quota
-        gpuQuota = group_quota.gpu_quota
-        gpuVendor = group_quota.gpu_vendor
-        expiryDate = group_quota.expiry_date.isoformat() if group_quota.expiry_date else None
-        remainingDays = group_quota.remaining_days
-        isExpired = group_quota.is_expired
+        cpuQuota = GroupDefaultQuota.objects.get(labname=group).cpu_quota
+        memQuota = GroupDefaultQuota.objects.get(labname=group).mem_quota
+        gpuQuota = GroupDefaultQuota.objects.get(labname=group).gpu_quota
+        gpuVendor = GroupDefaultQuota.objects.get(labname=group).gpu_vendor
     except:
         cpuQuota = 0
         memQuota = 0
         gpuQuota = 0
         gpuVendor = "NVIDIA"
-        expiryDate = None
-        remainingDays = None
-        isExpired = False
     
     # get the user permission from database
     data = {
@@ -519,9 +705,6 @@ def get_lab_info(request):
         "memQuota": memQuota,
         "gpuQuota": gpuQuota,
         "gpuVendor": gpuVendor,
-        "expiryDate": expiryDate,
-        "remainingDays": remainingDays,
-        "isExpired": isExpired,
         "memberUid": get_all_user_permission(user_list, labname)
     }
     return Response(data, status=200)
@@ -567,8 +750,6 @@ def editlab(request):
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
     gpuVendor = data['gpu_vendor']
-    expiryDate = data.get('expiry_date', None)  # 獲取到期日期，可能為空
-    
     try:
         cpuQuota = int(cpuQuota)
         memQuota = int(memQuota)
@@ -578,14 +759,17 @@ def editlab(request):
     if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
         return Response(status=500, data="gpuVendor is not valid")
     
-    # 驗證日期格式
-    expiry_date_obj = None
-    if expiryDate:
-        try:
-            from datetime import datetime
-            expiry_date_obj = datetime.strptime(expiryDate, '%Y-%m-%d').date()
-        except ValueError:
-            return Response(status=500, data="Invalid expiry date format")
+    try:
+        groupDefaultQuota = GroupDefaultQuota.objects.get(labname=Group.objects.get(name=labname))
+        defaultCpuQuota = groupDefaultQuota.cpu_quota
+        defaultMemQuota = groupDefaultQuota.mem_quota
+        defaultGpuQuota = groupDefaultQuota.gpu_quota
+        defaultGpuVendor = groupDefaultQuota.gpu_vendor
+    except:
+        defaultCpuQuota = 0
+        defaultMemQuota = 0
+        defaultGpuQuota = 0
+        defaultGpuVendor = "NVIDIA"
     
     group = Group.objects.get(name=labname)
     if group is None:
@@ -598,35 +782,113 @@ def editlab(request):
         groupDefaultQuota.mem_quota = memQuota
         groupDefaultQuota.gpu_quota = gpuQuota
         groupDefaultQuota.gpu_vendor = gpuVendor
-        groupDefaultQuota.expiry_date = expiry_date_obj
         groupDefaultQuota.save()
     else:
-        GroupDefaultQuota.objects.create(
-            labname=group, 
-            cpu_quota=cpuQuota, 
-            mem_quota=memQuota, 
-            gpu_quota=gpuQuota, 
-            gpu_vendor=gpuVendor,
-            expiry_date=expiry_date_obj
-        )
+        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+
+    ### get the user info from database
+    for user in User.objects.filter(groups=group):
+        profileName = get_profile_by_email(user.email)
+        
+        profile = get_profile_content(profileName)
+        userMemory = ""
+        userCpu = ""
+        userGpu = ""
+        if profile is not None:
+            # print(profileName)
+            # add try error control below
+            try:
+                userCpu = profile["metadata"]["annotations"]["cpu"]
+            except:
+                try:
+                    userCpu = profile['spec']['resourceQuotaSpec']['hard']['requests.cpu']
+                except:
+                    userCpu = "0"
+
+            try:
+                userGpu = profile["metadata"]["annotations"]["gpu"]
+            except:
+                try:
+                    userGpu = profile['spec']['resourceQuotaSpec']['hard']['requests.nvidia.com/gpu']
+                except:
+                    userGpu = "0"
+
+            try:
+                userMemory = profile["metadata"]["annotations"]["memory"]
+            except:
+                try:
+                    userMemory = profile['spec']['resourceQuotaSpec']['hard']['requests.memory']
+                    userMemory = userMemory[:-2]
+                except:
+                    userMemory = "0"
+                    
+        else:
+            print("Profile not found")
+            userMemory = "0"
+            userCpu = "0"
+            userGpu = "0"
+
+        print("cpu = {}, gpu = {}, memory = {}".format(userCpu, userGpu, userMemory))
+        print("defaultCpuQuota = {}, defaultMemQuota = {}, defaultGpuQuota = {}".format(defaultCpuQuota, defaultMemQuota, defaultGpuQuota))
+
+        # 新增檢查：只有當 user 與 default quota 不相等時才執行後續動作
+        if str(userCpu) == str(defaultCpuQuota) and str(userGpu) == str(defaultGpuQuota) and str(userMemory) == str(defaultMemQuota):
+            replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
+            permission = get_permission(user.username, labname)
+            print("permission = ", permission)
+            manager = 'user'
+            if permission == 'admin':
+                manager = 'manager'
+            elif permission == 'user':
+                manager = 'user'
+            print("manager = ", manager)
+            profileName = get_profile_by_email(user.email)
+            replace_profile_user(profileName, manager, str(cpuQuota), str(gpuQuota), str(memQuota))
+
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
 @api_view(['POST'])
 def get_default_values(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['labname']
+    user = data['user']
+    print("labname = ", labname)
+    print("user = ", user)
+    user_obj = User.objects.get(username=user)
+    detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+    print("detail_obj = ", detail_obj)
+    permission = 'user'
+    if len(detail_obj) == 1:
+        if detail_obj[0].permission == 0:
+             permission = 'root'
+        elif detail_obj[0].permission == 1:
+            permission = 'admin'
+        elif detail_obj[0].permission == 2:
+            permission = 'user'
+    
+    print("permission = ", permission)
+
     try:
         groupDefaultQuota = GroupDefaultQuota.objects.get(labname=Group.objects.get(name=labname))
         cpuQuota = groupDefaultQuota.cpu_quota
         memQuota = groupDefaultQuota.mem_quota
         gpuQuota = groupDefaultQuota.gpu_quota
         gpuVendor = groupDefaultQuota.gpu_vendor
+        permission = permission
     except:
         cpuQuota = 0
         memQuota = 0
         gpuQuota = 0
         gpuVendor = "NVIDIA"
-    return Response({"cpu_quota": cpuQuota, "mem_quota": memQuota, "gpu_quota": gpuQuota, "gpu_vendor": gpuVendor}, status=200)
+        permission = 'user'
+
+    return Response({
+        "cpu_quota": cpuQuota,
+        "mem_quota": memQuota,
+        "gpu_quota": gpuQuota,
+        "gpu_vendor": gpuVendor,
+        "permission": permission   # <--- 加上這行
+    }, status=200)
 
 @api_view(['POST'])
 def adduser(request):
@@ -642,6 +904,7 @@ def adduser(request):
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
     gpu_vendor = data['gpu_vendor']
+    expiry_date = data.get('expiry_date', None)
 
     if check_email(email):
         return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
@@ -662,12 +925,19 @@ def adduser(request):
     try:
         conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
         for entry in conn.entries:
-            return Response(status=500, data={"message": "Username is exist from ldap and the email is {}, username is {}".format(entry.mail.value, entry.cn.value)})
+            # 刪除該 entry
+            conn.delete(entry.entry_dn)
+            # 不 return，繼續執行
+            #return Response(status=500, data={"message": "Username is exist from ldap and the email is {}, username is {}".format(entry.mail.value, entry.cn.value)})
     except:
         pass
-        
+    conn.unbind()
+
     user = User.objects.create_user(username=username, password=password, first_name=firstname, last_name=lastname, email=data['email'])
     user.groups.add(Group.objects.get(name=labname))
+    k8s_date = str(datetime.datetime.now())
+    k8s_name = user.first_name + " " + user.last_name
+    send_add_group_email(k8s_name, labname, k8s_date, email)
     password = user.password
     group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(labname)
     user_dn = 'cn={},ou=users,dc=example,dc=org'.format(username),
@@ -684,10 +954,16 @@ def adduser(request):
     conn.unbind()
     manager = 'user'
     if data['is_lab_manager'] is False:
-        UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
         manager = 'manager'
-        UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+    
+    # 設定到期日期
+    if expiry_date:
+        user_detail.expiry_date = expiry_date
+        user_detail.save()
+    
     user.save()
     # add gpu vendor
     UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
@@ -706,7 +982,13 @@ def add_admin(request):
     user.is_staff = True
     for group in user.groups.all():
         user.groups.remove(group)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user.first_name + " " + user.last_name
+        send_delete_group_email(k8s_name, group, k8s_date, user.email)
     user.groups.add(Group.objects.get(name='root'))
+    k8s_date = str(datetime.datetime.now())
+    k8s_name = user.first_name + " " + user.last_name
+    send_add_group_email(k8s_name, 'root', k8s_date, user.email)
     user.save()
     detail = UserDetail.objects.filter(uid=user.id)
     for item in detail:
@@ -740,7 +1022,7 @@ def syschronize_ldap(requset):
     account_list = []
     for entry in conn.entries:
         account_list.append(entry.entry_gidNumber)
-        conn.unbind()
+    conn.unbind()
     # get the user with corresponding group
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
@@ -803,6 +1085,17 @@ def get_user_info(request):
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     notebooks = list_notebooks_api(profileName)
     # print("notebooks 2 = {}", notebooks)
+    
+    # 獲取使用者的到期日資訊
+    expiry_info = {}
+    for detail in detail_obj:
+        if detail.expiry_date:
+            expiry_info[detail.labname.name] = {
+                'expiry_date': detail.expiry_date.strftime('%Y-%m-%d'),
+                'remaining_days': detail.remaining_days,
+                'is_expired': detail.is_expired
+            }
+    
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
@@ -813,6 +1106,7 @@ def get_user_info(request):
         "gpu_quota" : gpu,
         "permission": get_user_all_groups(user_obj.username),
         "notebooks": notebooks,
+        "expiry_info": expiry_info,
     }
     return Response(data, status=200)
 
@@ -831,12 +1125,17 @@ def deleteUserModel(username):
             conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
         except:
             pass
+    k8s_name = user_obj.first_name + ' ' + user_obj.last_name
+    k8s_email = user_obj.email    
     User.objects.get(username=username).delete()
-    delete_profile(profileName)
+    delete_profile(profileName, k8s_email, k8s_name)
+    conn.unbind()
 
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
+    group_list = get_user_all_groups(data['username'])
+    print("group_list = ", group_list)
     deleteUserModel(data['username'])
     return Response(status=200)
 
@@ -849,6 +1148,9 @@ def lab_delete(request):
         User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
         group_list = get_user_all_groups(user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user.first_name + " " + user.last_name
+        send_delete_group_email(k8s_name, labname, k8s_date, user.email)
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
@@ -935,6 +1237,8 @@ def change_user_info(request):
             conn.modify(entry.entry_dn, {'givenName':[(MODIFY_REPLACE, [firstname])]})
             conn.modify(entry.entry_dn, {'sn':[(MODIFY_REPLACE, [lastname])]})
             conn.modify(entry.entry_dn, {'mail': [(MODIFY_REPLACE, [email])]})
+        conn.unbind()
+            
         user = User.objects.get(username=username)
         user.first_name = firstname
         user.last_name = lastname
@@ -970,8 +1274,9 @@ def change_user_info(request):
                 manager = 'manager'
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
-            print("manager = ", manager)    
-            replace_profile_user(profileName, manager,cpu_quota,gpu_quota,mem_quota)
+            print("manager = ", manager) 
+            profileName = get_profile_by_email(user_obj.email)
+            replace_profile_user(profileName, manager, str(cpu_quota), str(gpu_quota), str(mem_quota))
         return Response(status=200)
     except:
         return Response(status=500)
@@ -1051,6 +1356,10 @@ def excel(request):
                     else:
                         try:
                             User.objects.get(username=row[0].value).groups.add(Group.objects.get(name=row[1].value))
+                            user = User.objects.get(username=row[0].value)
+                            k8s_date = str(datetime.datetime.now())
+                            k8s_name = user.first_name + " " + user.last_name
+                            send_add_group_email(k8s_name, row[1].value, k8s_date, user.email)
                             print("add user {} into group {} success".format(row[0].value, row[1].value))
                             if row[6].value == 'admin':
                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=1, labname=Group.objects.get(name=row[1].value))
@@ -1066,6 +1375,9 @@ def excel(request):
             user_obj.save()
             # add user into group
             user_obj.groups.add(Group.objects.get(name=row[1].value))
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user_obj.first_name + " " + user_obj.last_name
+            send_add_group_email(k8s_name, row[1].value, k8s_date, user_obj.email)
             # add user into ldap
             group_dn = 'cn={},ou=Groups,dc=example,dc=org'.format(row[1].value)
             user_dn = 'cn={},ou=users,dc=example,dc=org'.format(row[0].value),
@@ -1076,6 +1388,7 @@ def excel(request):
                 'userPassword': ldap_md5.hash(row[2].value), 'shadowFlag': '0', 'shadowMin': '0', 'shadowMax': '99999', 
                 'shadowWarning': '0', 'shadowInactive': '99999', 'shadowLastChange': '12011', 
                 'shadowExpire': '99999', 'Description': [row[1].value]})
+            conn.unbind()
             # add user into database
             if row[6].value == 'admin':
                 UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=row[1].value))
@@ -1089,7 +1402,7 @@ def excel(request):
 
 def get_permission(user, group):
     # get the permission of the user
-    print("Lance - ",user, group)
+    # print("Lance - ",user, group)
     try:
         detail_obj = UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group))
     except:
@@ -1157,6 +1470,7 @@ def export_ldap(request):
             #    memory = "0"
         else:
             print("Profile not found")
+           
             memory = "0"
             cpu = "0"
             gpu = "0"
@@ -1203,6 +1517,9 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user_obj.first_name + " " + user_obj.last_name
+            send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -1210,6 +1527,9 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user_obj.first_name + " " + user_obj.last_name
+            send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -1389,21 +1709,27 @@ def import_lab_user(request):
                 failed_user.append({user['username']: "email is exist in database"})
                 userinfo.remove(user)
                 continue
-            # if user is exist in ldap
-            try:
-                conn = connectLDAP()
-                conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
-                for entry in conn.entries:
-                    failed_user.append({user['username']: "username is exist in ldap"})
-                    userinfo.remove(user)
-                    continue
-            except:
-                pass
             # if user is exist in kubeflow
             if get_profile_by_email(user['email']) is not None:
                 failed_user.append({user['username']: "email is exist in kubeflow"})
                 userinfo.remove(user)
                 continue
+
+            # if user is exist in ldap, Lance - must check in the last step, because if user is exist in ldap, it will be deleted
+            try:
+                conn = connectLDAP()
+                conn.search('cn={},ou=users,dc=example,dc=org'.format(user['username']), '(objectclass=posixAccount)', attributes=['*'])
+                for entry in conn.entries:
+                    #. failed_user.append({user['username']: "username is exist in ldap"})
+                    # userinfo.remove(user)
+                    # continue
+                    # 刪除該 entry
+                    conn.delete(entry.entry_dn)
+                    # 不 pass，繼續執行
+                conn.unbind()    
+            except:
+                pass
+
         # add user into django, ldap, and kubeflow
         for user in userinfo:
             # convert cpu value to correct format, from 8800m remove m and devide to 8 ,  if more than 1100
@@ -1424,6 +1750,9 @@ def import_lab_user(request):
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
                 user_obj.groups.add(Group.objects.get(name=group))
+                k8s_date = str(datetime.datetime.now())
+                k8s_name = user_obj.first_name + " " + user_obj.last_name
+                send_add_group_email(k8s_name, group, k8s_date, user_obj.email)
                 if user['permission'] == 'admin':
                     UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
                 elif user['permission'] == 'user':
@@ -1441,7 +1770,10 @@ def import_lab_user(request):
                 # add user into kubeflow's profile
                 k8s_password = row[1].value
                 k8s_name = row[3].value + ' ' + row[4].value
-                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=user['permission'], k8s_name=k8s_name, k8s_password=k8s_password)
+                manager = 'user'
+                if user['permission'] == 'admin':
+                    manager = 'manager'
+                create_profile(username=user['username'], email=user['email'],cpu=user['cpu_quota'], gpu=user['gpu_quota'], memory=user['mem_quota'], manager=manager, fullname=k8s_name, password=k8s_password)
             except:
                 # if user is not added into kubeflow, remove the user from database
                 print(traceback.format_exc())
@@ -1481,11 +1813,19 @@ def db_ldap_check(request):
     ldap_user = []
     for entry in conn.entries:
         ldap_user.append(entry.cn.value)
+    conn.unbind()
     django_user = []
     for user in User.objects.all():
         django_user.append(user.username)
+    # Lance fix TypeError: unhashable type: 'list'
+    ldap_user = [u[0] if isinstance(u, list) else u for u in ldap_user]
+    django_user = [u[0] if isinstance(u, list) else u for u in django_user]
+    print("ldap_user = ", ldap_user)
+    print("django_user = ", django_user)
+    # find the user in ldap but not in django
     unsycho_user = list(set(ldap_user) - set(django_user))
     if unsycho_user != []:
+        print("unsycho_user = ", unsycho_user)
         return Response(unsycho_user, status=200)
     return Response(status=200)
 
@@ -1501,6 +1841,10 @@ def remove_user_from_lab(request):
         User.objects.get(username=user).groups.remove(Group.objects.get(name=lab))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=lab)).delete()
         group_list = get_user_all_groups(user)
+        user_obj = User.objects.get(username=user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user_obj.first_name + " " + user_obj.last_name
+        send_delete_group_email(k8s_name, lab, k8s_date, user_obj.email)
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
@@ -1568,6 +1912,10 @@ def remove_multiple_user_from_lab(request):
         User.objects.get(username=user).groups.remove(Group.objects.get(name=group))
         UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=group)).delete()
         group_list = get_user_all_groups(user)
+        user_obj = User.objects.get(username=user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user_obj.first_name + " " + user_obj.last_name
+        send_delete_group_email(k8s_name, group, k8s_date, user_obj.email)
         # print(group_list)
         # check if group is empty
         if len(group_list) == 0:
@@ -1585,6 +1933,7 @@ def remove_multiple_user_from_lab(request):
         conn.search('dc={},ou=users,dc=example,dc=org'.format(user), '(objectclass=posixAccount)', attributes=['Description'])
         for entry in conn.entries:
             conn.modify(entry.entry_dn, {'Description': [(MODIFY_DELETE, [group])]})
+    conn.unbind()        
     return Response(status=200)
 
 @api_view(['GET'])
