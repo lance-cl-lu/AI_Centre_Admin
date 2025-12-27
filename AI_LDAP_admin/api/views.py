@@ -1291,6 +1291,16 @@ def user_delete_permanent(request):
     if not username:
         return Response(status=400, data={"message": "Username is required"})
     
+    # 印出 TRASH 群組的使用者（插入於 line 1293）
+    trash_group = Group.objects.filter(name="TRASH").first()
+    if trash_group:
+        trash_users = trash_group.user_set.all()
+        print("\nUSERS IN TRASH GROUP:")
+        for u in trash_users:
+            print(f"  - {u.username} (email: {u.email})")
+    else:
+        print("\nGroup TRASH does not exist")
+
     try:
         # ========== 驗證：印出所有群組和使用者 ==========
         all_groups = Group.objects.all()
@@ -1312,8 +1322,9 @@ def user_delete_permanent(request):
         group_list = get_user_all_groups(username)
         print(f"User {username} is in groups: {group_list}")
         
+        
         # 繼續執行刪除邏輯
-        deleteUserModel(username)
+        # deleteUserModel(username)
         
         return Response(status=200, data={"message": f"User {username} deleted successfully"})
     except User.DoesNotExist:
