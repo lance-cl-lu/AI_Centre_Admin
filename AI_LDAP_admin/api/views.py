@@ -1284,12 +1284,47 @@ def deleteUserModel(username):
     
 @api_view(['POST'])
 def user_delete_permanent(request):
+    """永久刪除使用者（包括 LDAP、Django DB、Kubernetes）"""
     data = json.loads(request.body.decode('utf-8'))
-    group_list = get_user_all_groups(data['username'])
-    print("group_list = ", group_list)
-    # deleteUserModelPermanent(data['username'])
-    return Response(status=200)
-
+    username = data.get('username')
+    
+    if not username:
+        return Response(status=400, data={"message": "Username is required"})
+    
+    try:
+        # ========== 驗證：印出所有群組和使用者 ==========
+        all_groups = Group.objects.all()
+        all_users = User.objects.all()
+        
+        print("="*60)
+        print("ALL GROUPS IN DATABASE:")
+        for group in all_groups:
+            print(f"  - {group.name}")
+        
+        print("\nALL USERS IN DATABASE:")
+        for user in all_users:
+            print(f"  - {user.username} (email: {user.email})")
+        
+        print(f"\nLooking for user: {username}")
+        print("="*60)
+        # =========================================
+        
+        group_list = get_user_all_groups(username)
+        print(f"User {username} is in groups: {group_list}")
+        
+        # 繼續執行刪除邏輯
+        deleteUserModel(username)
+        
+        return Response(status=200, data={"message": f"User {username} deleted successfully"})
+    except User.DoesNotExist:
+        print(f"[ERROR] User {username} not found in database")
+        return Response(status=404, data={"message": f"User {username} not found in database"})
+    except Exception as e:
+        print(f"[ERROR] Error deleting user {username}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response(status=500, data={"message": f"Error deleting user: {str(e)}"})
+    
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))

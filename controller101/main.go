@@ -202,11 +202,19 @@ func main() {
 	}
 }
 
-// scheduleDailyTask 在每天固定時間執行任務（例如凌晨 2 點）
+// scheduleDailyTask 根據設定在固定時間執行任務
 func scheduleDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
-	// 從環境變數讀取執行時間
-	dailyHour := 2   // 預設凌晨 2 點
-	dailyMinute := 0 // 預設 0 分
+	// 從環境變數讀取執行模式
+	taskMode := os.Getenv("TASK_MODE") // "daily" 或 "hourly"，預設 "daily"
+	if taskMode == "" {
+		taskMode = "daily"
+	}
+
+	var dailyHour, dailyMinute, hourlyMinute int
+
+	// 讀取每日執行時間
+	dailyHour = 2   // 預設凌晨 2 點
+	dailyMinute = 0 // 預設 0 分
 
 	if hourEnv := os.Getenv("DAILY_TASK_HOUR"); hourEnv != "" {
 		if h, err := strconv.Atoi(hourEnv); err == nil && h >= 0 && h < 24 {
@@ -220,12 +228,33 @@ func scheduleDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
 		}
 	}
 
-	fmt.Printf("Daily task scheduled at %02d:%02d\n", dailyHour, dailyMinute)
+	// 讀取每小時執行時間（分鐘）
+	hourlyMinute = 0 // 預設每小時的 0 分執行
 
+	if minuteEnv := os.Getenv("HOURLY_TASK_MINUTE"); minuteEnv != "" {
+		if m, err := strconv.Atoi(minuteEnv); err == nil && m >= 0 && m < 60 {
+			hourlyMinute = m
+		}
+	}
+
+	if taskMode == "daily" {
+		fmt.Printf("Daily task scheduled at %02d:%02d\n", dailyHour, dailyMinute)
+		scheduleDailyTaskLoop(clientset, ctx, dailyHour, dailyMinute)
+	} else if taskMode == "hourly" {
+		fmt.Printf("Hourly task scheduled at every hour %02d minute\n", hourlyMinute)
+		scheduleHourlyTaskLoop(clientset, ctx, hourlyMinute)
+	} else {
+		fmt.Printf("Unknown task mode: %s, defaulting to daily\n", taskMode)
+		scheduleDailyTaskLoop(clientset, ctx, dailyHour, dailyMinute)
+	}
+}
+
+// scheduleDailyTaskLoop 每天固定時間執行
+func scheduleDailyTaskLoop(clientset *kubernetes.Clientset, ctx context.Context, hour, minute int) {
 	for {
 		now := time.Now()
 		// 計算到下一次執行時間的間隔
-		next := time.Date(now.Year(), now.Month(), now.Day(), dailyHour, dailyMinute, 0, 0, now.Location())
+		next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
 
 		// 如果今天的執行時間已過，設定為明天
 		if now.After(next) {
@@ -234,6 +263,28 @@ func scheduleDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
 
 		duration := next.Sub(now)
 		fmt.Printf("Next daily task will run at: %s (in %v)\n", next.Format("2006-01-02 15:04:05"), duration)
+
+		time.Sleep(duration)
+
+		// 執行每日任務
+		performDailyTask(clientset, ctx)
+	}
+}
+
+// scheduleHourlyTaskLoop 每小時固定時刻執行
+func scheduleHourlyTaskLoop(clientset *kubernetes.Clientset, ctx context.Context, minute int) {
+	for {
+		now := time.Now()
+		// 計算到下一次執行時間的間隔（下一小時的指定分鐘）
+		next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), minute, 0, 0, now.Location())
+
+		// 如果目前時刻已過本小時的執行時間，設定為下一小時
+		if now.After(next) {
+			next = next.Add(1 * time.Hour)
+		}
+
+		duration := next.Sub(now)
+		fmt.Printf("Next hourly task will run at: %s (in %v)\n", next.Format("2006-01-02 15:04:05"), duration)
 
 		time.Sleep(duration)
 
