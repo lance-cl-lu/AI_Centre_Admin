@@ -11,6 +11,7 @@ function User() {
     let state = useLocation().state;
     let [user, setUser] = useState(null);
     const [permissions, setPermissions] = useState({});
+    const [expiryInfo, setExpiryInfo] = useState({});
     let cpuQuota = 0;
     let memoryQuota = 0;
     let gpuQuota = 0;
@@ -75,6 +76,7 @@ function User() {
                 document.getElementById("memQuota").value = memoryQuota;
                 document.getElementById("gpuQuota").value = gpuQuota;
                 setPermissions(data.permission);
+                setExpiryInfo(data.expiry_info || {});
                 document.getElementById("editandsave").className = "btn btn-primary";
                 document.getElementById("editandsave").innerHTML = "Edit";
             }, 400);
@@ -317,12 +319,20 @@ function User() {
                             <Form.Group as={Col} style={{width:"80%"}}>
                                 <ListGroup>
                                 { permissions && Object.keys(permissions).map((key, index) => {
+                                    const groupName = permissions[key].groupname;
+                                    const groupExpiry = expiryInfo[groupName];
                                     return (
                                         <ListGroup.Item key={index} style={{border:"none", padding:"0px", display:"flex", flexWrap:"nowrap", alignItems:"center", justifyContent:"space-evenly"}}>
                                             <Form.Label column sm="2" style={{width:"90%"}}>
-                                                {permissions[key].groupname}
+                                                {groupName}
+                                                {groupExpiry && (
+                                                    <div style={{fontSize: '0.85em', color: groupExpiry.is_expired ? 'red' : (groupExpiry.remaining_days <= 7 ? 'orange' : 'gray')}}>
+                                                        到期日: {groupExpiry.expiry_date}
+                                                        {groupExpiry.is_expired ? ' (已到期)' : ` (剩餘${groupExpiry.remaining_days}天)`}
+                                                    </div>
+                                                )}
                                             </Form.Label>
-                                            <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={permissions[key].groupname} style={{width:"10%"}}/>
+                                            <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={groupName} style={{width:"10%"}}/>
                                         </ListGroup.Item>
                                     )
                                 })}

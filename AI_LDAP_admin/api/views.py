@@ -1046,6 +1046,7 @@ def adduser(request):
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
     gpu_vendor = data['gpu_vendor']
+    expiry_date = data.get('expiry_date', None)
 
     if check_email(email):
         return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
@@ -1095,10 +1096,16 @@ def adduser(request):
     conn.unbind()
     manager = 'user'
     if data['is_lab_manager'] is False:
-        UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
         manager = 'manager'
-        UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+    
+    # 設定到期日期
+    if expiry_date:
+        user_detail.expiry_date = expiry_date
+        user_detail.save()
+    
     user.save()
     # add gpu vendor
     UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
@@ -1220,6 +1227,17 @@ def get_user_info(request):
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     notebooks = list_notebooks_api(profileName)
     # print("notebooks 2 = {}", notebooks)
+    
+    # 獲取使用者的到期日資訊
+    expiry_info = {}
+    for detail in detail_obj:
+        if detail.expiry_date:
+            expiry_info[detail.labname.name] = {
+                'expiry_date': detail.expiry_date.strftime('%Y-%m-%d'),
+                'remaining_days': detail.remaining_days,
+                'is_expired': detail.is_expired
+            }
+    
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
@@ -1230,6 +1248,7 @@ def get_user_info(request):
         "gpu_quota" : gpu,
         "permission": get_user_all_groups(user_obj.username),
         "notebooks": notebooks,
+        "expiry_info": expiry_info,
     }
     return Response(data, status=200)
 
