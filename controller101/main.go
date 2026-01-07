@@ -243,6 +243,9 @@ func scheduleDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
 	} else if taskMode == "hourly" {
 		fmt.Printf("Hourly task scheduled at every hour %02d minute\n", hourlyMinute)
 		scheduleHourlyTaskLoop(clientset, ctx, hourlyMinute)
+	} else if taskMode == "minute" {
+		fmt.Println("Minute task scheduled to run every minute")
+		scheduleMinuteTaskLoop(clientset, ctx)
 	} else {
 		fmt.Printf("Unknown task mode: %s, defaulting to daily\n", taskMode)
 		scheduleDailyTaskLoop(clientset, ctx, dailyHour, dailyMinute)
@@ -293,6 +296,23 @@ func scheduleHourlyTaskLoop(clientset *kubernetes.Clientset, ctx context.Context
 	}
 }
 
+// scheduleMinuteTaskLoop 每分鐘執行
+func scheduleMinuteTaskLoop(clientset *kubernetes.Clientset, ctx context.Context) {
+	for {
+		now := time.Now()
+		// 計算到下一分鐘整點的時間間隔
+		next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute()+1, 0, 0, now.Location())
+
+		duration := next.Sub(now)
+		fmt.Printf("Next minute task will run at: %s (in %v)\n", next.Format("2006-01-02 15:04:05"), duration)
+
+		time.Sleep(duration)
+
+		// 執行每日任務
+		performDailyTask(clientset, ctx)
+	}
+}
+
 // performDailyTask 每日執行的具體任務
 func performDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
 	fmt.Println("=====================================================")
@@ -302,52 +322,62 @@ func performDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
 	djangoAPIURL, err := getDjangoAPIURL(clientset, ctx)
 	if err != nil {
 		fmt.Printf("Error getting Django API URL: %v\n", err)
-		// 使用預設值
-		djangoAPIURL = "http://192.168.210.185:8000/api/ldap/user/deletepermanent/"
+		djangoAPIURL = "http://192.168.129.148:8000/api/ldap/user/deletepermanent/"
+		return
 	}
 
 	fmt.Printf("Using Django API URL: %s\n", djangoAPIURL)
 
-	// 取得所有 Profile，找出有 delete_date 且已過期的使用者
+	// 取得所有 Profile，找出有 delete_date 且已過期的使用者，並傳 userData 給 deleteUserPermanent
 	profiles, err := getAllProfiles(clientset, ctx)
+	deletedCount := 0
 	if err != nil {
 		fmt.Printf("Error fetching profiles: %v\n", err)
-		return
-	}
+	} else {
+		for _, profile := range profiles {
+			// 檢查 delete_date annotation
+			deleteDate, exists := profile["delete_date"]
+			if !exists {
+				continue
+			}
 
-	deletedCount := 0
-	for _, profile := range profiles {
-		// 檢查 delete_date annotation
-		deleteDate, exists := profile["delete_date"]
-		if !exists {
-			continue
-		}
+			// 解析 delete_date 時間
+			deleteDateStr, ok := deleteDate.(string)
+			if !ok {
+				continue
+			}
 
-		// 解析 delete_date 時間
-		deleteDateStr, ok := deleteDate.(string)
-		if !ok {
-			continue
-		}
+			deleteTime, err := time.Parse("2006-01-02 15:04:05", deleteDateStr)
+			if err != nil {
+				fmt.Printf("Error parsing delete_date for profile %s: %v\n", profile["name"], err)
+				continue
+			}
 
-		deleteTime, err := time.Parse("2006-01-02 15:04:05", deleteDateStr)
-		if err != nil {
-			fmt.Printf("Error parsing delete_date for profile %s: %v\n", profile["name"], err)
-			continue
-		}
-
-		// 檢查是否已過期
-		if time.Now().After(deleteTime) {
-			username := profile["name"].(string)
-			fmt.Printf("Deleting expired user: %s (delete_date: %s)\n", username, deleteDateStr)
-
-			// 呼叫 Django API 刪除使用者
-			if err := deleteUserPermanent(djangoAPIURL, username); err != nil {
-				fmt.Printf("Error deleting user %s: %v\n", username, err)
-			} else {
-				fmt.Printf("Successfully deleted user: %s\n", username)
-				deletedCount++
+			// 檢查是否已過期
+			if time.Now().After(deleteTime) {
+				username, _ := profile["name"].(string)
+				fmt.Printf("Deleting expired user: %s (delete_date: %s)\n", username, deleteDateStr)
 			}
 		}
+	}
+
+	// 取得目前任務模式（daily/hourly/minute），預設為 daily
+	mode := os.Getenv("TASK_MODE")
+	if mode == "" {
+		mode = "daily"
+	}
+
+	// 建立 userData，包含 username、mode 及 delete_date（可擴充）
+	userData := map[string]interface{}{
+		"mode": mode,
+	}
+
+	// 呼叫 Django API 刪除使用者（傳入 userData）
+	if err := deleteUserPermanent(djangoAPIURL, userData); err != nil {
+		fmt.Printf("Error deleting user: %v\n", err)
+	} else {
+		fmt.Printf("Successfully deleted user: \n")
+		deletedCount++
 	}
 
 	fmt.Printf("Total users deleted: %d\n", deletedCount)
@@ -460,12 +490,11 @@ func getAllProfiles(clientset *kubernetes.Clientset, ctx context.Context) ([]map
 }
 
 // deleteUserPermanent 呼叫 Django API 永久刪除使用者
-func deleteUserPermanent(apiURL, username string) error {
-	// 建立 JSON payload
-	payload := map[string]string{
-		"username": username,
-	}
-	jsonData, err := json.Marshal(payload)
+// 變更：不再直接傳入 username，改傳入一個 user data（map[string]interface{}）
+// 目前呼叫端可先準備 user data 並傳入（呼叫點保留/由日常任務決定）。
+func deleteUserPermanent(apiURL string, userData map[string]interface{}) error {
+	// 建立 JSON payload，直接使用傳入的 userData
+	jsonData, err := json.Marshal(userData)
 	if err != nil {
 		return fmt.Errorf("error marshalling JSON: %v", err)
 	}
@@ -497,7 +526,13 @@ func deleteUserPermanent(apiURL, username string) error {
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	fmt.Printf("API response for user %s: %s\n", username, string(body))
+	// 嘗試從 userData 找出 username（若存在則印出）
+	if name, ok := userData["username"].(string); ok {
+		fmt.Printf("API response for user %s: %s\n", name, string(body))
+	} else {
+		fmt.Printf("API response: %s\n", string(body))
+	}
+
 	return nil
 }
 

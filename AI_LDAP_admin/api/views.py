@@ -1260,12 +1260,16 @@ def deleteUserModel(username):
 
     user_obj.set_password("trash123456")
     user_obj.save()
-
-    for group in user_obj.groups.all():
+    # collect groups up front to avoid mutation during iteration
+    original_groups = list(user_obj.groups.all())
+    for group in original_groups:
         User.objects.get(username=username).groups.remove(Group.objects.get(name=group.name))
         UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=group.name)).delete()
-    UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
-    user_obj.groups.add(Group.objects.get(name="TRASH"))
+
+    # ensure TRASH group exists and record disabled status in UserDetail
+    trash_group, _ = Group.objects.get_or_create(name="TRASH")
+    UserDetail.objects.create(uid=user_obj, permission=2, labname=trash_group)
+    user_obj.groups.add(trash_group)
 
     conn = connectLDAP()
     ## delete the user memberUID from the group
@@ -1283,13 +1287,13 @@ def deleteUserModel(username):
     
     
 @api_view(['POST'])
-def user_delete_permanent(request):
+def user_delete_check(request):
     """永久刪除使用者（包括 LDAP、Django DB、Kubernetes）"""
-    data = json.loads(request.body.decode('utf-8'))
-    username = data.get('username')
+    # data = json.loads(request.body.decode('utf-8'))
+    # username = data.get('username')
     
-    if not username:
-        return Response(status=400, data={"message": "Username is required"})
+    # if not username:
+    #    return Response(status=400, data={"message": "Username is required"})
     
     # 印出 TRASH 群組的使用者（插入於 line 1293）
     trash_group = Group.objects.filter(name="TRASH").first()
@@ -1298,6 +1302,32 @@ def user_delete_permanent(request):
         print("\nUSERS IN TRASH GROUP:")
         for u in trash_users:
             print(f"  - {u.username} (email: {u.email})")
+
+        # 檢查每個 TRASH 使用者的 Profile 是否有 delete_date，若沒有則加上今天的日期
+        for u in trash_users:
+            try:
+                profileName = get_profile_by_email(u.email)
+                if not profileName:
+                    print(f"[delete_date] no profile found for user {u.username}")
+                    # no profile found, skip, but it's strange
+                    continue
+                profile = get_profile_content(profileName)
+                if profile is None:
+                    print(f"[delete_date] profile content not found for {profileName}")
+                    continue
+                annotations = profile.get('metadata', {}).get('annotations', {}) or {}
+                if not annotations.get('delete_date'):
+                    today = str(datetime.datetime.now())
+                    ok = replace_profile_user_delete_date(profileName, today)
+                    if ok:
+                        print(f"[delete_date] set delete_date for profile {profileName} to {today}")
+                    else:
+                        print(f"[delete_date] failed to set delete_date for profile {profileName}")
+                else:
+                    print(f"[delete_date] profile {profileName} already has delete_date: {annotations.get('delete_date')}")
+            except Exception as e:
+                print(f"[delete_date] error handling user {u.username}: {e}")
+
     else:
         print("\nGroup TRASH does not exist")
 
@@ -1315,23 +1345,22 @@ def user_delete_permanent(request):
         for user in all_users:
             print(f"  - {user.username} (email: {user.email})")
         
-        print(f"\nLooking for user: {username}")
-        print("="*60)
+        # print(f"\nLooking for user: {username}")
+        # print("="*60)
         # =========================================
         
-        group_list = get_user_all_groups(username)
-        print(f"User {username} is in groups: {group_list}")
-        
+        # group_list = get_user_all_groups(username)
+        # print(f"User {username} is in groups: {group_list}")
         
         # 繼續執行刪除邏輯
         # deleteUserModel(username)
         
-        return Response(status=200, data={"message": f"User {username} deleted successfully"})
+        return Response(status=200, data={"message": f"User deleted successfully"})
     except User.DoesNotExist:
-        print(f"[ERROR] User {username} not found in database")
-        return Response(status=404, data={"message": f"User {username} not found in database"})
+        # print(f"[ERROR] User {username} not found in database")
+        return Response(status=404, data={"message": f"User not found in database"})
     except Exception as e:
-        print(f"[ERROR] Error deleting user {username}: {str(e)}")
+        # print(f"[ERROR] Error deleting user {username}: {str(e)}")
         import traceback
         traceback.print_exc()
         return Response(status=500, data={"message": f"Error deleting user: {str(e)}"})
@@ -1339,9 +1368,18 @@ def user_delete_permanent(request):
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
-    group_list = get_user_all_groups(data['username'])
+    username = data['username']
+    group_list = get_user_all_groups(username)
     print("group_list = ", group_list)
-    deleteUserModel(data['username'])
+    
+    # 檢查用戶是否只在 TRASH 群組中
+    if len(group_list) == 1 and group_list[0]['groupname'] == 'TRASH':
+        print(f"User {username} is only in TRASH group, deleting permanently")
+        deleteUserModelPermanent(username)
+        return Response(status=200, data={"message": f"User {username} permanently deleted"})
+    
+    # 否則執行一般刪除（移至 TRASH）
+    deleteUserModel(username)
     return Response(status=200)
 
 @api_view(['POST'])

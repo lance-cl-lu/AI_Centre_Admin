@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ldap
+  namespace: ldap
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: ldap
+      port: 389
+      targetPort: 389
+
