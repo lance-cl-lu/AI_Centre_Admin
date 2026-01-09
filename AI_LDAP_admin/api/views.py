@@ -1315,6 +1315,7 @@ def user_delete_check(request):
     #    return Response(status=400, data={"message": "Username is required"})
     
     # 印出 TRASH 群組的使用者（插入於 line 1293）
+    user_need_to_delete = 0
     trash_group = Group.objects.filter(name="TRASH").first()
     if trash_group:
         trash_users = trash_group.user_set.all()
@@ -1335,20 +1336,34 @@ def user_delete_check(request):
                     print(f"[delete_date] profile content not found for {profileName}")
                     continue
                 annotations = profile.get('metadata', {}).get('annotations', {}) or {}
-                if not annotations.get('delete_date'):
-                    today = str(datetime.datetime.now())
-                    ok = replace_profile_user_delete_date(profileName, today)
+                delete_date_str = annotations.get('delete_date')
+                if not delete_date_str:
+                    today = datetime.datetime.now() + datetime.timedelta(days=30)
+                    delete_date_str = str(today)
+                    ok = replace_profile_user_delete_date(profileName, delete_date_str)
                     if ok:
-                        print(f"[delete_date] set delete_date for profile {profileName} to {today}")
+                        print(f"[delete_date] set delete_date for profile {profileName} to {delete_date_str}")
                     else:
                         print(f"[delete_date] failed to set delete_date for profile {profileName}")
                 else:
-                    print(f"[delete_date] profile {profileName} already has delete_date: {annotations.get('delete_date')}")
+                    print(f"[delete_date] profile {profileName} already has delete_date: {delete_date_str}")
+
+                # 額外檢查：若 delete_date 已超過今天，印出警告
+                try:
+                    delete_dt = datetime.datetime.fromisoformat(delete_date_str)
+                    if datetime.datetime.now() > delete_dt:
+                        user_need_to_delete += 1
+                        deleteUserModelPermanent(u.username)
+                        print(f"[delete_date] profile {profileName} exceeded delete_date: {delete_date_str}")
+                except ValueError:
+                    print(f"[delete_date] invalid delete_date format for profile {profileName}: {delete_date_str}")
             except Exception as e:
                 print(f"[delete_date] error handling user {u.username}: {e}")
 
     else:
         print("\nGroup TRASH does not exist")
+
+    return Response(status=200, data={"message": f"User deleted successfully, {user_need_to_delete} users need to be deleted"})
 
     try:
         # ========== 驗證：印出所有群組和使用者 ==========
@@ -1793,6 +1808,15 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            # 若使用者在 TRASH 中，將其從 TRASH 移除並移除相關 UserDetail
+            try:
+                trash_group = Group.objects.filter(name="TRASH").first()
+                if trash_group and user_obj.groups.filter(name="TRASH").exists():
+                    user_obj.groups.remove(trash_group)
+                    UserDetail.objects.filter(uid=user_obj, labname=trash_group).delete()
+                    print(f"Removed user {user} from TRASH group")
+            except Exception as e:
+                print(f"Error removing user {user} from TRASH: {e}")
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
@@ -1803,6 +1827,15 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            # 若使用者在 TRASH 中，將其從 TRASH 移除並移除相關 UserDetail
+            try:
+                trash_group = Group.objects.filter(name="TRASH").first()
+                if trash_group and user_obj.groups.filter(name="TRASH").exists():
+                    user_obj.groups.remove(trash_group)
+                    UserDetail.objects.filter(uid=user_obj, labname=trash_group).delete()
+                    print(f"Removed user {user} from TRASH group")
+            except Exception as e:
+                print(f"Error removing user {user} from TRASH: {e}")
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
