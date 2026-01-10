@@ -12,6 +12,8 @@ function User() {
     let [user, setUser] = useState(null);
     const [permissions, setPermissions] = useState({});
     const [expiryInfo, setExpiryInfo] = useState({});
+    const [expiryDates, setExpiryDates] = useState({});
+    const [originalExpiryDates, setOriginalExpiryDates] = useState({});
     let cpuQuota = 0;
     let memoryQuota = 0;
     let gpuQuota = 0;
@@ -77,6 +79,17 @@ function User() {
                 document.getElementById("gpuQuota").value = gpuQuota;
                 setPermissions(data.permission);
                 setExpiryInfo(data.expiry_info || {});
+
+                // 初始化到期日期狀態
+                const initialExpiryDates = {};
+                if (data.expiry_info) {
+                    Object.keys(data.expiry_info).forEach(groupName => {
+                        initialExpiryDates[groupName] = data.expiry_info[groupName].expiry_date || '';
+                    });
+                }
+                setExpiryDates(initialExpiryDates);
+                setOriginalExpiryDates(initialExpiryDates);
+
                 document.getElementById("editandsave").className = "btn btn-primary";
                 document.getElementById("editandsave").innerHTML = "Edit";
             }, 400);
@@ -125,6 +138,22 @@ function User() {
         }
     }
 
+    const handleExpiryDateChange = (groupName, newDate) => {
+        setExpiryDates(prev => ({
+            ...prev,
+            [groupName]: newDate
+        }));
+    };
+
+    const calculateRemainingDays = (dateString) => {
+        if (!dateString) return null;
+        const today = new Date();
+        const expiry = new Date(dateString);
+        const timeDiff = expiry - today;
+        const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+        return daysDiff;
+    };
+
     const editreadonly = async () => {
         if(document.getElementById("editandsave").innerHTML === "Edit"){
             document.getElementById("inputFirstName").readOnly = false;
@@ -140,11 +169,18 @@ function User() {
             document.getElementById("memQuota").style.backgroundColor = "#b4d9d7";
             document.getElementById("gpuQuota").style.backgroundColor = "#b4d9d7";
 
-            if(userPermission && userPermission === "root"){
+            if(userPermission && (userPermission === "root" || userPermission === "admin")){
                 let check = document.getElementsByClassName("form-check-input");
                 for(let i=0; i<check.length; i++){
                     check[i].disabled = false;
                     check[i].style.backgroundColor = "#b4d9d7";
+                }
+
+                // 啟用到期日期輸入框
+                let expiryInputs = document.getElementsByClassName("expiry-date-input");
+                for(let i=0; i<expiryInputs.length; i++){
+                    expiryInputs[i].disabled = false;
+                    expiryInputs[i].style.backgroundColor = "#b4d9d7";
                 }
             }
             document.getElementById("editandsave").innerHTML = "Save";
@@ -163,11 +199,18 @@ function User() {
             document.getElementById("cpuQuota").style.backgroundColor = "#fff";
             document.getElementById("memQuota").style.backgroundColor = "#fff";
             document.getElementById("gpuQuota").style.backgroundColor = "#fff";
-            if(userPermission && userPermission === "root"){
+            if(userPermission && (userPermission === "root" || userPermission === "admin")){
             let check = document.getElementsByClassName("form-check-input");
                 for(let i=0; i<check.length; i++){
                     check[i].disabled = true;
                     check[i].style.backgroundColor = "#fff";
+                }
+
+                // 禁用到期日期輸入框
+                let expiryInputs = document.getElementsByClassName("expiry-date-input");
+                for(let i=0; i<expiryInputs.length; i++){
+                    expiryInputs[i].disabled = true;
+                    expiryInputs[i].style.backgroundColor = "#fff";
                 }
             }
 
@@ -178,11 +221,18 @@ function User() {
                 let check = document.getElementsByClassName("form-check-input");
                 let group = [];
                 for(let i=0; i<check.length; i++){
-                    if(check[i].checked){
-                        group.push({"groupname":check[i].id, "permission":"admin"});
-                    } else {
-                        group.push({"groupname":check[i].id, "permission":"user"});
+                    const groupName = check[i].id;
+                    const groupData = {
+                        "groupname": groupName,
+                        "permission": check[i].checked ? "admin" : "user"
+                    };
+
+                    // 添加到期日期（如果有變更）
+                    if (expiryDates[groupName] !== originalExpiryDates[groupName]) {
+                        groupData.expiry_date = expiryDates[groupName] || null;
                     }
+
+                    group.push(groupData);
                 }
                 return group;
             }
@@ -236,8 +286,8 @@ function User() {
     return (
         <div className='userPage'>
                 <h1>User {state && state.user}</h1><br/>
-                <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "20px", borderRadius: "12px", display:"flex", flexWrap:"wrap"}}>
-                    <Form.Group as={Col} style={{width:"50%"}}>
+                <Form className='form-css' style={{boxShadow: "0px 0px 10px 0px #888888", padding: "25px", borderRadius: "12px", display:"flex", flexWrap:"wrap"}}>
+                    <Form.Group as={Col} style={{width:"50%", paddingRight: "20px"}}>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                             <Form.Label column sm="2">
                                 Username
@@ -272,71 +322,110 @@ function User() {
                         </Form.Group>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                             <Form.Label column sm="2">CPU Quota</Form.Label>
-                            <FloatingLabel
-                                controlId="floatingSelect"
-                                label="CPU Quota"
-                                className="mb-3"
-                            >
-                                <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="8" defaultValue={cpuQuota} step="0.1" readOnly/>
-                            </FloatingLabel>
+                            <Col sm="10" style={{width:"100%"}}>
+                                <FloatingLabel
+                                    controlId="floatingSelect"
+                                    label="CPU Quota"
+                                    className="mb-3"
+                                    style={{maxWidth: "300px"}}
+                                >
+                                    <Form.Control type="number" id="cpuQuota" placeholder="Enter CPU Quota" min="0.5" max="8" defaultValue={cpuQuota} step="0.1" readOnly/>
+                                </FloatingLabel>
+                            </Col>
                         </Form.Group>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                             <Form.Label column sm="2">Memory Quota</Form.Label>
-                            <FloatingLabel
-                                controlId="floatingInput"
-                                label="Memory Quota (GiB)"
-                                className="mb-3"
-                            >
-                                <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue={memoryQuota} step="0.1" readOnly/>
-                            </FloatingLabel>
+                            <Col sm="10" style={{width:"100%"}}>
+                                <FloatingLabel
+                                    controlId="floatingInput"
+                                    label="Memory Quota (GiB)"
+                                    className="mb-3"
+                                    style={{maxWidth: "300px"}}
+                                >
+                                    <Form.Control type="number" id="memQuota" placeholder="Enter Memory Quota" min="1" defaultValue={memoryQuota} step="0.1" readOnly/>
+                                </FloatingLabel>
+                            </Col>
                         </Form.Group>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap'}}>
                             <Form.Label column sm="2">GPU Quota</Form.Label>
-                            <FloatingLabel
-                                controlId="floatingInput"
-                                label="GPU Quota"
-                                className="mb-3"
-                            >
-                                <Form.Select aria-label="Floating label select example" id="gpuQuota" defaultValue={gpuQuota} disabled>
-                                    <option value="0">0</option>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                    <option value="4">4</option>
-                                    <option value="5">5</option>
-                                    <option value="6">6</option>
-                                    <option value="7">7</option>
-                                    <option value="8">8</option>
-                                </Form.Select>
-                            </FloatingLabel>
+                            <Col sm="10" style={{width:"100%"}}>
+                                <FloatingLabel
+                                    controlId="floatingInput"
+                                    label="GPU Quota"
+                                    className="mb-3"
+                                    style={{maxWidth: "300px"}}
+                                >
+                                    <Form.Select aria-label="Floating label select example" id="gpuQuota" defaultValue={gpuQuota} disabled>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8">8</option>
+                                    </Form.Select>
+                                </FloatingLabel>
+                            </Col>
                         </Form.Group>
                     </Form.Group>
-                    <Form.Group as={Col} style={{width:"50%"}}>
+                    <Form.Group as={Col} style={{width:"50%", paddingLeft: "20px"}}>
                         <Form.Group as={Row} className="mb-3" style={{flexWrap: 'nowrap', alignItems:"start"}}>
-                            <Form.Label column sm="2" style={{width:"20%"}}>
-                                Current Group:
-                            </Form.Label>
-                            <Form.Group as={Col} style={{width:"80%"}}>
+                            <Form.Group as={Col} style={{width:"100%"}}>
+                                <Form.Label style={{fontWeight: "600", fontSize: "1.3em", marginBottom: "15px", display: "block"}}>
+                                    Current Group
+                                </Form.Label>
                                 <ListGroup>
                                 { permissions && Object.keys(permissions).map((key, index) => {
                                     const groupName = permissions[key].groupname;
-                                    const groupExpiry = expiryInfo[groupName];
+
                                     return (
-                                        <ListGroup.Item key={index} style={{border:"none", padding:"0px", display:"flex", flexWrap:"nowrap", alignItems:"center", justifyContent:"space-evenly"}}>
-                                            <Form.Label column sm="2" style={{width:"90%"}}>
-                                                {groupName}
-                                                {groupExpiry && (
-                                                    <div style={{fontSize: '0.85em', color: groupExpiry.is_expired ? 'red' : (groupExpiry.remaining_days <= 7 ? 'orange' : 'gray')}}>
-                                                        到期日: {groupExpiry.expiry_date}
-                                                        {groupExpiry.is_expired ? ' (已到期)' : ` (剩餘${groupExpiry.remaining_days}天)`}
-                                                    </div>
-                                                )}
-                                            </Form.Label>
-                                            <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={groupName} style={{width:"10%"}}/>
+                                        <ListGroup.Item key={index} style={{border:"1px solid #dee2e6", padding:"10px 15px", marginBottom: "8px", borderRadius: "6px", display:"flex", flexWrap:"nowrap", alignItems:"center", justifyContent:"space-between"}}>
+                                            <div style={{flex: "1"}}>
+                                                <Form.Label style={{marginBottom: "0px", fontWeight: "500", fontSize: "1em", cursor: "default"}}>
+                                                    {groupName}
+                                                </Form.Label>
+                                            </div>
+                                            <Form.Check type="checkbox" defaultChecked={permissions[key].permission === "admin" ? true : false} disabled id={groupName}/>
                                         </ListGroup.Item>
                                     )
                                 })}
                                 </ListGroup>
+
+                                {(userPermission === "root" || userPermission === "admin") && Object.keys(permissions).length > 0 && (
+                                    <div style={{marginTop: "20px", paddingTop: "15px", borderTop: "1px solid #dee2e6"}}>
+                                        <Form.Label style={{fontWeight: "600", fontSize: "1.2em", marginBottom: "12px", display: "block"}}>設定到期日期</Form.Label>
+                                        {Object.keys(permissions).map((key, index) => {
+                                            const groupName = permissions[key].groupname;
+                                            const currentExpiryDate = expiryDates[groupName] || '';
+                                            const remainingDays = currentExpiryDate ? calculateRemainingDays(currentExpiryDate) : null;
+
+                                            return (
+                                                <div key={index} style={{marginBottom: "10px"}}>
+                                                    <Form.Label style={{fontWeight: "500", fontSize: "0.95em", marginBottom: "3px", display: "block"}}>
+                                                        {groupName}
+                                                    </Form.Label>
+                                                    <Form.Control
+                                                        type="date"
+                                                        className="expiry-date-input"
+                                                        value={currentExpiryDate}
+                                                        onChange={(e) => handleExpiryDateChange(groupName, e.target.value)}
+                                                        min={new Date().toISOString().split('T')[0]}
+                                                        disabled
+                                                        size="sm"
+                                                        style={{maxWidth: "1500px"}}
+                                                    />
+                                                    {remainingDays !== null && (
+                                                        <div style={{fontSize: '0.85em', color: remainingDays <= 3 ? 'red' : (remainingDays <= 7 ? '#FFA500' : '#1E90FF'), fontWeight: '600', marginTop: '2px'}}>
+                                                            新到期日剩餘: {remainingDays} 天{remainingDays <= 0 && ' (已過期)'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                         </Form.Group>
 
                     </Form.Group>
@@ -353,7 +442,7 @@ function User() {
                     <ListNoteBook user={state.user}/>
                 </Card>
         </div>
-
+  
     )
 }
 export default User
