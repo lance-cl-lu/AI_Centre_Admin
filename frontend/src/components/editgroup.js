@@ -9,6 +9,7 @@ function EditGroup() {
     const state = location.state;
     const [labinfo, setLabinfo] = useState([]);
     const [expiryDate, setExpiryDate] = useState('');
+    const [originalExpiryDate, setOriginalExpiryDate] = useState('');  // 追蹤原始到期日期
     const [remainingDays, setRemainingDays] = useState(null);
     useEffect(() => {
             labinfofetch();
@@ -40,11 +41,16 @@ function EditGroup() {
         });
         let data = await response.json();
         if(response.status===200){
+            console.log("===== LABINFO FETCH =====");
             console.log("labinfo", data);
+            console.log("expiryDate from API:", data.expiryDate);
+            console.log("remainingDays from API:", data.remainingDays);
+            console.log("===== END LABINFO FETCH =====");
             setLabinfo(data);
             // 設定現有的到期日期
-            if(data.expiryDate) {
-                setExpiryDate(data.expiryDate);
+            setExpiryDate(data.expiryDate || '');
+            setOriginalExpiryDate(data.expiryDate || '');  // 儲存原始值
+            if (data.remainingDays !== undefined) {
                 setRemainingDays(data.remainingDays);
             }
         } else {
@@ -53,19 +59,65 @@ function EditGroup() {
     }
 
     let editLab = async() => {
+        // 檢查到期日期是否有變更
+        const expiryDateChanged = expiryDate !== originalExpiryDate;
+
+        console.log('===== FRONTEND DEBUG =====');
+        console.log('Original expiry date:', originalExpiryDate);
+        console.log('Current expiry date:', expiryDate);
+        console.log('Expiry date changed:', expiryDateChanged);
+        console.log('Lab name:', state.lab);
+        
+        // 如果到期日期有變更，先確認
+        if (expiryDateChanged) {
+            const confirmResult = await Swal.fire({
+                title: '確認變更到期日期',
+                html: `
+                    <div style="text-align: left;">
+                        <p><strong>原到期日期：</strong>${originalExpiryDate || '未設定'}</p>
+                        <p><strong>新到期日期：</strong>${expiryDate || '未設定'}</p>
+                        ${expiryDate ? `<p><strong>剩餘天數：</strong>${remainingDays} 天</p>` : ''}
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '確認儲存',
+                cancelButtonText: '取消',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+            });
+            
+            console.log('Confirm result:', confirmResult);
+            
+            // 如果用戶取消，就不執行儲存
+            if (!confirmResult.isConfirmed) {
+                return;
+            }
+        }
+        
+        const requestBody = {
+            'lab': state.lab,
+            'cpu_quota': document.getElementById('cpu_quota').value,
+            'mem_quota': document.getElementById('memory_quota').value,
+            'gpu_quota': document.getElementById('gpu_quota').value,
+            'gpu_vendor': document.getElementById('gpu_vendor').value,
+            'expiry_date': expiryDate || null
+        };
+
+        console.log('Request body:', requestBody);
+
         let response = await fetch('/api/ldap/lab/edit/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({'lab': state.lab,
-                'cpu_quota': document.getElementById('cpu_quota').value,
-                'mem_quota': document.getElementById('memory_quota').value,
-                'gpu_quota': document.getElementById('gpu_quota').value,
-                'gpu_vendor': document.getElementById('gpu_vendor').value,
-                'expiry_date': expiryDate
-            }),
+            body: JSON.stringify(requestBody),
         });
+        console.log('Response status:', response.status);
+        const responseData = await response.json();
+        console.log('Response data:', responseData);
+        console.log('===== END FRONTEND DEBUG =====');
+
         if(response.status===200){
             Swal.fire({
                 title: 'Success',
@@ -88,6 +140,10 @@ function EditGroup() {
             })
         }
     }
+
+    const saveExpiryDate = async () => {
+        await editLab();
+    };
 
     return (
         <div>
@@ -137,6 +193,9 @@ function EditGroup() {
                         設定此群組的到期日期，到期後用戶將進入30天待刪除期
                     </Form.Text>
                 </Form.Group>
+                <Button variant="success" type="button" onClick={saveExpiryDate} style={{ marginBottom: '1rem' }}>
+                    儲存到期日期
+                </Button>
                 {remainingDays !== null && (
                     <Alert variant={remainingDays <= 7 ? (remainingDays <= 3 ? 'danger' : 'warning') : 'info'}>
                         <strong>剩餘天數: {remainingDays} 天</strong>

@@ -279,6 +279,19 @@ function Lab() {
     }
   };
 
+  // 計算剩餘天數
+  const calculateRemainingDays = (expiryDateString) => {
+    if (!expiryDateString) return null;
+    const today = new Date();
+    const expiry = new Date(expiryDateString);
+    const timeDiff = expiry - today;
+    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+    return daysDiff;
+  };
+
+  const remainingDays = labinfo.expiryDate ? calculateRemainingDays(labinfo.expiryDate) : null;
+  const isExpired = remainingDays !== null && remainingDays <= 0;
+
   return (
     <div className="lab-container">
       <header className="lab-header">
@@ -286,6 +299,27 @@ function Lab() {
           {labinfo.labname ? labinfo.labname : ''}
           {labinfo.memberUid ? ` (${Object.keys(labinfo.memberUid).length})` : ' (0)'}
         </h1>
+        {labinfo.expiryDate && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px 15px',
+            borderRadius: '8px',
+            backgroundColor: isExpired ? '#ffebee' : (remainingDays <= 3 ? '#ffebee' : (remainingDays <= 7 ? '#fff3e0' : '#e3f2fd')),
+            border: `2px solid ${isExpired ? 'red' : (remainingDays <= 3 ? 'red' : (remainingDays <= 7 ? '#FFA500' : '#1E90FF'))}`,
+            display: 'inline-block'
+          }}>
+            <div style={{ fontSize: '0.9em', color: '#666', marginBottom: '4px' }}>
+              到期日期: {labinfo.expiryDate}
+            </div>
+            <div style={{
+              fontSize: '1.1em',
+              fontWeight: '700',
+              color: isExpired ? 'red' : (remainingDays <= 3 ? 'red' : (remainingDays <= 7 ? '#FFA500' : '#1E90FF'))
+            }}>
+              {isExpired ? '❌ 已到期' : `⏰ 剩餘 ${remainingDays} 天`}
+            </div>
+          </div>
+        )}
       </header>
       
       {/* 操作連結群組 */}
