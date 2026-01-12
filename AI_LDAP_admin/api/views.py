@@ -1243,6 +1243,35 @@ def syschronize_ldap(requset):
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
 
+def delete_group_core(labname):
+    """Core logic to delete a group from database, LDAP, and Kubernetes"""
+    try:
+        group = Group.objects.get(name=labname)
+        for user in User.objects.filter(groups=group):
+            User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
+            UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
+            group_list = get_user_all_groups(user)
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user.first_name + " " + user.last_name
+            send_delete_group_email(k8s_name, labname, k8s_date, user.email)
+            # check if group is empty
+            if len(group_list) == 0:
+                print("group is empty")
+                deleteUserModel(user)
+            else:
+                print("group is not empty -", len(group_list))
+            print(user.username)
+        # delete the group from database
+        Group.objects.get(name=labname).delete()
+        conn = connectLDAP()
+        # delete the group from ldap
+        conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
+        conn.unbind()
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to delete group {labname}: {e}")
+        return False
+
 def get_user_all_groups(user):
     user = User.objects.get(username=user)
     # get current group
@@ -1444,7 +1473,7 @@ def user_delete_check(request):
     else:
         print("\nGroup TRASH does not exist")
 
-    return Response(status=200, data={"message": f"User deleted successfully, {user_need_to_delete} users need to be deleted"})
+    # return Response(status=200, data={"message": f"User deleted successfully, {user_need_to_delete} users need to be deleted"})
 
     try:
         # ========== 驗證：印出所有群組和使用者 ==========
@@ -1455,10 +1484,31 @@ def user_delete_check(request):
         print("ALL GROUPS IN DATABASE:")
         for group in all_groups:
             print(f"  - {group.name}")
+            groupDefaultQuota = GroupDefaultQuota.objects.filter(labname=Group.objects.get(name=group.name)).first()
+            if groupDefaultQuota:
+                defaultExpiryDate = groupDefaultQuota.expiry_date
+                print(f"Group={group.name}, Expiry Date={defaultExpiryDate}")
+                # 檢查 expiry_date 是否超過今天
+                if defaultExpiryDate:
+                    try:
+                        expiry_dt = datetime.datetime.fromisoformat(str(defaultExpiryDate))
+                        if datetime.datetime.now() > expiry_dt:
+                            print(f"  [WARNING] Group {group.name} has expired!")
+                            # 呼叫 delete_group_core 刪除過期的 group
+                            print(f"  [ACTION] Deleting expired group {group.name}...")
+                            if delete_group_core(group.name):
+                                print(f"  [SUCCESS] Group {group.name} deleted successfully")
+                            else:
+                                print(f"  [FAILED] Failed to delete group {group.name}")
+                            
+                    except ValueError:
+                        print(f"  [ERROR] Invalid expiry_date format for group {group.name}: {defaultExpiryDate}")
+            else:
+                print(f"Group={group.name}, Expiry Date=None (no GroupDefaultQuota record)")
         
-        print("\nALL USERS IN DATABASE:")
-        for user in all_users:
-            print(f"  - {user.username} (email: {user.email})")
+        # print("\nALL USERS IN DATABASE:")
+        # for user in all_users:
+        #    print(f"  - {user.username} (email: {user.email})")
         
         # print(f"\nLooking for user: {username}")
         # print("="*60)
@@ -1501,29 +1551,10 @@ def user_delete(request):
 def lab_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
-    group = Group.objects.get(name=labname)
-    for user in User.objects.filter(groups=group):
-        User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
-        UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
-        group_list = get_user_all_groups(user)
-        k8s_date = str(datetime.datetime.now())
-        k8s_name = user.first_name + " " + user.last_name
-        send_delete_group_email(k8s_name, labname, k8s_date, user.email)
-        # print(group_list)
-        # check if group is empty
-        if len(group_list) == 0:
-            print("group is empty")
-            deleteUserModel(user)
-        else:
-            print("group is not empty -", len(group_list))
-        print(user.username)
-    # delete the group from database
-    Group.objects.get(name=labname).delete()
-    conn = connectLDAP()
-    # delete the group from ldap
-    conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
-    conn.unbind()
-    return Response(status=200)
+    if delete_group_core(labname):
+        return Response(status=200, data={"message": f"Group {labname} deleted successfully"})
+    else:
+        return Response(status=500, data={"message": f"Failed to delete group {labname}"})
 
     
 def user_group_num(requset):
@@ -2099,11 +2130,28 @@ def import_lab_user(request):
                 return JsonResponse({'message': 'user {} password is not valid'.format(user['username'])}, status=400)
         # check all data is exist in database, ldap, and kubeflow or not
         failed_user = []
-        
+        exist_User = []
+
         for user in userinfo:
             # if username is exist in database
             if User.objects.filter(username=user['username']).exists() is True:
-                failed_user.append({user['username']: "username is exist in database"})
+                user_obj = User.objects.get(username=user['username'])
+                detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+                profileName = get_profile_by_email(user_obj.email)
+                profile = get_profile_content(profileName)
+                if user['email'] == user_obj.email and profile is not None:
+                    print("same email and profile exist:", user['email'], profileName)
+                    # 檢查是否已經在該 group 中
+                    if not user_obj.groups.filter(name=group).exists():
+                        user_obj.groups.add(Group.objects.get(name=group))
+                        if user['permission'] == 'admin':
+                            UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
+                        elif user['permission'] == 'user':
+                            UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=group))
+                    else:
+                        print("user already in group:", user['username'], group)
+                else:
+                    failed_user.append({user['username']: "username is exist in database"})
                 # remove the user from userinfo
                 userinfo.remove(user)
                 continue
