@@ -49,6 +49,7 @@ urlpatterns = [
     path("setNotebook/", set_notebook, name="set_notebook"),
     path("getNotebookYAML/", get_notebook_yaml, name="get_notebook_yaml"),
     path("uploadNotebookYAML/", upload_notebook_yaml, name="upload_notebook_yaml"),
+    path("node-resource-monitor/config/", node_resource_monitor_config, name="node_resource_monitor_config"),
     # danger for deploy
     # path("ldap/danger/", remove_all_entr, name="danger"),
     path("broadcast/", broadcast_email, name="broadcast_email"),

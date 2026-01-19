@@ -4,6 +4,7 @@ import json, random
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
 from django.core.files.storage import default_storage
+import os
 
 from passlib.hash import ldap_md5
 
@@ -16,15 +17,66 @@ from . import urls
 
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
+from kubernetes.client.rest import ApiException
 
 import smtplib, ssl
 from email.mime.text import MIMEText
 import yaml
 import zipfile
 import humps
+import requests
 
 # traceback
 import traceback    
+
+NODE_RESOURCE_MONITOR_CONFIGMAP = os.environ.get(
+    'NODE_RESOURCE_MONITOR_CONFIGMAP',
+    'node-resource-monitor-config',
+)
+NODE_RESOURCE_MONITOR_NAMESPACE = os.environ.get(
+    'NODE_RESOURCE_MONITOR_NAMESPACE',
+    'cgu',
+)
+NODE_RESOURCE_MONITOR_KEYS = {
+    'cpuCostPerMinute': 'CPU_COST_PER_MINUTE',
+    'gpuCostPerMinute': 'GPU_COST_PER_MINUTE',
+}
+
+
+def ensure_k8s_config():
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+
+def build_cost_response(config_map):
+    data = getattr(config_map, 'data', None) or {}
+    return {
+        'name': NODE_RESOURCE_MONITOR_CONFIGMAP,
+        'namespace': NODE_RESOURCE_MONITOR_NAMESPACE,
+        'cpuCostPerMinute': data.get('CPU_COST_PER_MINUTE'),
+        'gpuCostPerMinute': data.get('GPU_COST_PER_MINUTE'),
+    }
+
+
+def format_cost_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        if value < 0:
+            raise ValueError('費率必須為非負數值。')
+        return str(value)
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        numeric = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError('費率必須為數值。')
+    if numeric < 0:
+        raise ValueError('費率必須為非負數值。')
+    return raw
 
 def send_email_gmail(subject, message, destination):
     # First assemble the message
@@ -2431,6 +2483,64 @@ def remove_null(data):
     else:
         return data
     return removed
+
+
+@api_view(['GET', 'PATCH'])
+def node_resource_monitor_config(request):
+    try:
+        ensure_k8s_config()
+    except ConfigException as exc:
+        return Response(
+            {'detail': f'無法載入 Kubernetes 設定：{exc}'},
+            status=500,
+        )
+
+    v1 = client.CoreV1Api()
+    try:
+        config_map = v1.read_namespaced_config_map(
+            NODE_RESOURCE_MONITOR_CONFIGMAP,
+            NODE_RESOURCE_MONITOR_NAMESPACE,
+        )
+    except ApiException as exc:
+        status_code = exc.status or 500
+        message = exc.reason or '讀取 ConfigMap 失敗。'
+        return Response({'detail': message}, status=status_code)
+
+    if request.method == 'GET':
+        return Response(build_cost_response(config_map), status=200)
+
+    payload = request.data or {}
+    updates = {}
+    errors = {}
+    for field, key in NODE_RESOURCE_MONITOR_KEYS.items():
+        if field not in payload:
+            continue
+        try:
+            formatted = format_cost_value(payload[field])
+        except ValueError as err:
+            errors[field] = str(err)
+            continue
+        if formatted is not None:
+            updates[key] = formatted
+
+    if errors:
+        return Response({'detail': '費率格式錯誤。', 'errors': errors}, status=400)
+
+    if not updates:
+        return Response({'detail': '請至少提供一個費率數值。'}, status=400)
+
+    try:
+        patched = v1.patch_namespaced_config_map(
+            NODE_RESOURCE_MONITOR_CONFIGMAP,
+            NODE_RESOURCE_MONITOR_NAMESPACE,
+            {'data': updates},
+        )
+    except ApiException as exc:
+        status_code = exc.status or 500
+        message = exc.reason or '更新 ConfigMap 失敗。'
+        return Response({'detail': message}, status=status_code)
+
+    return Response(build_cost_response(patched), status=200)
 
 # Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
 @api_view(["POST"])
