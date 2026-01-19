@@ -2132,13 +2132,16 @@ def import_lab_user(request):
         failed_user = []
         exist_User = []
 
-        for user in userinfo:
+        # print(userinfo)
+        for user in userinfo[:]:
             # if username is exist in database
+            # print("Checking user:", user['username'], user['email'],user['permission'], user['password'])
             if User.objects.filter(username=user['username']).exists() is True:
                 user_obj = User.objects.get(username=user['username'])
                 detail_obj = UserDetail.objects.filter(uid=user_obj.id)
                 profileName = get_profile_by_email(user_obj.email)
                 profile = get_profile_content(profileName)
+                print(user_obj.email, user['email'], profileName, profile)
                 if user['email'] == user_obj.email and profile is not None:
                     print("same email and profile exist:", user['email'], profileName)
                     # 檢查是否已經在該 group 中
@@ -2184,13 +2187,13 @@ def import_lab_user(request):
         # add user into django, ldap, and kubeflow
         for user in userinfo:
             # convert cpu value to correct format, from 8800m remove m and devide to 8 ,  if more than 1100
-            print("Without check", user['cpu_quota'])
+            # print("Without check", user['cpu_quota'])
             if str(user['cpu_quota']).isdigit() is False:
                 user['cpu_quota'] = user['cpu_quota'][:-1]
-            print("After check1", user['cpu_quota'])
+            # print("After check1", user['cpu_quota'])
             if float(user['cpu_quota']) > 1100:
                 user['cpu_quota'] = str(float(user['cpu_quota'])/1100)
-            print("After check2", user['cpu_quota'])
+            # print("After check2", user['cpu_quota'])
             try:
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
