@@ -1,4 +1,7 @@
-const DEFAULT_PROMETHEUS_BASE = 'http://120.126.23.25:32049';
+const DEFAULT_PROMETHEUS_BASE =
+  typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:32049`
+    : 'http://localhost:32049';
 
 const ensureBaseUrl = (value) => {
   if (!value) {

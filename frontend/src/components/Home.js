@@ -945,69 +945,69 @@ function Home() {
           </div>
         </motion.div>
 
-        <Card className="text-center mt-4">
-          <Card.Header>Kubeflow</Card.Header>
-          <Card.Body>
-            <Card.Title>AI Center LDAP管理平台</Card.Title>
-            <Card.Text>
-              CGU LDAP management platform provides features the faculty needs to
-              facilitate the permission of AI center users.
-            </Card.Text>
-            <a
-              href={KUBEFLOW_HTTP}
-              className="btn btn-primary"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Kubeflow dashboard
-            </a>
-          </Card.Body>
-        </Card>
+        {/* <Card className="text-center mt-4">
+            <Card.Header>Kubeflow</Card.Header>
+            <Card.Body>
+              <Card.Title>AI Center LDAP管理平台</Card.Title>
+              <Card.Text>
+                CGU LDAP management platform provides features the faculty needs to
+                facilitate the permission of AI center users.
+              </Card.Text>
+              <a
+                href={KUBEFLOW_HTTP}
+                className="btn btn-primary"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Kubeflow dashboard
+              </a>
+            </Card.Body>
+          </Card>
 
-        <Row xs={1} md={2} className="g-3 mt-3">
-          <Col>
-            <Card className="h-100">
-              <Card.Body>
-                <Card.Title>平台介紹</Card.Title>
-                <Card.Text>
-                  The CGU AI Center website manages user information and
-                  permissions for the AI Center&apos;s exclusive environment.
-                </Card.Text>
-                <Link
-                  to="/lab"
-                  state={{ lab: null }}
-                  className="btn btn-primary"
-                >
-                  Lab
-                </Link>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card className="h-100">
-              <Card.Body>
-                <Card.Title>通知總覽</Card.Title>
-                <Card.Text>
-                  CGU AI Center has the following data not yet synchronized with
-                  LDAP:
-                </Card.Text>
-                <ul style={{ marginTop: '1vh', maxHeight: '120px', overflowY: 'auto' }}>
-                  {unsyncList.map((msg, index) => (
-                    <li
-                      key={index}
-                      style={{ fontSize: '12px', marginBottom: '5px' }}
-                    >
-                      {msg.message}
-                    </li>
-                  ))}
-                </ul>
-                <Link to="/notification" className="btn btn-primary">
-                  通知細項
-                </Link>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+          <Row xs={1} md={2} className="g-3 mt-3">
+            <Col>
+              <Card className="h-100">
+                <Card.Body>
+                  <Card.Title>平台介紹</Card.Title>
+                  <Card.Text>
+                    The CGU AI Center website manages user information and
+                    permissions for the AI Center&apos;s exclusive environment.
+                  </Card.Text>
+                  <Link
+                    to="/lab"
+                    state={{ lab: null }}
+                    className="btn btn-primary"
+                  >
+                    Lab
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col>
+              <Card className="h-100">
+                <Card.Body>
+                  <Card.Title>通知總覽</Card.Title>
+                  <Card.Text>
+                    CGU AI Center has the following data not yet synchronized with
+                    LDAP:
+                  </Card.Text>
+                  <ul style={{ marginTop: '1vh', maxHeight: '120px', overflowY: 'auto' }}>
+                    {unsyncList.map((msg, index) => (
+                      <li
+                        key={index}
+                        style={{ fontSize: '12px', marginBottom: '5px' }}
+                      >
+                        {msg.message}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/notification" className="btn btn-primary">
+                    通知細項
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row> */}
 
         <Card className="mt-4">
           <Card.Header>Node Resource Monitor 費率設定</Card.Header>
@@ -1420,47 +1420,47 @@ function Home() {
           </Card.Body>
         </Card>
 
-        <Row xs={1} md={3} className="g-3 mt-4">
-          <Col>
-            <Card className="h-100">
-              <Card.Body>
-                <Card.Title>新增使用者</Card.Title>
-                <Card.Text>
-                  Add new users to the AI center by clicking the button below.
-                </Card.Text>
-                <Link to="/add" className="btn btn-primary">
-                  新增
-                </Link>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card className="h-100">
-              <Card.Body>
-                <Card.Title>查詢資料</Card.Title>
-                <Card.Text>
-                  Search for user or lab information in the platform.
-                </Card.Text>
-                <Link to="/search" className="btn btn-primary">
-                  搜尋
-                </Link>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card className="h-100">
-              <Card.Body>
-                <Card.Title>管理Lab</Card.Title>
-                <Card.Text>
-                  Manage lab resources and configurations for users.
-                </Card.Text>
-                <Link to="/lab" className="btn btn-primary">
-                  管理
-                </Link>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+        {/* <Row xs={1} md={3} className="g-3 mt-4">
+            <Col>
+              <Card className="h-100">
+                <Card.Body>
+                  <Card.Title>新增使用者</Card.Title>
+                  <Card.Text>
+                    Add new users to the AI center by clicking the button below.
+                  </Card.Text>
+                  <Link to="/add" className="btn btn-primary">
+                    新增
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col>
+              <Card className="h-100">
+                <Card.Body>
+                  <Card.Title>查詢資料</Card.Title>
+                  <Card.Text>
+                    Search for user or lab information in the platform.
+                  </Card.Text>
+                  <Link to="/search" className="btn btn-primary">
+                    搜尋
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col>
+              <Card className="h-100">
+                <Card.Body>
+                  <Card.Title>管理Lab</Card.Title>
+                  <Card.Text>
+                    Manage lab resources and configurations for users.
+                  </Card.Text>
+                  <Link to="/lab" className="btn btn-primary">
+                    管理
+                  </Link>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row> */}
       </div>
     </div>
   );
