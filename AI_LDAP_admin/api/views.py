@@ -111,6 +111,62 @@ def send_email_gmail(subject, message, destination):
             server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
         print(f'Failed to send email to {destination}: {e}')
 
+def send_group_email_gmail(subject, message, destinations):
+    """Send a single SMTP message to multiple recipients at once.
+    `destinations` should be a list (or iterable) of email addresses.
+    """
+    if not destinations:
+        return
+    # Assemble the message
+    msg = MIMEText(message, 'html')
+    msg['Subject'] = subject
+    # Add a readable To header (not required for SMTP delivery)
+    try:
+        msg['To'] = ', '.join(destinations)
+    except Exception:
+        # In case destinations is not iterable of strings
+        msg['To'] = str(destinations)
+
+    # SMTP settings (reuse the same accounts as send_email_gmail)
+    port = 465
+    my_mail = 'support01@twentyfouri.com'
+    my_password = 'czyq oonp vyxd inor'
+    my_mail2 = 'support02@twentyfouri.com'
+    my_password2 = 'rqgn hsmt pbnl gmau'
+    context = ssl.create_default_context()
+
+    to_addrs = list(destinations)
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, to_addrs, msg.as_string())
+        print(f'Email sent successfully to {len(to_addrs)} recipients')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+                server.login(my_mail2, my_password2)
+                # Notify admin about the failure
+                server.sendmail(my_mail2, ["lance.cl.lu@gmail.com"], f"Group email failed to send to {to_addrs}")
+        except Exception as e2:
+            print(f'Fallback notify failed: {e2}')
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+                server.login(my_mail2, my_password2)
+                server.sendmail(my_mail2, ["lance.cl.lu@gmail.com"], f"Group email failed to send to {to_addrs}")
+        except Exception as e2:
+            print(f'Fallback notify failed: {e2}')
+    except Exception as e:
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+                server.login(my_mail2, my_password2)
+                server.sendmail(my_mail2, ["lance.cl.lu@gmail.com"], f"Group email failed to send to {to_addrs}")
+        except Exception as e2:
+            print(f'Fallback notify failed: {e2}')
+        print(f'Failed to send group email to {to_addrs}: {e}')
+
 def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
     add_account_email_title = '帳號啟用通知信 ( Account Activation Notification )'
     add_account_email_body = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
@@ -338,8 +394,8 @@ def broadcast_email(request):
         #    print(f"  - {email}")
         # print("="*50)
 
-        for email in email_list:
-            send_email_gmail(subject, content, email)
+        # Send a single SMTP message to multiple recipients at once
+        send_group_email_gmail(subject, content, email_list)
         
         return Response(status=200, data={"message": f"Email sent to {len(email_list)} users"})
     except Exception as e:
@@ -377,9 +433,8 @@ def group_broadcast_email(request):
     
     # 發送郵件
     try:
-        # 使用你現有的郵件發送機制
-        for email in email_list:
-            send_email_gmail(subject, content, email)
+        # 使用你現有的郵件發送機制，一次寄給多位收件者
+        send_group_email_gmail(subject, content, email_list)
         
         return Response(status=200, data={"message": f"Email sent to {len(email_list)} users in group {lab}"})
     except Exception as e:
