@@ -75,3 +75,90 @@
     border: 1px solid white;
   }
   
+.usage-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #e5e5e5;
+}
+.usage-tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 14px;
+    font-weight: 600;
+    color: #6c757d;
+    border-bottom: 3px solid transparent;
+}
+.usage-tab-btn.active {
+    color: #0d6efd;
+    border-color: #0d6efd;
+}
+.usage-panel {
+    display: grid;
+    gap: 16px;
+}
+.usage-form-grid {
+    max-width: 640px;
+}
+.usage-results {
+    margin-top: 4px;
+}
+.usage-loading,
+.usage-error,
+.usage-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.usage-error {
+    color: #b00020;
+}
+.usage-empty {
+    color: #6c757d;
+}
+.usage-notice {
+    font-size: 0.9rem;
+    color: #495057;
+    margin-bottom: 8px;
+}
+.usage-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+.usage-table th,
+.usage-table td {
+    border: 1px solid #d9d9d9;
+    padding: 8px 10px;
+}
+.usage-table thead th {
+    background-color: #f5f5f5;
+    font-weight: 600;
+}
+.usage-table tbody th {
+    font-weight: 600;
+    text-align: left;
+}
+.usage-table td {
+    text-align: right;
+    vertical-align: top;
+}
+.usage-table-compact td,
+.usage-table-compact th {
+    font-size: 0.95rem;
+}
+.usage-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+.usage-cell-value {
+    font-weight: 600;
+}
+.usage-cell-time {
+    color: #6c757d;
+    font-size: 0.85rem;
+    text-align: right;
+}
+  
