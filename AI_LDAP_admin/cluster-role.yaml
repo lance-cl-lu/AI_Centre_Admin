@@ -46,6 +46,16 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
   - events
   - nodes
   verbs:
@@ -66,4 +76,3 @@ rules:
   verbs:
   - list
   - get
-

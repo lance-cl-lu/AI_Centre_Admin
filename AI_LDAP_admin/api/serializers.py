@@ -18,6 +18,14 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = '__all__'
 
+class UserDetailSerializer(serializers.ModelSerializer):
+    remaining_days = serializers.ReadOnlyField()
+    is_expired = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = UserDetail
+        fields = ['id', 'uid', 'permission', 'labname', 'expiry_date', 'remaining_days', 'is_expired']
+
 ## Serializers group and corresponding user
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:

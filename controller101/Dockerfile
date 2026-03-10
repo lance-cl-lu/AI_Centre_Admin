@@ -1,5 +1,5 @@
 # Build stage
-FROM golang as builder
+FROM golang AS builder
 
 WORKDIR /app
 
@@ -17,13 +17,24 @@ FROM golang
 
 WORKDIR /app
 
+# 安裝開發工具（vim, curl 等）
+RUN apt-get update && \
+    apt-get install -y vim curl && \
+    rm -rf /var/lib/apt/lists/*
+
 #RUN mkdir -p /root/.kube
 #COPY config /root/.kube/config
 
 COPY --from=builder /app/main .
 
+# 複製原始碼（開發時使用）
+COPY main.go .
+
 # Expose the port (adjust as per your application)
 EXPOSE 8080
 
-# Run the Go application
-CMD ["./main"]
+# 建立啟動腳本
+RUN echo '#!/bin/sh\nwhile true; do\n  echo "Starting main..."\n  ./main\n  echo "main exited with code $?, restarting in 5 seconds..."\n  sleep 5\ndone' > /app/start.sh && chmod +x /app/start.sh
+
+# Run the Go application with auto-restart
+CMD ["/app/start.sh"]

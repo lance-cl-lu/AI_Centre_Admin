@@ -32,6 +32,7 @@ urlpatterns = [
     path("ldap/user/list/", user_list, name="user_list"),
     path("ldap/user/add/", adduser, name="get_lab_info"),
     path("ldap/user/delete/", user_delete, name="user_delete"),
+    path("ldap/user/deletecheck/", user_delete_check, name="user_delete_permanent"),
     path("ldap/user/mutiple/delete/", multiple_user_delete, name="multiple_lab_delete"),
     
     path("ldap/admin/add/", add_admin, name="add_admin"),
@@ -48,8 +49,11 @@ urlpatterns = [
     path("setNotebook/", set_notebook, name="set_notebook"),
     path("getNotebookYAML/", get_notebook_yaml, name="get_notebook_yaml"),
     path("uploadNotebookYAML/", upload_notebook_yaml, name="upload_notebook_yaml"),
+    path("node-resource-monitor/config/", node_resource_monitor_config, name="node_resource_monitor_config"),
     # danger for deploy
     # path("ldap/danger/", remove_all_entr, name="danger"),
+    path("broadcast/", broadcast_email, name="broadcast_email"),
+    path("group/broadcast/", group_broadcast_email, name="group_broadcast_email"),
 ]
 
 # LDAP_IP = '120.126.23.245'

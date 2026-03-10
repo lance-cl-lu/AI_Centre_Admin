@@ -25,12 +25,28 @@ spec:
       serviceAccountName: pod-killer-service-account  # Link the service account here
       containers:
       - name: pod-killer
-        image: cguaicadmin/pod-killer:v0.5  # Updated with the correct image name
+        image: cguaicadmin/pod-killer:v0.55  # Updated with the correct image name
         env:
         - name: TIMEINTERVAL
           value: "60"  # Time interval in seconds
         - name: DURATION
           value: "60"  # Duration in seconds
+        - name: TASK_MODE
+          value: "minute"  # "daily" 或 "hourly" 或 "minute"
+        - name: DAILY_TASK_HOUR
+          value: "2"      # 每天凌晨 2 點
+        - name: DAILY_TASK_MINUTE
+          value: "30"     # 30 分
+        - name: HOURLY_TASK_MINUTE
+          value: "45"      # 每小時的 45 分執行
+        - name: DJANGO_NAMESPACE
+          value: "ldap"
+        - name: DJANGO_DEPLOYMENT
+          value: "backend-deployment"
+        - name: DJANGO_PORT
+          value: "8000"
+        - name: DJANGO_API_PATH
+          value: "/api/ldap/user/deletecheck/"
         ports:
         - containerPort: 8080
         resources:
@@ -78,6 +94,7 @@ rules:
   - apiGroups: ["kubeflow.org"]
     resources:
       - notebooks
+      - profiles
     verbs:
       - get
       - list
@@ -98,6 +115,15 @@ rules:
       - pods
       - services
       - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  
+  # Permissions for Deployments (apps)
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
     verbs:
       - get
       - list

@@ -13,6 +13,7 @@ function AddUser() {
     const [lab, setLab] = useState([]);
     const [isGPUQuotaDisabled, setIsGPUQuotaDisabled] = useState(true);
     const [permission, setPermission] = useState("user"); // 新增 permission 狀態
+    const [expiryDate, setExpiryDate] = useState('');
     const group = useLocation().state['group'];
     console.log(group);
     //const state = useLocation().state; 
@@ -131,6 +132,7 @@ function AddUser() {
                     "mem_quota":e.target[10].value,
                     "gpu_quota":e.target[11].value,
                     "gpu_vendor":e.target[12].value,
+                    "expiry_date": expiryDate || null,
                 }),
             });
 
@@ -305,6 +307,19 @@ function AddUser() {
                                 <option value="AMD">AMD</option>
                             </Form.Control>
                         </FloatingLabel>
+                    </Form.Group>
+                    <Form.Group className="mb-3" controlId="formExpiryDate">
+                        <Form.Label>使用者到期日期</Form.Label>
+                        <Form.Control 
+                            type="date" 
+                            id="expiry_date" 
+                            value={expiryDate}
+                            onChange={(e) => setExpiryDate(e.target.value)}
+                            placeholder="選擇到期日期"
+                        />
+                        <Form.Text className="text-muted">
+                            留空表示無到期日限制
+                        </Form.Text>
                     </Form.Group>
                     <Button variant="primary" type="submit" style={{ margin: '1rem' }}>Submit</Button>
                     <Button variant="warning" onClick={() => window.history.back()} style={{ margin: '1rem' }}>Cancel and Back</Button>

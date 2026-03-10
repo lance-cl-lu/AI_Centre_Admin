@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -79,7 +83,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	notebookMap := make(map[string]*Notebook) // 用 namespace+name 作為 key
+	notebookMap := make(map[string]*Notebook)
+
+	// 啟動每日定時任務（在固定時間執行，不影響主迴圈）
+	go scheduleDailyTask(clientset, ctx)
 
 	for {
 		// 動態更新 Notebook 資料
@@ -123,16 +130,14 @@ func main() {
 				notebookMap[key] = &Notebook{
 					Name:        name,
 					Namespace:   namespace,
-					RemovalTag:  !persistentTag, // 使用 persistentTag
-					IdleCounter: 0,              // 初始化 IdleCounter 為 0
+					RemovalTag:  !persistentTag,
+					IdleCounter: 0,
 				}
 			}
 
-			// 如果有 kubeflow-resource-stopped annotation，將 IdleCounter 設為 0
 			if stoppedAnnotation != "" {
 				notebookMap[key].IdleCounter = 0
 			} else {
-				// 更新是否需要刪除的標記
 				notebookMap[key].RemovalTag = !persistentTag
 			}
 		}
@@ -182,7 +187,7 @@ func main() {
 				}
 			}
 		}
-		// print notebookMap
+
 		for _, notebook := range notebookMap {
 			fmt.Printf("Notebook: %s, Namespace: %s, CPU Usage: %s, Mem Usage: %s, Idle Counter: %d, Removal Tag: %t\n",
 				notebook.Name, notebook.Namespace, notebook.CPUUsage, notebook.MemUsage, notebook.IdleCounter, notebook.RemovalTag)
@@ -192,11 +197,343 @@ func main() {
 		}
 
 		time.Sleep(time.Duration(durationInt) * time.Second)
-		// print time
 		fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 		fmt.Println("=====================================================")
-
 	}
+}
+
+// scheduleDailyTask 根據設定在固定時間執行任務
+func scheduleDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
+	// 從環境變數讀取執行模式
+	taskMode := os.Getenv("TASK_MODE") // "daily" 或 "hourly"，預設 "daily"
+	if taskMode == "" {
+		taskMode = "daily"
+	}
+
+	var dailyHour, dailyMinute, hourlyMinute int
+
+	// 讀取每日執行時間
+	dailyHour = 2   // 預設凌晨 2 點
+	dailyMinute = 0 // 預設 0 分
+
+	if hourEnv := os.Getenv("DAILY_TASK_HOUR"); hourEnv != "" {
+		if h, err := strconv.Atoi(hourEnv); err == nil && h >= 0 && h < 24 {
+			dailyHour = h
+		}
+	}
+
+	if minuteEnv := os.Getenv("DAILY_TASK_MINUTE"); minuteEnv != "" {
+		if m, err := strconv.Atoi(minuteEnv); err == nil && m >= 0 && m < 60 {
+			dailyMinute = m
+		}
+	}
+
+	// 讀取每小時執行時間（分鐘）
+	hourlyMinute = 0 // 預設每小時的 0 分執行
+
+	if minuteEnv := os.Getenv("HOURLY_TASK_MINUTE"); minuteEnv != "" {
+		if m, err := strconv.Atoi(minuteEnv); err == nil && m >= 0 && m < 60 {
+			hourlyMinute = m
+		}
+	}
+
+	if taskMode == "daily" {
+		fmt.Printf("Daily task scheduled at %02d:%02d\n", dailyHour, dailyMinute)
+		scheduleDailyTaskLoop(clientset, ctx, dailyHour, dailyMinute)
+	} else if taskMode == "hourly" {
+		fmt.Printf("Hourly task scheduled at every hour %02d minute\n", hourlyMinute)
+		scheduleHourlyTaskLoop(clientset, ctx, hourlyMinute)
+	} else if taskMode == "minute" {
+		fmt.Println("Minute task scheduled to run every minute")
+		scheduleMinuteTaskLoop(clientset, ctx)
+	} else {
+		fmt.Printf("Unknown task mode: %s, defaulting to daily\n", taskMode)
+		scheduleDailyTaskLoop(clientset, ctx, dailyHour, dailyMinute)
+	}
+}
+
+// scheduleDailyTaskLoop 每天固定時間執行
+func scheduleDailyTaskLoop(clientset *kubernetes.Clientset, ctx context.Context, hour, minute int) {
+	for {
+		now := time.Now()
+		// 計算到下一次執行時間的間隔
+		next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+
+		// 如果今天的執行時間已過，設定為明天
+		if now.After(next) {
+			next = next.Add(24 * time.Hour)
+		}
+
+		duration := next.Sub(now)
+		fmt.Printf("Next daily task will run at: %s (in %v)\n", next.Format("2006-01-02 15:04:05"), duration)
+
+		time.Sleep(duration)
+
+		// 執行每日任務
+		performDailyTask(clientset, ctx)
+	}
+}
+
+// scheduleHourlyTaskLoop 每小時固定時刻執行
+func scheduleHourlyTaskLoop(clientset *kubernetes.Clientset, ctx context.Context, minute int) {
+	for {
+		now := time.Now()
+		// 計算到下一次執行時間的間隔（下一小時的指定分鐘）
+		next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), minute, 0, 0, now.Location())
+
+		// 如果目前時刻已過本小時的執行時間，設定為下一小時
+		if now.After(next) {
+			next = next.Add(1 * time.Hour)
+		}
+
+		duration := next.Sub(now)
+		fmt.Printf("Next hourly task will run at: %s (in %v)\n", next.Format("2006-01-02 15:04:05"), duration)
+
+		time.Sleep(duration)
+
+		// 執行每日任務
+		performDailyTask(clientset, ctx)
+	}
+}
+
+// scheduleMinuteTaskLoop 每分鐘執行
+func scheduleMinuteTaskLoop(clientset *kubernetes.Clientset, ctx context.Context) {
+	for {
+		now := time.Now()
+		// 計算到下一分鐘整點的時間間隔
+		next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute()+1, 0, 0, now.Location())
+
+		duration := next.Sub(now)
+		fmt.Printf("Next minute task will run at: %s (in %v)\n", next.Format("2006-01-02 15:04:05"), duration)
+
+		time.Sleep(duration)
+
+		// 執行每日任務
+		performDailyTask(clientset, ctx)
+	}
+}
+
+// performDailyTask 每日執行的具體任務
+func performDailyTask(clientset *kubernetes.Clientset, ctx context.Context) {
+	fmt.Println("=====================================================")
+	fmt.Println("Starting daily task at", time.Now().Format("2006-01-02 15:04:05"))
+
+	// 動態取得 Django backend Pod IP
+	djangoAPIURL, err := getDjangoAPIURL(clientset, ctx)
+	if err != nil {
+		fmt.Printf("Error getting Django API URL: %v\n", err)
+		djangoAPIURL = "http://192.168.129.148:8000/api/ldap/user/deletepermanent/"
+		return
+	}
+
+	fmt.Printf("Using Django API URL: %s\n", djangoAPIURL)
+
+	// 取得所有 Profile，找出有 delete_date 且已過期的使用者，並傳 userData 給 deleteUserPermanent
+	profiles, err := getAllProfiles(clientset, ctx)
+	deletedCount := 0
+	if err != nil {
+		fmt.Printf("Error fetching profiles: %v\n", err)
+	} else {
+		for _, profile := range profiles {
+			// 檢查 delete_date annotation
+			deleteDate, exists := profile["delete_date"]
+			if !exists {
+				continue
+			}
+
+			// 解析 delete_date 時間
+			deleteDateStr, ok := deleteDate.(string)
+			if !ok {
+				continue
+			}
+
+			deleteTime, err := time.Parse("2006-01-02 15:04:05", deleteDateStr)
+			if err != nil {
+				fmt.Printf("Error parsing delete_date for profile %s: %v\n", profile["name"], err)
+				continue
+			}
+
+			// 檢查是否已過期
+			if time.Now().After(deleteTime) {
+				username, _ := profile["name"].(string)
+				fmt.Printf("Deleting expired user: %s (delete_date: %s)\n", username, deleteDateStr)
+			}
+		}
+	}
+
+	// 取得目前任務模式（daily/hourly/minute），預設為 daily
+	mode := os.Getenv("TASK_MODE")
+	if mode == "" {
+		mode = "daily"
+	}
+
+	// 建立 userData，包含 username、mode 及 delete_date（可擴充）
+	userData := map[string]interface{}{
+		"mode": mode,
+	}
+
+	// 呼叫 Django API 刪除使用者（傳入 userData）
+	if err := deleteUserPermanent(djangoAPIURL, userData); err != nil {
+		fmt.Printf("Error deleting user: %v\n", err)
+	} else {
+		fmt.Printf("Successfully deleted user: \n")
+		deletedCount++
+	}
+
+	fmt.Printf("Total users deleted: %d\n", deletedCount)
+	fmt.Println("Daily task completed at", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Println("=====================================================")
+}
+
+// getDjangoAPIURL 動態取得 Django backend Pod IP
+func getDjangoAPIURL(clientset *kubernetes.Clientset, ctx context.Context) (string, error) {
+	// 從環境變數讀取配置（可選）
+	namespace := os.Getenv("DJANGO_NAMESPACE")
+	if namespace == "" {
+		namespace = "ldap"
+	}
+
+	deploymentName := os.Getenv("DJANGO_DEPLOYMENT")
+	if deploymentName == "" {
+		deploymentName = "backend-deployment"
+	}
+
+	port := os.Getenv("DJANGO_PORT")
+	if port == "" {
+		port = "8000"
+	}
+
+	apiPath := os.Getenv("DJANGO_API_PATH")
+	if apiPath == "" {
+		apiPath = "/api/ldap/user/deletepermanent/"
+	}
+
+	// 取得 Deployment 的 label selector
+	deployment, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, v1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("error getting deployment: %v", err)
+	}
+
+	// 使用 label selector 找到對應的 Pod
+	labelSelector := ""
+	for key, value := range deployment.Spec.Selector.MatchLabels {
+		if labelSelector != "" {
+			labelSelector += ","
+		}
+		labelSelector += fmt.Sprintf("%s=%s", key, value)
+	}
+
+	// 取得 Pod 列表
+	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, v1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return "", fmt.Errorf("error listing pods: %v", err)
+	}
+
+	if len(pods.Items) == 0 {
+		return "", fmt.Errorf("no pods found for deployment %s", deploymentName)
+	}
+
+	// 取得第一個 Running 的 Pod IP
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == "Running" && pod.Status.PodIP != "" {
+			apiURL := fmt.Sprintf("http://%s:%s%s", pod.Status.PodIP, port, apiPath)
+			return apiURL, nil
+		}
+	}
+
+	return "", fmt.Errorf("no running pod found with IP")
+}
+
+// getAllProfiles 取得所有 Kubeflow Profile
+func getAllProfiles(clientset *kubernetes.Clientset, ctx context.Context) ([]map[string]interface{}, error) {
+	profilesData, err := clientset.RESTClient().
+		Get().
+		AbsPath("/apis/kubeflow.org/v1/profiles").
+		DoRaw(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var profilesResp map[string]interface{}
+	if err := json.Unmarshal(profilesData, &profilesResp); err != nil {
+		return nil, err
+	}
+
+	profiles := []map[string]interface{}{}
+	items, ok := profilesResp["items"].([]interface{})
+	if !ok {
+		return profiles, nil
+	}
+
+	for _, item := range items {
+		profileMap := item.(map[string]interface{})
+		metadata := profileMap["metadata"].(map[string]interface{})
+		annotations, hasAnnotations := metadata["annotations"].(map[string]interface{})
+
+		profileInfo := map[string]interface{}{
+			"name": metadata["name"].(string),
+		}
+
+		if hasAnnotations {
+			if deleteDate, exists := annotations["delete_date"]; exists {
+				profileInfo["delete_date"] = deleteDate
+			}
+		}
+
+		profiles = append(profiles, profileInfo)
+	}
+
+	return profiles, nil
+}
+
+// deleteUserPermanent 呼叫 Django API 永久刪除使用者
+// 變更：不再直接傳入 username，改傳入一個 user data（map[string]interface{}）
+// 目前呼叫端可先準備 user data 並傳入（呼叫點保留/由日常任務決定）。
+func deleteUserPermanent(apiURL string, userData map[string]interface{}) error {
+	// 建立 JSON payload，直接使用傳入的 userData
+	jsonData, err := json.Marshal(userData)
+	if err != nil {
+		return fmt.Errorf("error marshalling JSON: %v", err)
+	}
+
+	// 發送 POST 請求
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 讀取回應
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response: %v", err)
+	}
+
+	// 檢查 HTTP 狀態碼
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// 嘗試從 userData 找出 username（若存在則印出）
+	if name, ok := userData["username"].(string); ok {
+		fmt.Printf("API response for user %s: %s\n", name, string(body))
+	} else {
+		fmt.Printf("API response: %s\n", string(body))
+	}
+
+	return nil
 }
 
 func parseCPU(cpu string) int {

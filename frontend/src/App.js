@@ -26,6 +26,7 @@ import ListNoteBook from './components/ListNoteBook';
 import EditGroup from './components/editgroup';
 import Move from "./components/Move"
 import './components/Lab.css';    
+import Broadcast from './components/Broadcast';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -65,6 +66,8 @@ function App() {
                     <Route path="/listnotebook" element={<ListNoteBook/>}/>
                     <Route path="/edit/group" element={<EditGroup/>}/>
                     <Route path="move/" element={<Move/>}/>
+                    <Route path="broadcast/" element={<Broadcast/>}/>
+                    <Route path="/group/broadcast" element={<Broadcast isGroupBroadcast={true} />}/>
                     <Route path="*" element={<Home />} />
                   </Routes>
               </div>

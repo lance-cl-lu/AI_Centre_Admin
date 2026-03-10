@@ -4,6 +4,7 @@ import json, random
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
 from django.core.files.storage import default_storage
+import os
 
 from passlib.hash import ldap_md5
 
@@ -16,15 +17,66 @@ from . import urls
 
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
+from kubernetes.client.rest import ApiException
 
 import smtplib, ssl
 from email.mime.text import MIMEText
 import yaml
 import zipfile
 import humps
+import requests
 
 # traceback
 import traceback    
+
+NODE_RESOURCE_MONITOR_CONFIGMAP = os.environ.get(
+    'NODE_RESOURCE_MONITOR_CONFIGMAP',
+    'node-resource-monitor-config',
+)
+NODE_RESOURCE_MONITOR_NAMESPACE = os.environ.get(
+    'NODE_RESOURCE_MONITOR_NAMESPACE',
+    'cgu',
+)
+NODE_RESOURCE_MONITOR_KEYS = {
+    'cpuCostPerMinute': 'CPU_COST_PER_MINUTE',
+    'gpuCostPerMinute': 'GPU_COST_PER_MINUTE',
+}
+
+
+def ensure_k8s_config():
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+
+def build_cost_response(config_map):
+    data = getattr(config_map, 'data', None) or {}
+    return {
+        'name': NODE_RESOURCE_MONITOR_CONFIGMAP,
+        'namespace': NODE_RESOURCE_MONITOR_NAMESPACE,
+        'cpuCostPerMinute': data.get('CPU_COST_PER_MINUTE'),
+        'gpuCostPerMinute': data.get('GPU_COST_PER_MINUTE'),
+    }
+
+
+def format_cost_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        if value < 0:
+            raise ValueError('費率必須為非負數值。')
+        return str(value)
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        numeric = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError('費率必須為數值。')
+    if numeric < 0:
+        raise ValueError('費率必須為非負數值。')
+    return raw
 
 def send_email_gmail(subject, message, destination):
     # First assemble the message
@@ -35,10 +87,85 @@ def send_email_gmail(subject, message, destination):
     port = 465
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
-    context = ssl.create_default_context() 
-    with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
-        server.login(my_mail, my_password)
-        server.sendmail(my_mail, destination, msg.as_string())
+    my_mail2 = 'support02@twentyfouri.com'
+    my_password2 = 'rqgn hsmt pbnl gmau'
+    context = ssl.create_default_context()
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, destination, msg.as_string())
+        print(f'Email sent successfully to {destination}')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
+    except Exception as e:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail2, my_password2)
+            server.sendmail(my_mail2, "lance.cl.lu@gmail.com", f"Email failed to send to {destination}")
+        print(f'Failed to send email to {destination}: {e}')
+
+def send_group_email_gmail(subject, message, destinations):
+    """Send a single SMTP message to multiple recipients at once.
+    `destinations` should be a list (or iterable) of email addresses.
+    """
+    if not destinations:
+        return
+    # Assemble the message
+    msg = MIMEText(message, 'html')
+    msg['Subject'] = subject
+    # Add a readable To header (not required for SMTP delivery)
+    try:
+        msg['To'] = ', '.join(destinations)
+    except Exception:
+        # In case destinations is not iterable of strings
+        msg['To'] = str(destinations)
+
+    # SMTP settings (reuse the same accounts as send_email_gmail)
+    port = 465
+    my_mail = 'support01@twentyfouri.com'
+    my_password = 'czyq oonp vyxd inor'
+    my_mail2 = 'support02@twentyfouri.com'
+    my_password2 = 'rqgn hsmt pbnl gmau'
+    context = ssl.create_default_context()
+
+    to_addrs = list(destinations)
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, to_addrs, msg.as_string())
+        print(f'Email sent successfully to {len(to_addrs)} recipients')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+                server.login(my_mail2, my_password2)
+                # Notify admin about the failure
+                server.sendmail(my_mail2, ["lance.cl.lu@gmail.com"], f"Group email failed to send to {to_addrs}")
+        except Exception as e2:
+            print(f'Fallback notify failed: {e2}')
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+                server.login(my_mail2, my_password2)
+                server.sendmail(my_mail2, ["lance.cl.lu@gmail.com"], f"Group email failed to send to {to_addrs}")
+        except Exception as e2:
+            print(f'Fallback notify failed: {e2}')
+    except Exception as e:
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+                server.login(my_mail2, my_password2)
+                server.sendmail(my_mail2, ["lance.cl.lu@gmail.com"], f"Group email failed to send to {to_addrs}")
+        except Exception as e2:
+            print(f'Fallback notify failed: {e2}')
+        print(f'Failed to send group email to {to_addrs}: {e}')
 
 def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
     add_account_email_title = '帳號啟用通知信 ( Account Activation Notification )'
@@ -231,6 +358,87 @@ def set_notebook(request):
     print("profileName = ", profileName)
     change_notebooks_persisitent(profileName, notebookName, persisitent)
     return Response( status=200)
+    
+@api_view(['POST'])
+def broadcast_email(request):
+    """發送郵件給所有使用者"""
+    data = json.loads(request.body.decode('utf-8'))
+    subject = data.get('subject')
+    content = data.get('content')
+    
+    if not subject or not content:
+        return Response(status=400, data={"message": "Subject and content are required"})
+    
+    # 取得所有使用者的 email
+    users = User.objects.all()
+    email_list = []
+    
+    for user in users:
+        if user.email:
+            email_list.append(user.email)
+    
+    if not email_list:
+        return Response(status=404, data={"message": "No users with email found"})
+    
+    # 發送郵件
+    try:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        # 測試：印出 email 資訊
+        # print("="*50)
+        # print(f"Subject: {subject}")
+        # print(f"Content: {content}")
+        # print(f"Email list ({len(email_list)} users):")
+        # for email in email_list:
+        #    print(f"  - {email}")
+        # print("="*50)
+
+        # Send a single SMTP message to multiple recipients at once
+        send_group_email_gmail(subject, content, email_list)
+        
+        return Response(status=200, data={"message": f"Email sent to {len(email_list)} users"})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response(status=500, data={"message": f"Error sending email: {str(e)}"})
+    
+@api_view(['POST'])
+def group_broadcast_email(request):
+    """發送郵件給特定群組的所有成員"""
+    data = json.loads(request.body.decode('utf-8'))
+    lab = data.get('lab')
+    subject = data.get('subject')
+    content = data.get('content')
+    
+    if not lab or not subject or not content:
+        return Response(status=400, data={"message": "Lab, subject and content are required"})
+    
+    # 檢查群組是否存在
+    try:
+        group = Group.objects.get(name=lab)
+    except Group.DoesNotExist:
+        return Response(status=404, data={"message": f"Group {lab} not found"})
+    
+    # 取得該群組所有成員的 email
+    users = User.objects.filter(groups=group)
+    email_list = []
+    
+    for user in users:
+        if user.email:
+            email_list.append(user.email)
+    
+    if not email_list:
+        return Response(status=404, data={"message": f"No users with email in group {lab}"})
+    
+    # 發送郵件
+    try:
+        # 使用你現有的郵件發送機制，一次寄給多位收件者
+        send_group_email_gmail(subject, content, email_list)
+        
+        return Response(status=200, data={"message": f"Email sent to {len(email_list)} users in group {lab}"})
+    except Exception as e:
+        return Response(status=500, data={"message": f"Error sending email: {str(e)}"})
     
 @api_view(['POST'])
 def list_notebooks(request):
@@ -514,6 +722,45 @@ def replace_profile_user(name,user,cpu,gpu,memory):
             )
             print(api_response)
 
+def replace_profile_user_delete_date(name, date):
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        config.load_kube_config()
+
+    api = client.CustomObjectsApi()
+    # 只抓單一 profile，避免直接操作 list 物件
+    try:
+        profile = api.get_cluster_custom_object(group, version, plural, name)
+    except Exception as e:
+        print(f"[delete_date] 取 profile 失敗: {e}")
+        return False
+
+    annotations = profile.get('metadata', {}).get('annotations', {}) or {}
+    # 全部轉成字串，避免型別錯誤
+    annotations = {k: str(v) for k, v in annotations.items()}
+    annotations['delete_date'] = str(date)
+
+    patch_body = {
+        "metadata": {
+            "annotations": annotations
+        }
+    }
+
+    try:
+        resp = api.patch_cluster_custom_object(
+            group=group,
+            version=version,
+            plural=plural,
+            name=name,
+            body=patch_body
+        )
+        print("[delete_date] 更新成功:", resp.get('metadata', {}).get('annotations'))
+        return True
+    except Exception as e:
+        print(f"[delete_date] 更新失敗: {e}")
+        return False
+
 
 def get_gid():
     while True:
@@ -583,12 +830,14 @@ def get_group_corresponding_user(request):
                     except Exception as e:
                         print(f"LDAP search error: {e}")
                 group_list.append({"group_dn": group.name, "member_uids": user_list})
-                conn.unbind()
+                conn.unbind()         
             return Response(group_list, status=200)
         elif detail_obj[0].permission == 1:
             # get only the group that user is in
             for group_item in detail_obj:
                 if(group_item.labname.name == 'root'):
+                    continue
+                if(group_item.labname.name == 'TRASH'):
                     continue
                 User.objects.filter(groups=group_item.labname)
                 user_list = []
@@ -689,6 +938,29 @@ def get_lab_info(request):
         gpuQuota = 0
         gpuVendor = "NVIDIA"
     
+    # 獲取群組到期資訊
+    expiry_date = None
+    remaining_days = None
+    print(f"===== GET LAB INFO DEBUG =====")
+    print(f"Lab name: {labname}")
+    try:
+        group_quota = GroupDefaultQuota.objects.get(labname=group)
+        print(f"Group quota found: {group_quota}")
+        print(f"Expiry date field: {group_quota.expiry_date}")
+        print(f"Expiry date type: {type(group_quota.expiry_date)}")
+        if group_quota.expiry_date:
+            expiry_date = group_quota.expiry_date.strftime('%Y-%m-%d')
+            remaining_days = group_quota.remaining_days
+            print(f"Expiry date formatted: {expiry_date}, Remaining days: {remaining_days}")
+        else:
+            print("No expiry date set for this group")
+    except Exception as e:
+        print(f"Error getting group quota: {e}")
+        import traceback
+        traceback.print_exc()
+        pass
+    print(f"===== END GET LAB INFO DEBUG =====")
+    
     # get the user permission from database
     data = {
         "labname": labname,
@@ -697,10 +969,20 @@ def get_lab_info(request):
         "memQuota": memQuota,
         "gpuQuota": gpuQuota,
         "gpuVendor": gpuVendor,
-        "memberUid": get_all_user_permission(user_list, labname)
+        "memberUid": get_all_user_permission(user_list, labname),
+        "expiryDate": expiry_date,
+        "remainingDays": remaining_days
     }
     return Response(data, status=200)
 
+def create_group(labname):
+    try:
+        Group.objects.get(name=labname)
+        return False
+    except:
+        group = Group.objects.create(name=labname)
+        return True
+    
 @api_view(['POST'])
 def addlab(request):
     data = json.loads(request.body.decode('utf-8'))
@@ -708,7 +990,17 @@ def addlab(request):
     cpuQuota = data['cpu_quota']
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
-    gpuVendor = data['gpu_vendor']    
+    gpuVendor = data['gpu_vendor']
+    expiryDate = data.get('expiry_date', None)  # 取得到期日期，如果沒有則為 None
+    
+    # 處理空字串的情況，將空字串轉為 None
+    if expiryDate == '' or expiryDate == 'null' or expiryDate == 'undefined':
+        expiryDate = None
+    elif isinstance(expiryDate, str):
+        try:
+            expiryDate = datetime.date.fromisoformat(expiryDate)
+        except ValueError:
+            return Response(status=400, data="expiry_date is not valid")
     
     # check Group is exist or not
     try:
@@ -731,7 +1023,14 @@ def addlab(request):
         return Response(status=500, data="gpuVendor is not valid")
     
     group = Group.objects.create(name=labname)
-    GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+    GroupDefaultQuota.objects.create(
+        labname=group, 
+        cpu_quota=cpuQuota, 
+        mem_quota=memQuota, 
+        gpu_quota=gpuQuota, 
+        gpu_vendor=gpuVendor,
+        expiry_date=expiryDate if expiryDate else None  # 儲存到期日期
+    )
     return Response(status=200, data={"message": "add lab {} success".format(labname)})
 
 @api_view(['POST'])
@@ -742,6 +1041,22 @@ def editlab(request):
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
     gpuVendor = data['gpu_vendor']
+    expiryDate = data.get('expiry_date', None)  # 取得到期日期，如果沒有則為 None
+    
+    # 處理空字串的情況，將空字串轉為 None
+    if expiryDate == '' or expiryDate == 'null' or expiryDate == 'undefined':
+        expiryDate = None
+    elif isinstance(expiryDate, str):
+        try:
+            expiryDate = datetime.date.fromisoformat(expiryDate)
+        except ValueError:
+            return Response(status=400, data="expiry_date is not valid")
+    
+    print(f"===== EDIT LAB DEBUG =====")
+    print(f"Lab name: {labname}")
+    print(f"Expiry date received: {expiryDate}")
+    print(f"Expiry date type: {type(expiryDate)}")
+    
     try:
         cpuQuota = int(cpuQuota)
         memQuota = int(memQuota)
@@ -770,13 +1085,24 @@ def editlab(request):
     # if GroupDefaultQuota is exist, update the default quota, else create the default quota
     if GroupDefaultQuota.objects.filter(labname=group).exists():
         groupDefaultQuota = GroupDefaultQuota.objects.get(labname=group)
+        print(f"Before update - expiry_date: {groupDefaultQuota.expiry_date}")
         groupDefaultQuota.cpu_quota = cpuQuota
         groupDefaultQuota.mem_quota = memQuota
         groupDefaultQuota.gpu_quota = gpuQuota
         groupDefaultQuota.gpu_vendor = gpuVendor
+        groupDefaultQuota.expiry_date = expiryDate if expiryDate else None  # 儲存到期日期
+        print(f"After assignment - expiry_date: {groupDefaultQuota.expiry_date}")
         groupDefaultQuota.save()
+        print(f"After save - expiry_date: {groupDefaultQuota.expiry_date}")
+        # 重新查詢確認
+        groupDefaultQuota.refresh_from_db()
+        print(f"After refresh - expiry_date: {groupDefaultQuota.expiry_date}")
     else:
-        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor, expiry_date=expiryDate if expiryDate else None)
+        print(f"Created new GroupDefaultQuota with expiry_date: {expiryDate}")
+    
+    print(f"===== END DEBUG =====")
+
 
     ### get the user info from database
     for user in User.objects.filter(groups=group):
@@ -825,17 +1151,22 @@ def editlab(request):
 
         # 新增檢查：只有當 user 與 default quota 不相等時才執行後續動作
         if str(userCpu) == str(defaultCpuQuota) and str(userGpu) == str(defaultGpuQuota) and str(userMemory) == str(defaultMemQuota):
-            replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
-            permission = get_permission(user.username, labname)
-            print("permission = ", permission)
-            manager = 'user'
-            if permission == 'admin':
-                manager = 'manager'
-            elif permission == 'user':
+            try:
+                replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
+                permission = get_permission(user.username, labname)
+                print("permission = ", permission)
                 manager = 'user'
-            print("manager = ", manager)
-            profileName = get_profile_by_email(user.email)
-            replace_profile_user(profileName, manager, str(cpuQuota), str(gpuQuota), str(memQuota))
+                if permission == 'admin':
+                    manager = 'manager'
+                elif permission == 'user':
+                    manager = 'user'
+                print("manager = ", manager)
+                profileName = get_profile_by_email(user.email)
+                replace_profile_user(profileName, manager, str(cpuQuota), str(gpuQuota), str(memQuota))
+            except Exception as e:
+                # Avoid failing the whole edit when k8s profile update conflicts.
+                print(f"Profile update failed for {user.username}: {e}")
+                continue
 
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
@@ -896,6 +1227,7 @@ def adduser(request):
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
     gpu_vendor = data['gpu_vendor']
+    expiry_date = data.get('expiry_date', None)
 
     if check_email(email):
         return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
@@ -945,10 +1277,16 @@ def adduser(request):
     conn.unbind()
     manager = 'user'
     if data['is_lab_manager'] is False:
-        UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
         manager = 'manager'
-        UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+    
+    # 設定到期日期
+    if expiry_date:
+        user_detail.expiry_date = expiry_date
+        user_detail.save()
+    
     user.save()
     # add gpu vendor
     UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
@@ -1012,6 +1350,35 @@ def syschronize_ldap(requset):
     
     return JsonResponse({'group_list': group_list, 'account_list': account_list}, status=200)
 
+def delete_group_core(labname):
+    """Core logic to delete a group from database, LDAP, and Kubernetes"""
+    try:
+        group = Group.objects.get(name=labname)
+        for user in User.objects.filter(groups=group):
+            User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
+            UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
+            group_list = get_user_all_groups(user)
+            k8s_date = str(datetime.datetime.now())
+            k8s_name = user.first_name + " " + user.last_name
+            send_delete_group_email(k8s_name, labname, k8s_date, user.email)
+            # check if group is empty
+            if len(group_list) == 0:
+                print("group is empty")
+                deleteUserModel(user)
+            else:
+                print("group is not empty -", len(group_list))
+            print(user.username)
+        # delete the group from database
+        Group.objects.get(name=labname).delete()
+        conn = connectLDAP()
+        # delete the group from ldap
+        conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
+        conn.unbind()
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to delete group {labname}: {e}")
+        return False
+
 def get_user_all_groups(user):
     user = User.objects.get(username=user)
     # get current group
@@ -1070,6 +1437,24 @@ def get_user_info(request):
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     notebooks = list_notebooks_api(profileName)
     # print("notebooks 2 = {}", notebooks)
+    
+    # 獲取使用者的到期日資訊
+    expiry_info = {}
+    for detail in detail_obj:
+        if detail.expiry_date:
+            expiry_info[detail.labname.name] = {
+                'expiry_date': detail.expiry_date.strftime('%Y-%m-%d'),
+                'remaining_days': detail.remaining_days,
+                'is_expired': detail.is_expired
+            }
+        else:
+            # 即使沒有設定到期日期，也要返回群組資訊
+            expiry_info[detail.labname.name] = {
+                'expiry_date': None,
+                'remaining_days': None,
+                'is_expired': False
+            }
+    
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
@@ -1080,10 +1465,11 @@ def get_user_info(request):
         "gpu_quota" : gpu,
         "permission": get_user_all_groups(user_obj.username),
         "notebooks": notebooks,
+        "expiry_info": expiry_info,
     }
     return Response(data, status=200)
 
-def deleteUserModel(username):
+def deleteUserModelPermanent(username):
     user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
     conn = connectLDAP()
@@ -1104,41 +1490,178 @@ def deleteUserModel(username):
     delete_profile(profileName, k8s_email, k8s_name)
     conn.unbind()
 
+def deleteUserModel(username):
+    user_obj = User.objects.get(username=username)
+    profileName = get_profile_by_email(user_obj.email)
+
+    user_obj.set_password("trash123456")
+    user_obj.save()
+    # collect groups up front to avoid mutation during iteration
+    original_groups = list(user_obj.groups.all())
+    for group in original_groups:
+        User.objects.get(username=username).groups.remove(Group.objects.get(name=group.name))
+        UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=group.name)).delete()
+
+    # ensure TRASH group exists and record disabled status in UserDetail
+    trash_group, _ = Group.objects.get_or_create(name="TRASH")
+    UserDetail.objects.create(uid=user_obj, permission=2, labname=trash_group)
+    user_obj.groups.add(trash_group)
+
+    conn = connectLDAP()
+    ## delete the user memberUID from the group
+    conn.search('dc=example,dc=org', '(objectclass=posixGroup)', attributes=['cn'])
+    conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
+    for entry in conn.entries:
+        try:
+            conn.modify(entry.entry_dn, {'userPassword': [(MODIFY_REPLACE, [user_obj.password.split('$')[1]])]})
+        except:
+            pass
+    conn.unbind()
+
+    k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
+    replace_profile_user_delete_date(username, k8s_date)
+    
+    
+@api_view(['POST'])
+def user_delete_check(request):
+    """永久刪除使用者（包括 LDAP、Django DB、Kubernetes）"""
+    # data = json.loads(request.body.decode('utf-8'))
+    # username = data.get('username')
+    
+    # if not username:
+    #    return Response(status=400, data={"message": "Username is required"})
+    
+    # 印出 TRASH 群組的使用者（插入於 line 1293）
+    user_need_to_delete = 0
+    trash_group = Group.objects.filter(name="TRASH").first()
+    if trash_group:
+        trash_users = trash_group.user_set.all()
+        print("\nUSERS IN TRASH GROUP:")
+        for u in trash_users:
+            print(f"  - {u.username} (email: {u.email})")
+
+        # 檢查每個 TRASH 使用者的 Profile 是否有 delete_date，若沒有則加上今天的日期
+        for u in trash_users:
+            try:
+                profileName = get_profile_by_email(u.email)
+                if not profileName:
+                    print(f"[delete_date] no profile found for user {u.username}")
+                    # no profile found, skip, but it's strange
+                    continue
+                profile = get_profile_content(profileName)
+                if profile is None:
+                    print(f"[delete_date] profile content not found for {profileName}")
+                    continue
+                annotations = profile.get('metadata', {}).get('annotations', {}) or {}
+                delete_date_str = annotations.get('delete_date')
+                if not delete_date_str:
+                    today = datetime.datetime.now() + datetime.timedelta(days=30)
+                    delete_date_str = str(today)
+                    ok = replace_profile_user_delete_date(profileName, delete_date_str)
+                    if ok:
+                        print(f"[delete_date] set delete_date for profile {profileName} to {delete_date_str}")
+                    else:
+                        print(f"[delete_date] failed to set delete_date for profile {profileName}")
+                else:
+                    print(f"[delete_date] profile {profileName} already has delete_date: {delete_date_str}")
+
+                # 額外檢查：若 delete_date 已超過今天，印出警告
+                try:
+                    delete_dt = datetime.datetime.fromisoformat(delete_date_str)
+                    if datetime.datetime.now() > delete_dt:
+                        user_need_to_delete += 1
+                        deleteUserModelPermanent(u.username)
+                        print(f"[delete_date] profile {profileName} exceeded delete_date: {delete_date_str}")
+                except ValueError:
+                    print(f"[delete_date] invalid delete_date format for profile {profileName}: {delete_date_str}")
+            except Exception as e:
+                print(f"[delete_date] error handling user {u.username}: {e}")
+
+    else:
+        print("\nGroup TRASH does not exist")
+
+    # return Response(status=200, data={"message": f"User deleted successfully, {user_need_to_delete} users need to be deleted"})
+
+    try:
+        # ========== 驗證：印出所有群組和使用者 ==========
+        all_groups = Group.objects.all()
+        all_users = User.objects.all()
+        
+        print("="*60)
+        print("ALL GROUPS IN DATABASE:")
+        for group in all_groups:
+            print(f"  - {group.name}")
+            groupDefaultQuota = GroupDefaultQuota.objects.filter(labname=Group.objects.get(name=group.name)).first()
+            if groupDefaultQuota:
+                defaultExpiryDate = groupDefaultQuota.expiry_date
+                print(f"Group={group.name}, Expiry Date={defaultExpiryDate}")
+                # 檢查 expiry_date 是否超過今天
+                if defaultExpiryDate:
+                    try:
+                        expiry_dt = datetime.datetime.fromisoformat(str(defaultExpiryDate))
+                        if datetime.datetime.now() > expiry_dt:
+                            print(f"  [WARNING] Group {group.name} has expired!")
+                            # 呼叫 delete_group_core 刪除過期的 group
+                            print(f"  [ACTION] Deleting expired group {group.name}...")
+                            if delete_group_core(group.name):
+                                print(f"  [SUCCESS] Group {group.name} deleted successfully")
+                            else:
+                                print(f"  [FAILED] Failed to delete group {group.name}")
+                            
+                    except ValueError:
+                        print(f"  [ERROR] Invalid expiry_date format for group {group.name}: {defaultExpiryDate}")
+            else:
+                print(f"Group={group.name}, Expiry Date=None (no GroupDefaultQuota record)")
+        
+        # print("\nALL USERS IN DATABASE:")
+        # for user in all_users:
+        #    print(f"  - {user.username} (email: {user.email})")
+        
+        # print(f"\nLooking for user: {username}")
+        # print("="*60)
+        # =========================================
+        
+        # group_list = get_user_all_groups(username)
+        # print(f"User {username} is in groups: {group_list}")
+        
+        # 繼續執行刪除邏輯
+        # deleteUserModel(username)
+        
+        return Response(status=200, data={"message": f"User deleted successfully"})
+    except User.DoesNotExist:
+        # print(f"[ERROR] User {username} not found in database")
+        return Response(status=404, data={"message": f"User not found in database"})
+    except Exception as e:
+        # print(f"[ERROR] Error deleting user {username}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return Response(status=500, data={"message": f"Error deleting user: {str(e)}"})
+    
 @api_view(['POST'])
 def user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
-    group_list = get_user_all_groups(data['username'])
+    username = data['username']
+    group_list = get_user_all_groups(username)
     print("group_list = ", group_list)
-    deleteUserModel(data['username'])
+    
+    # 檢查用戶是否只在 TRASH 群組中
+    if len(group_list) == 1 and group_list[0]['groupname'] == 'TRASH':
+        print(f"User {username} is only in TRASH group, deleting permanently")
+        deleteUserModelPermanent(username)
+        return Response(status=200, data={"message": f"User {username} permanently deleted"})
+    
+    # 否則執行一般刪除（移至 TRASH）
+    deleteUserModel(username)
     return Response(status=200)
 
 @api_view(['POST'])
 def lab_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
-    group = Group.objects.get(name=labname)
-    for user in User.objects.filter(groups=group):
-        User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
-        UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
-        group_list = get_user_all_groups(user)
-        k8s_date = str(datetime.datetime.now())
-        k8s_name = user.first_name + " " + user.last_name
-        send_delete_group_email(k8s_name, labname, k8s_date, user.email)
-        # print(group_list)
-        # check if group is empty
-        if len(group_list) == 0:
-            print("group is empty")
-            deleteUserModel(user)
-        else:
-            print("group is not empty -", len(group_list))
-        print(user.username)
-    # delete the group from database
-    Group.objects.get(name=labname).delete()
-    conn = connectLDAP()
-    # delete the group from ldap
-    conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
-    conn.unbind()
-    return Response(status=200)
+    if delete_group_core(labname):
+        return Response(status=200, data={"message": f"Group {labname} deleted successfully"})
+    else:
+        return Response(status=500, data={"message": f"Failed to delete group {labname}"})
 
     
 def user_group_num(requset):
@@ -1153,6 +1676,20 @@ def user_group_num(requset):
     group_num = len(Group.objects.all())
     # return the number of group and user
     data = {'lab_num': group_num, 'lab_list': group_list, 'user_num': user_num, 'user_list': user_list}
+
+    # 建立 TRASH group (如果不存在)
+    try:
+        Group.objects.get(name="TRASH")
+    except:
+        group = Group.objects.create(name="TRASH")
+        GroupDefaultQuota.objects.create(
+            labname=group, 
+            cpu_quota=0, 
+            mem_quota=0, 
+            gpu_quota=0, 
+            gpu_vendor="NVIDIA"
+        )
+
     return JsonResponse(data, safe=False)
 
 
@@ -1231,23 +1768,36 @@ def change_user_info(request):
 
         for permission_obj in permission:
             # check the permission is same or not
-            if permission_obj['permission'] == get_permission(username, permission_obj['groupname']):
-                pass
-            else:
+            detail_obj = UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=permission_obj['groupname']))
+
+            if permission_obj['permission'] != get_permission(username, permission_obj['groupname']):
                 # change the permission
-                detail_obj = UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=permission_obj['groupname']))
                 if permission_obj['permission'] == 'admin':
                     detail_obj.permission = 1
                 elif permission_obj['permission'] == 'user':
                     detail_obj.permission = 2
                 print("permission_obj = ", permission_obj['permission'])
                 detail_obj.save()
+
+            # 處理到期日期（如果有提供）
+            if 'expiry_date' in permission_obj:
+                expiry_date_str = permission_obj['expiry_date']
+                if expiry_date_str:
+                    # 轉換日期字串為日期對象
+                    from datetime import datetime
+                    expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                    detail_obj.expiry_date = expiry_date
+                else:
+                    detail_obj.expiry_date = None
+                detail_obj.save()
+                print(f"Updated expiry date for {username} in {permission_obj['groupname']}: {expiry_date_str}")
+
             manager = 'user'
             if permission_obj['permission'] == 'admin':
                 manager = 'manager'
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
-            print("manager = ", manager) 
+            print("manager = ", manager)
             profileName = get_profile_by_email(user_obj.email)
             replace_profile_user(profileName, manager, str(cpu_quota), str(gpu_quota), str(mem_quota))
         return Response(status=200)
@@ -1307,7 +1857,7 @@ def excel(request):
 
                 for group_obj in User.objects.get(username=row[0].value).groups.all():
                     if group_obj.name == row[1].value:
-                        # check password is correct or not
+                        # check password is correct or not                        
                         if User.objects.get(username=row[0].value).check_password(row[2].value) is False:
                             if User.objects.get(username=row[0].value).password == row[2].value:
                                 print("user {} password is correct".format(row[0].value))
@@ -1490,6 +2040,15 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            # 若使用者在 TRASH 中，將其從 TRASH 移除並移除相關 UserDetail
+            try:
+                trash_group = Group.objects.filter(name="TRASH").first()
+                if trash_group and user_obj.groups.filter(name="TRASH").exists():
+                    user_obj.groups.remove(trash_group)
+                    UserDetail.objects.filter(uid=user_obj, labname=trash_group).delete()
+                    print(f"Removed user {user} from TRASH group")
+            except Exception as e:
+                print(f"Error removing user {user} from TRASH: {e}")
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
@@ -1500,6 +2059,15 @@ def add_user_to_lab(request):
         try:
             UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=lab))
             user_obj.groups.add(Group.objects.get(name=lab))
+            # 若使用者在 TRASH 中，將其從 TRASH 移除並移除相關 UserDetail
+            try:
+                trash_group = Group.objects.filter(name="TRASH").first()
+                if trash_group and user_obj.groups.filter(name="TRASH").exists():
+                    user_obj.groups.remove(trash_group)
+                    UserDetail.objects.filter(uid=user_obj, labname=trash_group).delete()
+                    print(f"Removed user {user} from TRASH group")
+            except Exception as e:
+                print(f"Error removing user {user} from TRASH: {e}")
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
@@ -1669,11 +2237,31 @@ def import_lab_user(request):
                 return JsonResponse({'message': 'user {} password is not valid'.format(user['username'])}, status=400)
         # check all data is exist in database, ldap, and kubeflow or not
         failed_user = []
-        
-        for user in userinfo:
+        exist_User = []
+
+        # print(userinfo)
+        for user in userinfo[:]:
             # if username is exist in database
+            # print("Checking user:", user['username'], user['email'],user['permission'], user['password'])
             if User.objects.filter(username=user['username']).exists() is True:
-                failed_user.append({user['username']: "username is exist in database"})
+                user_obj = User.objects.get(username=user['username'])
+                detail_obj = UserDetail.objects.filter(uid=user_obj.id)
+                profileName = get_profile_by_email(user_obj.email)
+                profile = get_profile_content(profileName)
+                print(user_obj.email, user['email'], profileName, profile)
+                if user['email'] == user_obj.email and profile is not None:
+                    print("same email and profile exist:", user['email'], profileName)
+                    # 檢查是否已經在該 group 中
+                    if not user_obj.groups.filter(name=group).exists():
+                        user_obj.groups.add(Group.objects.get(name=group))
+                        if user['permission'] == 'admin':
+                            UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
+                        elif user['permission'] == 'user':
+                            UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=group))
+                    else:
+                        print("user already in group:", user['username'], group)
+                else:
+                    failed_user.append({user['username']: "username is exist in database"})
                 # remove the user from userinfo
                 userinfo.remove(user)
                 continue
@@ -1706,19 +2294,13 @@ def import_lab_user(request):
         # add user into django, ldap, and kubeflow
         for user in userinfo:
             # convert cpu value to correct format, from 8800m remove m and devide to 8 ,  if more than 1100
-            print("Without check", user['cpu_quota'])
+            # print("Without check", user['cpu_quota'])
             if str(user['cpu_quota']).isdigit() is False:
                 user['cpu_quota'] = user['cpu_quota'][:-1]
-            print("After check1", user['cpu_quota'])
+            # print("After check1", user['cpu_quota'])
             if float(user['cpu_quota']) > 1100:
                 user['cpu_quota'] = str(float(user['cpu_quota'])/1100)
-            print("After check2", user['cpu_quota'])
-            try:
-                if int(user['mem_quota']) > 1100:
-                    user['mem_quota'] = str(float(user['mem_quota'])/1100)
-            except:
-                user['mem_quota'] = '0'
-            
+            # print("After check2", user['cpu_quota'])
             try:
                 User.objects.create_user(username=user['username'], password=user['password'], first_name=user['firstname'], last_name=user['lastname'], email=user['email'])
                 user_obj = User.objects.get(username=user['username'])
@@ -1872,7 +2454,7 @@ def multiple_user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
     for user in users:
-        deleteUserModel(User.objects.get(username=user).username)
+        deleteUserModelPermanent(User.objects.get(username=user).username)
     return Response(status=200)
 
 @api_view(['POST'])
@@ -1956,6 +2538,64 @@ def remove_null(data):
     else:
         return data
     return removed
+
+
+@api_view(['GET', 'PATCH'])
+def node_resource_monitor_config(request):
+    try:
+        ensure_k8s_config()
+    except ConfigException as exc:
+        return Response(
+            {'detail': f'無法載入 Kubernetes 設定：{exc}'},
+            status=500,
+        )
+
+    v1 = client.CoreV1Api()
+    try:
+        config_map = v1.read_namespaced_config_map(
+            NODE_RESOURCE_MONITOR_CONFIGMAP,
+            NODE_RESOURCE_MONITOR_NAMESPACE,
+        )
+    except ApiException as exc:
+        status_code = exc.status or 500
+        message = exc.reason or '讀取 ConfigMap 失敗。'
+        return Response({'detail': message}, status=status_code)
+
+    if request.method == 'GET':
+        return Response(build_cost_response(config_map), status=200)
+
+    payload = request.data or {}
+    updates = {}
+    errors = {}
+    for field, key in NODE_RESOURCE_MONITOR_KEYS.items():
+        if field not in payload:
+            continue
+        try:
+            formatted = format_cost_value(payload[field])
+        except ValueError as err:
+            errors[field] = str(err)
+            continue
+        if formatted is not None:
+            updates[key] = formatted
+
+    if errors:
+        return Response({'detail': '費率格式錯誤。', 'errors': errors}, status=400)
+
+    if not updates:
+        return Response({'detail': '請至少提供一個費率數值。'}, status=400)
+
+    try:
+        patched = v1.patch_namespaced_config_map(
+            NODE_RESOURCE_MONITOR_CONFIGMAP,
+            NODE_RESOURCE_MONITOR_NAMESPACE,
+            {'data': updates},
+        )
+    except ApiException as exc:
+        status_code = exc.status or 500
+        message = exc.reason or '更新 ConfigMap 失敗。'
+        return Response({'detail': message}, status=status_code)
+
+    return Response(build_cost_response(patched), status=200)
 
 # Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
 @api_view(["POST"])
