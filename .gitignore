@@ -34,3 +34,11 @@ flymd.*
 # Files created by Gogland IDE
 .idea/
 
+# package lock files
+package-lock.json
+
+# Go compiled binaries
+controller101/main
+controller101/mykubeclient
+QNAPController/main
+
