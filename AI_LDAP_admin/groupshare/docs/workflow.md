@@ -1,108 +1,155 @@
-# GroupShare 修正進度報告（給資深工程師）
+# GroupShare 維運與部署 Workflow
 
-日期：2026-03-15（Asia/Taipei）
+最後更新：2026-03-15（Asia/Taipei）
 
-## 1) 這次完成的事
-- 已部署 backend 新版：`docker.io/cguaicadmin/ldap_backend:v0.2.40`。
-- 已重啟 `ldap/backend-deployment` 並確認 rollout 完成（`1 updated / 1 ready`）。
-- 已執行一次性 backfill，補齊所有既有 Profile 的 `group/manager` annotation。
-- 已補齊即時同步：`add_user_to_lab`、`remove_user_from_lab`、`remove_multiple_user_from_lab` 成功後會立即刷新 Profile annotation。
-- 已把部署檔同步：`full-stack-deployment.yaml` image 更新為 `v0.2.40`。
+## 1) 功能總覽（先理解這三層）
 
-## 2) 為什麼一定要重部署 backend
-- GroupShare controller 只會讀 `Profile.metadata.annotations.group/manager`，不會自己去 Account Manager DB 算群組。
-- 真正把 `group/manager` 寫進 Profile 的邏輯在 backend：
-  - `build_groupshare_annotations()`：`api/views.py:365`
-  - `create_profile()`：`api/views.py:410`
-  - `replace_profile_user()`：`api/views.py:572`
-- 如果不重部署，叢集仍跑舊版 `v0.2.38`，annotation 會維持舊行為（`manager=user/manager` 字串），controller 仍會報 ignored。
+1. Account Manager backend 寫 Profile annotation
+- `group`: 使用者可見群組（CSV）
+- `manager`: 角色（`user` / `manager`）
+- `manager-group`: 可 RW 的管理群組（CSV）
 
-## 3) 後端程式變更重點（已上線）
-- 新增 helper：用 DB 真實資料算 annotation
-  - `group` = 使用者實際所屬群組（排除 `root`）。
-  - `manager` = `group` 與 `UserDetail.permission=1` 的交集。
-- `create_profile()` 寫入
-  - `group`, `manager`（新欄位語意）
-  - `manager-role`（保留舊角色字串相容）
-- `replace_profile_user()` 改為 update annotation（不整包覆蓋），並同步 `group/manager`。
-- 新增 `sync_profile_groupshare_annotations()`（`api/views.py:605`）：
-  - 專門在「群組成員異動」後，立即重算並回寫 `group/manager`。
-  - 先用 email 找 Profile，找不到則 fallback 用 username 當 profile 名稱。
+2. GroupShare Controller 自動同步 PodDefault
+- 讀每個 namespace 的 Profile annotation
+- 產生/更新 `PodDefault/groupshare`
+- 注入 `/mnt/groups/<group>` NFS 掛載
 
-## 4) 一次性 backfill 結果
-- backfill 前：`profiles=79 non_empty_group=0 non_empty_manager=78`
-- backfill 後：`profiles=79 non_empty_group=77 non_empty_manager=18`
-- 實際更新：`profiles_total=79 updated=78 unchanged=1 user_not_found=2`
+3. Validating Webhook 擋不合法 Notebook
+- 禁止繞過白名單 NFS 掛載
+- 非管理群組禁止改成 RW
+- 要求 `groupshare=enabled` 才能使用 GroupShare volume
 
-### 具體例子（已驗證）
-- `a001`：`group='test001'`, `manager=''`
-- `a004`：`group='test001'`, `manager='test001'`（同群組管理者）
-- `lance2`：`group='AIG'`, `manager='AIG'`
-- `aictest001`：`group='TRASH,test002,test003,test004,test005,test006,test007'`, `manager=''`
+## 2) 重要路徑
 
-### 你關心的「找不到」清單
-- 找不到對應 Account Manager 使用者（`user_not_found=2`）：
-  - `aictest0031`（owner email 也是對不到 DB）
-  - `kubeflow-user-example-com`（owner `user@example.com` 對不到 DB）
-- Profile 指向不存在 namespace：`0` 筆（全部 namespace 都存在）
-- Profile annotation 內含 DB 不存在群組：`0` 筆
-- `manager` 不在同 profile 的 `group` 內：`0` 筆
+- `groupshare/controller/app.py`: Controller 主流程
+- `groupshare/controller/parser.py`: annotation 解析（含 `manager-group` fallback）
+- `groupshare/webhook/app.py`: Admission Webhook 入口
+- `groupshare/webhook/rules.py`: Rule A/B/C/D
+- `groupshare/deploy/*.yaml`: k8s 部署模板（目前為 ConfigMap 掛 code）
 
-## 5) 新增 group/manager 現在會不會被偵測到
-結論：會，但要看你走哪條 Account Manager API 路徑。
+## 3) 日常改版流程（Code Change）
 
-### 會自動生效的路徑
-- 新增帳號（`adduser`）：
-  - `api/views.py:1034` 呼叫 `create_profile()`。
-  - 當下就把新 `group/manager` 寫進 Profile annotation
-  - controller 每 20 秒輪詢一次 Profile（`groupshare/controller/app.py:27`, `:188-200`）
-  - 讀到 annotation 改變就更新 PodDefault（`app.py:126-187`）
+在 `AI_LDAP_admin/groupshare` 目錄操作。
 
-- 編輯使用者資訊/權限（`change_user_info`）：
-  - `api/views.py:1343` -> `replace_profile_user()`
-  - 會重算 `group/manager` 後寫回 Profile
-  - controller 之後會同步到 PodDefault
-
-- 群組加人（`add_user_to_lab`）：
-  - `api/views.py:1630` 成功後呼叫 `sync_profile_groupshare_annotations()`
-  - `group/manager` 會即時更新到 Profile annotation
-
-- 群組移除單一使用者（`remove_user_from_lab`）：
-  - `api/views.py:1956` 在使用者尚有其他群組時，會呼叫 `sync_profile_groupshare_annotations()`
-  - 若該使用者已無群組，走既有 `deleteUserModel()`（刪 user/profile）
-
-- 群組批次移除使用者（`remove_multiple_user_from_lab`）：
-  - `api/views.py:2030` 逐一移除後，對仍保留帳號者呼叫 `sync_profile_groupshare_annotations()`
-
-### 目前仍要注意的邊界
-- 這次重點補的是「群組成員異動 API」即時同步，不是背景排程掃 DB。
-- 若有其他未走到上述 API 的資料修補動作，仍建議執行一次 backfill 作保險。
-
-## 6) Controller 端驗證重點
-- manager/group 解析邏輯：
-  - `parse_csv_list()`、`intersect_groups()` 在 `groupshare/controller/parser.py:5-31`
-- 舊錯誤來源是 `manager` 用 `user/manager` 字串，`intersect_groups()` 會判定不在 group 內並 warning。
-- backfill 後近期 log 已觀察到持續 `Synced Profile ... no changes`，且近 10 分鐘 warning 計數為 0。
-
-## 7) 部署與驗證指令（本次實際使用）
+1. 先本機驗證
 ```bash
-docker build -t cguaicadmin/ldap_backend:v0.2.40 .
-docker push cguaicadmin/ldap_backend:v0.2.40
-kubectl set image deployment/backend-deployment backend=docker.io/cguaicadmin/ldap_backend:v0.2.40 -n ldap
-kubectl rollout restart deployment/backend-deployment -n ldap
-kubectl rollout status deployment/backend-deployment -n ldap --timeout=300s
-kubectl get profiles -o json
-kubectl logs -n kubeflow deploy/groupshare-controller -c controller --since=10m
+python -m unittest discover -s tests -p 'test_*.py'
+python -m py_compile controller/app.py controller/parser.py webhook/app.py webhook/rules.py
 ```
 
-## 8) 第二階段驗證（本次新增）
-- 程式部署後，已在 Pod 內確認新 helper 與呼叫點存在：
-  - `grep -n 'sync_profile_groupshare_annotations' /code/api/views.py`
-  - 命中 `def` 與 4 個呼叫點（add/remove 相關）
-- controller 近 5 分鐘 warning 計數：`0`
-
-## 9) 回滾方式（必要時）
+2. 套用部署檔
 ```bash
-kubectl set image deployment/backend-deployment backend=docker.io/cguaicadmin/ldap_backend:v0.2.39 -n ldap
-kubectl rollout status deployment/backend-deployment -n ldap --timeout=300s
+kubectl apply -f deploy/controller-rbac.yaml
+kubectl apply -f deploy/controller-configmap.yaml
+kubectl apply -f deploy/controller-code-configmap.yaml
+kubectl apply -f deploy/controller-deployment.yaml
+kubectl apply -f deploy/webhook-rbac.yaml
+kubectl apply -f deploy/webhook-code-configmap.yaml
+kubectl apply -f deploy/webhook-certificate.yaml
+kubectl apply -f deploy/webhook-deployment.yaml
+kubectl apply -f deploy/webhook-service.yaml
+kubectl apply -f deploy/validating-webhook-configuration.yaml
 ```
+
+2.1 如果這次有改 `AI_LDAP_admin/api/views.py`（Profile annotation 寫入邏輯）
+```bash
+cd /home/mark/work/AI_Centre_Admin/AI_LDAP_admin
+kubectl apply -f full-stack-deployment.yaml
+kubectl -n ldap rollout status deployment/backend-deployment --timeout=180s
+```
+
+2.2 如果這次有改 backend 程式且需要發新映像（建議）
+```bash
+cd /home/mark/work/AI_Centre_Admin/AI_LDAP_admin
+
+# 建議用新 tag，不要覆蓋舊 tag
+export BACKEND_IMAGE=docker.io/cguaicadmin/ldap_backend
+export BACKEND_TAG=v0.2.41
+
+docker login
+docker build -t ${BACKEND_IMAGE}:${BACKEND_TAG} . --no-cache
+docker push ${BACKEND_IMAGE}:${BACKEND_TAG}
+```
+
+2.3 把叢集 backend 切到新映像（兩種方式擇一）
+
+方式 A（較快，建議）：
+```bash
+kubectl -n ldap set image deployment/backend-deployment backend=${BACKEND_IMAGE}:${BACKEND_TAG}
+kubectl -n ldap rollout status deployment/backend-deployment --timeout=300s
+```
+註：方式 A 會讓叢集先更新，但不會自動改 repo 裡的 `full-stack-deployment.yaml`，之後記得回寫新 tag。
+
+方式 B（維持 YAML 為單一真相）：
+```bash
+# 先把 full-stack-deployment.yaml 的 image 改成新 tag，再 apply
+kubectl apply -f full-stack-deployment.yaml
+kubectl -n ldap rollout status deployment/backend-deployment --timeout=300s
+```
+
+3. 觀察 rollout 狀態
+```bash
+kubectl -n kubeflow rollout status deployment/groupshare-controller --timeout=180s
+kubectl -n kubeflow rollout status deployment/groupshare-validating-webhook --timeout=180s
+```
+
+4. 驗證 Pod 是否健康
+```bash
+kubectl -n kubeflow get pods -l app=groupshare-controller
+kubectl -n kubeflow get pods -l app=groupshare-validating-webhook
+kubectl -n kubeflow logs deploy/groupshare-controller --tail=100
+kubectl -n kubeflow logs deploy/groupshare-validating-webhook --tail=100
+```
+
+## 4) `rollout` 是什麼？可不可以刪？
+
+`rollout` 是 Kubernetes 觀察/觸發 Deployment 更新的機制。
+
+- `kubectl rollout status ...`: 看這次更新是否完成（建議保留）
+- `kubectl rollout restart ...`: 強制重啟 Pod（在 code 走 ConfigMap 掛載時非常有用）
+
+結論：不要把 rollout 流程整段刪掉，至少保留 `rollout status`。
+若你更新了 ConfigMap 裡的程式碼，但 Pod 沒重建，新的 Python 程式通常不會自動 reload，建議手動重啟：
+
+```bash
+kubectl -n kubeflow rollout restart deployment/groupshare-controller
+kubectl -n kubeflow rollout restart deployment/groupshare-validating-webhook
+```
+
+## 5) Crash / 異常處理流程
+
+1. 先看 Pod 與事件
+```bash
+kubectl -n kubeflow get pods | grep groupshare
+kubectl -n kubeflow describe pod <pod-name>
+```
+
+2. 看 logs
+```bash
+kubectl -n kubeflow logs <controller-pod-name> --tail=200
+kubectl -n kubeflow logs <webhook-pod-name> --tail=200
+```
+
+3. 常見原因
+- RBAC 不足：`forbidden` 相關錯誤
+- `NFS_PATH` / `NFS_SERVER` 設定不一致
+- cert-manager 未正常注入 webhook 憑證
+- Deployment 可啟動但仍跑舊 code（忘記 rollout restart）
+
+4. 快速復原
+- 先把對應 `deploy/*.yaml` 改回前一版並 `kubectl apply`
+- 再執行 `kubectl rollout restart` + `kubectl rollout status`
+- 若 backend 新映像有問題：`kubectl -n ldap rollout undo deployment/backend-deployment`
+
+## 6) 驗證清單（上線後）
+
+1. Controller 日誌有 `Created/Updated PodDefault` 訊息
+2. Profile namespace 中存在 `PodDefault/groupshare`
+3. Notebook 加上 `groupshare=enabled` 能正常掛載 `/mnt/groups/*`
+4. 非 admin 群組把 volume 改成 `readOnly: false` 會被 webhook 擋下
+5. webhook 憑證 ready（`groupshare-webhook-tls` secret 存在）
+
+## 7) 與 README 的分工
+
+- `README.md`: 架構與專案導覽（給第一次看的人）
+- `docs/workflow.md`（本文件）: 日常維運與故障處理步驟（給 on-call/接手工程師）

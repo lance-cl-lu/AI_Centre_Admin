@@ -5,7 +5,7 @@ import unittest
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(BASE, "controller"))
 
-from parser import intersect_groups, parse_csv_list, to_volume_name
+from parser import intersect_groups, parse_csv_list, parse_manager_groups, to_volume_name
 
 
 class TestControllerParser(unittest.TestCase):
@@ -22,6 +22,25 @@ class TestControllerParser(unittest.TestCase):
     def test_group_name_sanitization_to_volume(self):
         name = to_volume_name("Lab_Vision! 2023")
         self.assertEqual(name, "gs-lab-vision-2023")
+
+    def test_parse_manager_groups_prefers_manager_group(self):
+        annotations = {
+            "manager-group": "A,B",
+            "manager": "user",
+        }
+        self.assertEqual(parse_manager_groups(annotations), "A,B")
+
+    def test_parse_manager_groups_fallback_legacy_manager(self):
+        annotations = {
+            "manager": "A,B",
+        }
+        self.assertEqual(parse_manager_groups(annotations), "A,B")
+
+    def test_parse_manager_groups_ignores_role_marker(self):
+        annotations = {
+            "manager": "manager",
+        }
+        self.assertEqual(parse_manager_groups(annotations), "")
 
 
 if __name__ == "__main__":

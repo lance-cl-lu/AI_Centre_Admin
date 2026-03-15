@@ -1,5 +1,8 @@
 import re
-from typing import List, Tuple
+from typing import Dict, List, Tuple
+
+
+ROLE_MARKERS = {"user", "manager"}
 
 
 def parse_csv_list(raw: str) -> List[str]:
@@ -15,6 +18,19 @@ def parse_csv_list(raw: str) -> List[str]:
             seen.add(item)
             deduped.append(item)
     return deduped
+
+
+def parse_manager_groups(annotations: Dict[str, str]) -> str:
+    manager_group_raw = (annotations.get("manager-group", "") or "").strip()
+    if manager_group_raw:
+        return manager_group_raw
+
+    # Backward compatibility: older transition wrote manager groups into manager.
+    manager_raw = (annotations.get("manager", "") or "").strip()
+    if manager_raw and manager_raw.lower() not in ROLE_MARKERS:
+        return manager_raw
+
+    return ""
 
 
 def intersect_groups(groups: List[str], managers: List[str]) -> Tuple[List[str], List[str]]:

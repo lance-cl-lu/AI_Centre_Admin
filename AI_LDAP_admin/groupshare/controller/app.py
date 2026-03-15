@@ -7,7 +7,13 @@ from typing import Dict, List, Tuple
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-from parser import parse_csv_list, intersect_groups, sanitize_group_token, to_volume_name
+from parser import (
+    parse_csv_list,
+    parse_manager_groups,
+    intersect_groups,
+    sanitize_group_token,
+    to_volume_name,
+)
 
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
@@ -132,7 +138,7 @@ class GroupshareController:
             return
 
         groups_raw = annotations.get("group", "")
-        managers_raw = annotations.get("manager", "")
+        managers_raw = parse_manager_groups(annotations)
 
         groups = parse_csv_list(groups_raw)
         managers = parse_csv_list(managers_raw)

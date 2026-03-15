@@ -11,7 +11,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 
 涵蓋：
 
-- Controller 解析：`group: 'A, B,, C ', manager: 'B, X'`
+- Controller 解析：`group: 'A, B,, C ', manager: 'manager', manager-group: 'B, X'`
   - 期望 `groups=['A','B','C']`
   - 期望 `adminGroups=['B']`
   - 期望產生 `X` 的 warning

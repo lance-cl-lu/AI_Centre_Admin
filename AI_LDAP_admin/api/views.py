@@ -41,6 +41,7 @@ NODE_RESOURCE_MONITOR_KEYS = {
     'cpuCostPerMinute': 'CPU_COST_PER_MINUTE',
     'gpuCostPerMinute': 'GPU_COST_PER_MINUTE',
 }
+ROLE_MARKERS = {"user", "manager"}
 
 
 def ensure_k8s_config():
@@ -362,12 +363,32 @@ def check_email(email):
             return True
     return False
 
-def build_groupshare_annotations(profile_name=None, owner_email=None):
+def get_user_by_profile_or_email(profile_name=None, owner_email=None):
     user_obj = None
     if profile_name:
         user_obj = User.objects.filter(username=profile_name.lower()).first()
     if user_obj is None and owner_email:
         user_obj = User.objects.filter(email__iexact=owner_email).first()
+    return user_obj
+
+
+def resolve_manager_role(profile_name=None, owner_email=None, user_obj=None, fallback_role="user"):
+    role = (fallback_role or "").strip().lower()
+    if role not in ROLE_MARKERS:
+        role = "user"
+
+    if user_obj is None:
+        user_obj = get_user_by_profile_or_email(profile_name=profile_name, owner_email=owner_email)
+
+    if user_obj is None:
+        return role
+
+    has_admin_permission = UserDetail.objects.filter(uid=user_obj, permission=1).exists()
+    return "manager" if has_admin_permission else "user"
+
+
+def build_groupshare_annotations(profile_name=None, owner_email=None):
+    user_obj = get_user_by_profile_or_email(profile_name=profile_name, owner_email=owner_email)
 
     if user_obj is None:
         return "", ""
@@ -381,6 +402,17 @@ def build_groupshare_annotations(profile_name=None, owner_email=None):
     manager_groups = [g for g in groups if g in manager_candidates]
 
     return ",".join(groups), ",".join(manager_groups)
+
+
+def get_manager_groups_from_annotations(annotations):
+    manager_group_raw = (annotations.get("manager-group", "") or "").strip()
+    if manager_group_raw:
+        return manager_group_raw
+    manager_raw = (annotations.get("manager", "") or "").strip()
+    if manager_raw and manager_raw.lower() not in {"user", "manager"}:
+        return manager_raw
+
+    return ""
     
 def delete_profile(name, email, fullname):
     if name is None:
@@ -423,6 +455,11 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
         profile_name=username.lower(),
         owner_email=email.lower(),
     )
+    manager_role = resolve_manager_role(
+        profile_name=username.lower(),
+        owner_email=email.lower(),
+        fallback_role=manager,
+    )
 
     profile_data = {
         "apiVersion": "kubeflow.org/v1",
@@ -431,8 +468,8 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
             "name": username.lower(),
             "annotations": {
                 "group": groups_raw,
-                "manager": managers_raw,
-                "manager-role": manager,
+                "manager": manager_role,
+                "manager-group": managers_raw,
                 "cpu" : cpu,
                 "gpu" : gpu,
                 "memory" : memory
@@ -578,12 +615,17 @@ def replace_profile_user(name,user,cpu,gpu,memory):
                 profile_name=p['metadata'].get('name', ''),
                 owner_email=p.get('spec', {}).get('owner', {}).get('name', ''),
             )
+            manager_role = resolve_manager_role(
+                profile_name=p['metadata'].get('name', ''),
+                owner_email=p.get('spec', {}).get('owner', {}).get('name', ''),
+                fallback_role=user,
+            )
             annotations = p['metadata'].get('annotations', {}) or {}
             annotations.update(
                 {
                     "group": groups_raw,
-                    "manager": managers_raw,
-                    "manager-role": user,
+                    "manager": manager_role,
+                    "manager-group": managers_raw,
                     "cpu": cpu,
                     "gpu": gpu,
                     "memory": memory,
@@ -604,7 +646,8 @@ def replace_profile_user(name,user,cpu,gpu,memory):
 
 def sync_profile_groupshare_annotations(user_obj):
     """
-    Best-effort sync for group/manager annotations after group membership changes.
+    Best-effort sync for group/manager-group annotations after group membership changes.
+    Also normalizes manager role annotation back to user/manager.
     """
     try:
         owner_email = (user_obj.email or "").strip().lower()
@@ -629,18 +672,26 @@ def sync_profile_groupshare_annotations(user_obj):
             profile_name=profile_name,
             owner_email=owner_email,
         )
+        manager_role = resolve_manager_role(
+            profile_name=profile_name,
+            owner_email=owner_email,
+            user_obj=user_obj,
+            fallback_role=(profile.get('metadata', {}).get('annotations', {}) or {}).get("manager", "user"),
+        )
 
         annotations = profile.get('metadata', {}).get('annotations', {}) or {}
-        old_group = annotations.get("group", "") or ""
-        old_manager = annotations.get("manager", "") or ""
-        if old_group == groups_raw and old_manager == managers_raw:
+        old_group = (annotations.get("group", "") or "").strip()
+        old_manager_group = get_manager_groups_from_annotations(annotations)
+        old_manager = (annotations.get("manager", "") or "").strip()
+        if old_group == groups_raw and old_manager_group == managers_raw and old_manager == manager_role:
             print(f"[groupshare-sync] no annotation changes for profile={profile_name}")
             return True
 
         annotations.update(
             {
                 "group": groups_raw,
-                "manager": managers_raw,
+                "manager": manager_role,
+                "manager-group": managers_raw,
             }
         )
         profile['metadata']['annotations'] = annotations
@@ -654,7 +705,7 @@ def sync_profile_groupshare_annotations(user_obj):
             body=profile,
         )
         print(
-            f"[groupshare-sync] updated profile={profile_name} group='{groups_raw}' manager='{managers_raw}'"
+            f"[groupshare-sync] updated profile={profile_name} group='{groups_raw}' manager='{manager_role}' manager-group='{managers_raw}'"
         )
         return True
     except Exception:

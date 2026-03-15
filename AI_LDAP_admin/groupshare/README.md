@@ -7,7 +7,8 @@
 
 1. Account Manager 會把群組資訊寫進 Profile annotation
 - `group`: 這個 namespace 可以看到哪些群組資料
-- `manager`: 哪些群組在這個 namespace 內可用 RW 權限
+- `manager`: 角色欄位（`user` 或 `manager`）
+- `manager-group`: 哪些群組在這個 namespace 內可用 RW 權限
 
 2. Controller 讀 Profile，自動產生/更新 PodDefault
 - 每個 Profile namespace 一個 `PodDefault/groupshare`
@@ -18,7 +19,7 @@
 3. Webhook 擋繞過
 - 擋掉使用者自己宣告 `/group*` 路徑
 - 擋掉不在白名單的 NFS volume/path/server
-- 擋掉非 manager 把 volume 改成 RW
+- 擋掉不屬於 `manager-group` 的使用者把 volume 改成 RW
 - 強制 Notebook 必須有 `groupshare=enabled`
 
 ## 資料夾說明
@@ -56,7 +57,7 @@
 ## 現在的驗證狀態
 
 已完成：
-- Python 單元測試（6 tests）通過
+- Python 單元測試（13 tests）通過
 - Python 語法編譯檢查通過
 - `kubectl apply --dry-run=client` 全部通過
 - `kubectl apply --dry-run=server` 全部通過

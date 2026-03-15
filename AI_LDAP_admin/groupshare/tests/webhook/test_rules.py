@@ -91,7 +91,7 @@ class TestWebhookRules(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertEqual(rule, "Rule B")
 
-    def test_rule_d_label_required(self):
+    def test_rule_d_label_required_for_groupshare_volumes(self):
         nb = self._base_notebook()
         nb["metadata"]["labels"] = {}
 
@@ -106,6 +106,90 @@ class TestWebhookRules(unittest.TestCase):
 
         self.assertFalse(allowed)
         self.assertEqual(rule, "Rule D")
+
+    def test_rule_d_unlabeled_notebook_without_nfs_is_allowed(self):
+        nb = self._base_notebook()
+        nb["metadata"]["labels"] = {}
+        nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"] = []
+        nb["spec"]["template"]["spec"]["volumes"] = []
+
+        allowed, rule, _ = evaluate_rules(
+            notebook_obj=nb,
+            user_groups=["staff"],
+            expected_nfs_server="10.100.1.31",
+            allowed_volume_names={"gs-hr-data"},
+            allowed_nfs_paths={"/exports/hr-data"},
+            admin_volume_names={"gs-hr-admin"},
+        )
+
+        self.assertTrue(allowed)
+        self.assertEqual(rule, "ALLOW")
+
+    def test_rule_c_admin_scope_is_per_volume(self):
+        nb = self._base_notebook()
+        nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"] = [
+            {
+                "name": "gs-hr",
+                "mountPath": "/mnt/groups/hr",
+                "readOnly": False,
+            },
+            {
+                "name": "gs-fin",
+                "mountPath": "/mnt/groups/fin",
+                "readOnly": False,
+            },
+        ]
+        nb["spec"]["template"]["spec"]["volumes"] = [
+            {
+                "name": "gs-hr",
+                "nfs": {
+                    "server": "10.100.1.31",
+                    "path": "/exports/hr",
+                    "readOnly": False,
+                },
+            },
+            {
+                "name": "gs-fin",
+                "nfs": {
+                    "server": "10.100.1.31",
+                    "path": "/exports/fin",
+                    "readOnly": False,
+                },
+            },
+        ]
+
+        allowed, rule, message = evaluate_rules(
+            notebook_obj=nb,
+            user_groups=["hr"],
+            expected_nfs_server="10.100.1.31",
+            allowed_volume_names={"gs-hr", "gs-fin"},
+            allowed_nfs_paths={"/exports/hr", "/exports/fin"},
+            admin_volume_names={"gs-hr"},
+        )
+
+        self.assertFalse(allowed)
+        self.assertEqual(rule, "Rule C")
+        self.assertIn("gs-fin", message)
+
+    def test_rule_c_admin_can_rw_own_volume(self):
+        nb = self._base_notebook()
+        nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0]["name"] = "gs-hr"
+        nb["spec"]["template"]["spec"]["volumes"][0]["name"] = "gs-hr"
+        nb["spec"]["template"]["spec"]["volumes"][0]["nfs"]["path"] = "/exports/hr"
+        nb["spec"]["template"]["spec"]["volumes"][0]["nfs"]["readOnly"] = False
+        nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0]["readOnly"] = False
+
+        allowed, rule, _ = evaluate_rules(
+            notebook_obj=nb,
+            user_groups=["hr"],
+            expected_nfs_server="10.100.1.31",
+            allowed_volume_names={"gs-hr"},
+            allowed_nfs_paths={"/exports/hr"},
+            admin_volume_names={"gs-hr"},
+        )
+
+        self.assertTrue(allowed)
+        self.assertEqual(rule, "ALLOW")
 
 
 if __name__ == "__main__":
