@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: groupshare-webhook-cert
+  namespace: kubeflow
+spec:
+  secretName: groupshare-webhook-tls
+  dnsNames:
+    - groupshare-webhook.kubeflow.svc
+    - groupshare-webhook.kubeflow.svc.cluster.local
+  issuerRef:
+    name: kubeflow-self-signing-issuer
+    kind: ClusterIssuer

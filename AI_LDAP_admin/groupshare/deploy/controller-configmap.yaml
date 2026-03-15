@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: groupshare-nfs-defaults
+  namespace: kubeflow
+data:
+  NFS_SERVER: "120.126.23.7"

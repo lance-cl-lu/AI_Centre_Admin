@@ -361,6 +361,26 @@ def check_email(email):
         if p['spec']['owner']['name'] == email.lower():
             return True
     return False
+
+def build_groupshare_annotations(profile_name=None, owner_email=None):
+    user_obj = None
+    if profile_name:
+        user_obj = User.objects.filter(username=profile_name.lower()).first()
+    if user_obj is None and owner_email:
+        user_obj = User.objects.filter(email__iexact=owner_email).first()
+
+    if user_obj is None:
+        return "", ""
+
+    groups = sorted({g.name for g in user_obj.groups.all() if g.name and g.name != 'root'})
+    manager_candidates = {
+        detail.labname.name
+        for detail in UserDetail.objects.filter(uid=user_obj, permission=1).select_related('labname')
+        if detail.labname and detail.labname.name
+    }
+    manager_groups = [g for g in groups if g in manager_candidates]
+
+    return ",".join(groups), ",".join(manager_groups)
     
 def delete_profile(name, email, fullname):
     if name is None:
@@ -399,13 +419,20 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
     memoryStr = str(int(float(memory))) + "Gi"
     # print(" memoryStr = {}".format(memoryStr))
     
+    groups_raw, managers_raw = build_groupshare_annotations(
+        profile_name=username.lower(),
+        owner_email=email.lower(),
+    )
+
     profile_data = {
         "apiVersion": "kubeflow.org/v1",
         "kind": "Profile",
         "metadata": {
             "name": username.lower(),
             "annotations": {
-                "manager": manager,
+                "group": groups_raw,
+                "manager": managers_raw,
+                "manager-role": manager,
                 "cpu" : cpu,
                 "gpu" : gpu,
                 "memory" : memory
@@ -547,13 +574,22 @@ def replace_profile_user(name,user,cpu,gpu,memory):
     print("name = ", name)
     for p in profiles:
         if p['metadata']['name'] == name:
-            userAnnotations = {
-                "manager": user,
-                "cpu" : cpu,
-                "gpu" : gpu,
-                "memory" : memory
-            }
-            p['metadata']['annotations'] = userAnnotations
+            groups_raw, managers_raw = build_groupshare_annotations(
+                profile_name=p['metadata'].get('name', ''),
+                owner_email=p.get('spec', {}).get('owner', {}).get('name', ''),
+            )
+            annotations = p['metadata'].get('annotations', {}) or {}
+            annotations.update(
+                {
+                    "group": groups_raw,
+                    "manager": managers_raw,
+                    "manager-role": user,
+                    "cpu": cpu,
+                    "gpu": gpu,
+                    "memory": memory,
+                }
+            )
+            p['metadata']['annotations'] = annotations
             print(" p = ", p)
             api = client.CustomObjectsApi()
             # replace the profile 
@@ -565,6 +601,66 @@ def replace_profile_user(name,user,cpu,gpu,memory):
                 body=p
             )
             print(api_response)
+
+def sync_profile_groupshare_annotations(user_obj):
+    """
+    Best-effort sync for group/manager annotations after group membership changes.
+    """
+    try:
+        owner_email = (user_obj.email or "").strip().lower()
+        profile_name = get_profile_by_email(owner_email) if owner_email else None
+        profile = None
+
+        if profile_name:
+            profile = get_profile_content(profile_name)
+        else:
+            # Fallback: profile name is often username.
+            candidate_name = (user_obj.username or "").strip().lower()
+            if candidate_name:
+                profile = get_profile_content(candidate_name)
+                if profile is not None:
+                    profile_name = profile.get('metadata', {}).get('name', candidate_name)
+
+        if profile is None or not profile_name:
+            print(f"[groupshare-sync] profile not found for user={user_obj.username}, skip")
+            return False
+
+        groups_raw, managers_raw = build_groupshare_annotations(
+            profile_name=profile_name,
+            owner_email=owner_email,
+        )
+
+        annotations = profile.get('metadata', {}).get('annotations', {}) or {}
+        old_group = annotations.get("group", "") or ""
+        old_manager = annotations.get("manager", "") or ""
+        if old_group == groups_raw and old_manager == managers_raw:
+            print(f"[groupshare-sync] no annotation changes for profile={profile_name}")
+            return True
+
+        annotations.update(
+            {
+                "group": groups_raw,
+                "manager": managers_raw,
+            }
+        )
+        profile['metadata']['annotations'] = annotations
+
+        api = client.CustomObjectsApi()
+        api.replace_cluster_custom_object(
+            group=group,
+            version=version,
+            plural=plural,
+            name=profile['metadata']['name'],
+            body=profile,
+        )
+        print(
+            f"[groupshare-sync] updated profile={profile_name} group='{groups_raw}' manager='{managers_raw}'"
+        )
+        return True
+    except Exception:
+        print("[groupshare-sync] failed")
+        print(traceback.format_exc())
+        return False
 
 
 def get_gid():
@@ -1046,6 +1142,7 @@ def add_admin(request):
     for entry in conn.entries:
         conn.modify(entry.entry_dn, {'Description': [(MODIFY_ADD, ['root'])]})
     conn.unbind()
+    sync_profile_groupshare_annotations(user)
 
     return Response(status=200)
 
@@ -1183,6 +1280,7 @@ def lab_delete(request):
             deleteUserModel(user)
         else:
             print("group is not empty -", len(group_list))
+            sync_profile_groupshare_annotations(user)
         print(user.username)
     # delete the group from database
     Group.objects.get(name=labname).delete()
@@ -1394,6 +1492,7 @@ def excel(request):
                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=0, labname=Group.objects.get(name=row[1].value))
                         except:
                             pass
+                sync_profile_groupshare_annotations(subuser_obj)
                 continue
             # add user into django
             user_obj = User.objects.create_user(username=row[0].value, password=row[2].value, first_name=row[4].value, last_name=row[5].value, email=row[3].value)
@@ -1545,6 +1644,7 @@ def add_user_to_lab(request):
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
+            sync_profile_groupshare_annotations(user_obj)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -1555,6 +1655,7 @@ def add_user_to_lab(request):
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
+            sync_profile_groupshare_annotations(user_obj)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -1877,6 +1978,7 @@ def remove_user_from_lab(request):
             deleteUserModel(user)
         else:
             print("group is not empty -", len(group_list))
+            sync_profile_groupshare_annotations(user_obj)
         return Response(status=200)
     except:
         return Response(status=500)
@@ -1948,6 +2050,7 @@ def remove_multiple_user_from_lab(request):
             deleteUserModel(user)
         else:
             print("group is not empty -", len(group_list))
+            sync_profile_groupshare_annotations(user_obj)
         conn.search('dc={},ou=Groups,dc=example,dc=org'.format(group), '(objectclass=posixGroup)', attributes=['*'])
         for entry in conn.entries:
             try:
