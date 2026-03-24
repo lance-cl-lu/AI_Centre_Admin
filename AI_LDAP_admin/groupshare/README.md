@@ -14,7 +14,7 @@
 - 每個 Profile namespace 一個 `PodDefault/groupshare`
 - Notebook 只要帶 `groupshare=enabled`，就會被注入掛載
 - 掛載點是 `/mnt/groups/<group>`
-- NFS 實體路徑是 `NFS_PATH/<group>`（建議 `NFS_PATH=/group`）
+- NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/kflow_dev/shared`）
 
 3. Webhook 擋繞過
 - 擋掉使用者自己宣告 `/group*` 路徑
@@ -36,7 +36,7 @@
 
 - `deploy/`
   - `controller-rbac.yaml`: controller 權限
-  - `controller-configmap.yaml`: NFS fallback 設定（例如 `NFS_SERVER`）
+  - `controller-configmap.yaml`: GroupShare 專用 NFS 設定（例如 `NFS_SERVER`、`NFS_PATH`）
   - `controller-deployment.yaml`: controller 部署
   - `webhook-rbac.yaml`: webhook 權限
   - `webhook-deployment.yaml`: webhook 部署

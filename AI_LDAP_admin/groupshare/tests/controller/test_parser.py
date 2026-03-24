@@ -5,7 +5,7 @@ import unittest
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(BASE, "controller"))
 
-from parser import intersect_groups, parse_csv_list, parse_manager_groups, to_volume_name
+from parser import build_group_nfs_path, intersect_groups, parse_csv_list, parse_manager_groups, to_volume_name
 
 
 class TestControllerParser(unittest.TestCase):
@@ -22,6 +22,10 @@ class TestControllerParser(unittest.TestCase):
     def test_group_name_sanitization_to_volume(self):
         name = to_volume_name("Lab_Vision! 2023")
         self.assertEqual(name, "gs-lab-vision-2023")
+
+    def test_build_group_nfs_path_uses_shared_root(self):
+        path = build_group_nfs_path("/kflow_dev/shared/", "MarkTest")
+        self.assertEqual(path, "/kflow_dev/shared/marktest")
 
     def test_parse_manager_groups_prefers_manager_group(self):
         annotations = {

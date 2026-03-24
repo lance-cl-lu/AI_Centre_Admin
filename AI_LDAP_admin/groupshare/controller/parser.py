@@ -55,6 +55,13 @@ def sanitize_group_token(group: str) -> str:
     return token
 
 
+def build_group_nfs_path(base_path: str, group: str) -> str:
+    sanitized = sanitize_group_token(group)
+    if not sanitized:
+        return ""
+    return f"{base_path.rstrip('/')}/{sanitized}"
+
+
 def to_volume_name(group: str) -> str:
     sanitized = sanitize_group_token(group)
     return f"gs-{sanitized}" if sanitized else "gs-unknown"

@@ -8,6 +8,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 from parser import (
+    build_group_nfs_path,
     parse_csv_list,
     parse_manager_groups,
     intersect_groups,
@@ -48,16 +49,20 @@ class GroupshareController:
             for env_var in container.env or []:
                 env_map[env_var.name] = env_var.value
 
-        nfs_path = env_map.get("NFS_PATH")
-        nfs_server = env_map.get("NFS_SERVER")
-        if not nfs_path:
-            raise RuntimeError("NFS_PATH is required in nfs-client-provisioner deployment env")
-
-        if not nfs_server:
+        cm_data = {}
+        try:
             cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
-            nfs_server = cm.data.get("NFS_SERVER") if cm and cm.data else None
-            if not nfs_server:
-                raise RuntimeError("NFS_SERVER missing from deployment env and fallback ConfigMap")
+            cm_data = cm.data or {}
+        except ApiException as exc:
+            if exc.status != 404:
+                raise
+
+        nfs_path = (cm_data.get("NFS_PATH") or env_map.get("NFS_PATH") or "").strip()
+        nfs_server = (cm_data.get("NFS_SERVER") or env_map.get("NFS_SERVER") or "").strip()
+        if not nfs_path:
+            raise RuntimeError("NFS_PATH missing from groupshare ConfigMap and provisioner deployment env")
+        if not nfs_server:
+            raise RuntimeError("NFS_SERVER missing from groupshare ConfigMap and provisioner deployment env")
 
         logger.info("[INFO] Loaded NFS settings: server=%s path=%s", nfs_server, nfs_path)
         return nfs_server, nfs_path
@@ -81,7 +86,7 @@ class GroupshareController:
             if group in admin_set:
                 sanitized_admin_volume_names.append(volume_name)
 
-            nfs_path = f"{self.nfs_path.rstrip('/')}/{mount_token}"
+            nfs_path = build_group_nfs_path(self.nfs_path, group)
             allowed_nfs_paths.append(nfs_path)
 
             volume_mounts.append(
