@@ -21,14 +21,19 @@ spec:
     spec:
       containers:
         - name: backend
-          image: docker.io/cguaicadmin/ldap_backend:v0.2.41
+          image: docker.io/cguaicadmin/ldap_backend:v0.2.42
           # image: docker.io/cguaicadmin/backend_dev:v0.3
           imagePullPolicy: Always
+          env:
+            - name: GROUPSHARE_STORAGE_ROOT
+              value: /mnt/groupshare
           ports:
             - containerPort: 8000
           volumeMounts:
             - mountPath: /code/db
               name: sqlite-data
+            - mountPath: /mnt/groupshare
+              name: groupshare-storage
       #terminationMessagePath: /dev/termination-log
       #terminationMessagePolicy: File
       dnsPolicy: ClusterFirst
@@ -40,6 +45,10 @@ spec:
         - name: sqlite-data
           persistentVolumeClaim:
             claimName: pvc-backend-sqlite
+        - name: groupshare-storage
+          nfs:
+            server: 120.126.23.7
+            path: /kflow_dev/shared
 
 ---
 kind: PersistentVolumeClaim

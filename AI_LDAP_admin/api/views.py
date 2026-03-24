@@ -3,6 +3,7 @@ from ldap3 import *
 import json, random 
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
+from django.db import transaction
 from django.core.files.storage import default_storage
 import os
 
@@ -13,6 +14,7 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
+from .groupshare_storage import ensure_groupshare_group_directory
 from . import urls
 
 from kubernetes import client, config
@@ -929,9 +931,27 @@ def addlab(request):
     if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
         return Response(status=500, data="gpuVendor is not valid")
     
-    group = Group.objects.create(name=labname)
-    GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
-    return Response(status=200, data={"message": "add lab {} success".format(labname)})
+    try:
+        with transaction.atomic():
+            group = Group.objects.create(name=labname)
+            GroupDefaultQuota.objects.create(
+                labname=group,
+                cpu_quota=cpuQuota,
+                mem_quota=memQuota,
+                gpu_quota=gpuQuota,
+                gpu_vendor=gpuVendor,
+            )
+            groupshare_path = ensure_groupshare_group_directory(labname)
+    except Exception as exc:
+        return Response(status=500, data={"message": "add lab {} failed: {}".format(labname, exc)})
+
+    return Response(
+        status=200,
+        data={
+            "message": "add lab {} success".format(labname),
+            "groupshare_path": groupshare_path,
+        },
+    )
 
 @api_view(['POST'])
 def editlab(request):
@@ -1493,8 +1513,15 @@ def excel(request):
             row[0].value = row[0].value.lower()
             row[3].value = row[3].value.lower()
             if Group.objects.filter(name=row[1].value).exists() is False:
-                group = Group.objects.create(name=row[1].value)
-                print("add lab {} success".format(row[1].value))
+                try:
+                    group = Group.objects.create(name=row[1].value)
+                    ensure_groupshare_group_directory(row[1].value)
+                    print("add lab {} success".format(row[1].value))
+                except Exception as exc:
+                    failed_user.append({row[0].value: "group {} create failed: {}".format(row[1].value, exc)})
+                    if Group.objects.filter(name=row[1].value).exists():
+                        Group.objects.get(name=row[1].value).delete()
+                    continue
             if User.objects.filter(username=row[0].value).exists() is True:
                 # check the user is in the group or not
                 subuser_obj = User.objects.get(username=row[0].value)
