@@ -53,6 +53,7 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr-data"},
             allowed_nfs_paths={"/group/hr-data"},
             admin_volume_names={"gs-admin"},
+            writable_volume_names=set(),
         )
 
         self.assertFalse(allowed)
@@ -70,6 +71,7 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr-data"},
             allowed_nfs_paths={"/exports/hr-data"},
             admin_volume_names={"gs-hr-admin"},
+            writable_volume_names=set(),
         )
 
         self.assertFalse(allowed)
@@ -86,6 +88,7 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr-data"},
             allowed_nfs_paths={"/exports/hr-data"},
             admin_volume_names={"gs-hr-admin"},
+            writable_volume_names=set(),
         )
 
         self.assertFalse(allowed)
@@ -102,6 +105,7 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr-data"},
             allowed_nfs_paths={"/exports/hr-data"},
             admin_volume_names={"gs-hr-admin"},
+            writable_volume_names=set(),
         )
 
         self.assertFalse(allowed)
@@ -120,6 +124,7 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr-data"},
             allowed_nfs_paths={"/exports/hr-data"},
             admin_volume_names={"gs-hr-admin"},
+            writable_volume_names=set(),
         )
 
         self.assertTrue(allowed)
@@ -165,6 +170,7 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr", "gs-fin"},
             allowed_nfs_paths={"/exports/hr", "/exports/fin"},
             admin_volume_names={"gs-hr"},
+            writable_volume_names=set(),
         )
 
         self.assertFalse(allowed)
@@ -186,10 +192,70 @@ class TestWebhookRules(unittest.TestCase):
             allowed_volume_names={"gs-hr"},
             allowed_nfs_paths={"/exports/hr"},
             admin_volume_names={"gs-hr"},
+            writable_volume_names=set(),
         )
 
         self.assertTrue(allowed)
         self.assertEqual(rule, "ALLOW")
+
+    def test_namespace_share_volume_can_be_rw(self):
+        nb = self._base_notebook()
+        nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0] = {
+            "name": "ns-b1144209",
+            "mountPath": "/mnt/namespaces/b1144209",
+            "readOnly": False,
+        }
+        nb["spec"]["template"]["spec"]["volumes"][0] = {
+            "name": "ns-b1144209",
+            "nfs": {
+                "server": "10.100.1.31",
+                "path": "/exports/_namespaces/b1144209",
+                "readOnly": False,
+            },
+        }
+
+        allowed, rule, _ = evaluate_rules(
+            notebook_obj=nb,
+            user_groups=["staff"],
+            expected_nfs_server="10.100.1.31",
+            allowed_volume_names={"ns-b1144209"},
+            allowed_nfs_paths={"/exports/_namespaces/b1144209"},
+            admin_volume_names=set(),
+            writable_volume_names={"ns-b1144209"},
+        )
+
+        self.assertTrue(allowed)
+        self.assertEqual(rule, "ALLOW")
+
+    def test_rule_d_label_required_for_namespace_share_volume(self):
+        nb = self._base_notebook()
+        nb["metadata"]["labels"] = {}
+        nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0] = {
+            "name": "ns-b1144209",
+            "mountPath": "/mnt/namespaces/b1144209",
+            "readOnly": False,
+        }
+        nb["spec"]["template"]["spec"]["volumes"][0] = {
+            "name": "ns-b1144209",
+            "nfs": {
+                "server": "10.100.1.31",
+                "path": "/exports/_namespaces/b1144209",
+                "readOnly": False,
+            },
+        }
+
+        allowed, rule, _ = evaluate_rules(
+            notebook_obj=nb,
+            user_groups=["staff"],
+            expected_nfs_server="10.100.1.31",
+            allowed_volume_names={"ns-b1144209"},
+            allowed_nfs_paths={"/exports/_namespaces/b1144209"},
+            admin_volume_names=set(),
+            writable_volume_names={"ns-b1144209"},
+        )
+
+        self.assertFalse(allowed)
+        self.assertEqual(rule, "Rule D")
 
 
 if __name__ == "__main__":

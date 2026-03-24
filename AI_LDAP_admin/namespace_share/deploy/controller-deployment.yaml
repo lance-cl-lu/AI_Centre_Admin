@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: namespace-share-controller
+  namespace: kubeflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: namespace-share-controller
+  template:
+    metadata:
+      labels:
+        app: namespace-share-controller
+    spec:
+      serviceAccountName: namespace-share-controller
+      containers:
+        - name: controller
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - pip install --no-cache-dir kubernetes==26.1.0 && python /app/app.py
+          env:
+            - name: NFS_NAMESPACE
+              value: kf-storage
+            - name: NFS_DEPLOYMENT
+              value: nfs-subdir-external-provisioner
+            - name: NFS_CONFIGMAP
+              value: namespace-share-nfs-defaults
+            - name: NAMESPACE_SHARE_PODDEFAULT_NAME
+              value: namespace-share
+            - name: NAMESPACE_SHARE_SELECTOR_LABEL
+              value: groupshare
+            - name: NAMESPACE_SHARE_SELECTOR_VALUE
+              value: enabled
+            - name: POLL_SECONDS
+              value: "20"
+          volumeMounts:
+            - name: controller-code
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: controller-code
+          configMap:
+            name: namespace-share-controller-code

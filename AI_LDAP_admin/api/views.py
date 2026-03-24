@@ -15,6 +15,7 @@ from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
 from .groupshare_storage import ensure_groupshare_group_directory
+from .namespace_share_storage import ensure_namespace_share_directory
 from . import urls
 
 from kubernetes import client, config
@@ -462,6 +463,7 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
         owner_email=email.lower(),
         fallback_role=manager,
     )
+    ensure_namespace_share_directory(username.lower())
 
     profile_data = {
         "apiVersion": "kubeflow.org/v1",

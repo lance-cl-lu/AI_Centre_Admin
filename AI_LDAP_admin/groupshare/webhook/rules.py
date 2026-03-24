@@ -39,6 +39,7 @@ def evaluate_rules(
     allowed_volume_names: Set[str],
     allowed_nfs_paths: Set[str],
     admin_volume_names: Set[str],
+    writable_volume_names: Set[str],
 ) -> Tuple[bool, str, str]:
     metadata = notebook_obj.get("metadata", {})
     labels = metadata.get("labels", {}) or {}
@@ -51,7 +52,7 @@ def evaluate_rules(
                 continue
             volume_name = volume.get("name", "")
             path = nfs.get("path", "")
-            if volume_name.startswith("gs-") or path.startswith("/group"):
+            if volume_name in allowed_volume_names or path in allowed_nfs_paths or path.startswith("/group"):
                 return False, "Rule D", "groupshare label is required: groupshare=enabled"
         return True, "ALLOW", "groupshare disabled: skip rules"
 
@@ -73,6 +74,7 @@ def evaluate_rules(
         server = nfs.get("server", "")
         read_only = bool(nfs.get("readOnly", False))
         is_admin_for_volume = volume_name in requested_admin_volumes
+        is_namespace_writable = volume_name in writable_volume_names
 
         if path.startswith("/group"):
             return False, "Rule A", f"forbidden NFS path: {path}"
@@ -80,16 +82,16 @@ def evaluate_rules(
         if server != expected_nfs_server:
             return False, "Rule B", f"NFS server mismatch: {server}"
 
-        if volume_name not in allowed_volume_names or not volume_name.startswith("gs-"):
+        if volume_name not in allowed_volume_names:
             return False, "Rule B", f"volume not in allowed whitelist: {volume_name}"
 
         if path not in allowed_nfs_paths:
             return False, "Rule B", f"NFS path not in allowed whitelist: {path}"
 
-        if not is_admin_for_volume and not read_only:
+        if not is_admin_for_volume and not is_namespace_writable and not read_only:
             return False, "Rule C", f"readOnly=false denied for non-admin on volume {volume_name}"
 
-        if not is_admin_for_volume and mount_readonly.get(volume_name) is False:
+        if not is_admin_for_volume and not is_namespace_writable and mount_readonly.get(volume_name) is False:
             return False, "Rule C", f"volumeMount readOnly=false denied for non-admin on volume {volume_name}"
 
     return True, "ALLOW", "request accepted"
