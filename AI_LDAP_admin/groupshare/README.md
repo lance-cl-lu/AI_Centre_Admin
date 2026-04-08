@@ -1,6 +1,6 @@
 # GroupShare for Kubeflow (v1, no quota)
 
-這套 GroupShare 的目標很簡單：
+目標：
 讓 Kubeflow Notebook 可以自動看到「自己群組的共享資料夾」，同時避免使用者繞過規則亂掛 NFS。
 
 ## GroupShare 在做什麼
