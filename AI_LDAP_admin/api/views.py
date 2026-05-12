@@ -322,7 +322,7 @@ group = 'kubeflow.org'  # CRD 的 Group
 version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
-def change_notebooks_persisitent(namespace, notebook, persisitent):
+def change_notebooks_metadata(namespace, notebook, persisitent, proxy_allow_ports):
     try:
         config.load_incluster_config()
     except ConfigException:
@@ -332,6 +332,9 @@ def change_notebooks_persisitent(namespace, notebook, persisitent):
         "metadata": {
             "labels": {
                 "persisitent": persisitent
+            },
+            "annotations": {
+                "kflow.cgu.com.tw/proxy-allow-ports": proxy_allow_ports
             }
         },
     }
@@ -352,11 +355,12 @@ def set_notebook(request):
     user = data['user']
     notebookName = data['notebookName']
     persisitent = data['persisitent']
+    proxy_allow_ports = data["proxy_allow_ports"]
 
     user_obj = User.objects.get(username=data['user'])
     profileName = get_profile_by_email(user_obj.email)
     print("profileName = ", profileName)
-    change_notebooks_persisitent(profileName, notebookName, persisitent)
+    change_notebooks_metadata(profileName, notebookName, persisitent, proxy_allow_ports)
     return Response( status=200)
     
 @api_view(['POST'])
@@ -491,8 +495,13 @@ def list_notebooks_api(namespace):
                 status =notebook["status"]["conditions"][0]["status"]
             except:
                 status = 'none'
+            
+            try:
+                proxy_allow_ports =notebook["metadata"]["annotations"]["kflow.cgu.com.tw/proxy-allow-ports"] # Patten: Add proxy-allow-ports
+            except:
+                proxy_allow_ports = ''
 
-            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "persisitent": persisitent, "status": status }
+            ResponseOne = { "name": name, "cpu": cpu, "memory": memory, "gpus": gpus, "persisitent": persisitent, "status": status, "proxy_allow_ports": proxy_allow_ports }
             Response.append(ResponseOne)
 
         print("Response = {}", Response)
