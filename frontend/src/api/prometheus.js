@@ -14,6 +14,63 @@ export const PROMETHEUS_BASE_URL = ensureBaseUrl(
   process.env.REACT_APP_PROMETHEUS_BASE_URL
 );
 
+export const PROMETHEUS_NAMESPACE_METRIC_SERVICE_STORAGE_KEY =
+  'prometheus_namespace_metric_service';
+export const DEFAULT_NAMESPACE_METRIC_SERVICE =
+  process.env.REACT_APP_PROMETHEUS_NAMESPACE_METRIC_SERVICE || 'prom-app-v71';
+
+export const PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS = [
+  {
+    value: 'prom-app-v71',
+    label: '新版 v71',
+    description: '使用新 exporter 與新驗證過的 Prometheus 資料來源。',
+  },
+  {
+    value: 'prom-app',
+    label: '舊版',
+    description: '使用目前正式環境的舊 exporter 資料來源。',
+  },
+];
+
+const VALID_NAMESPACE_METRIC_SERVICES = new Set(
+  PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS.map((option) => option.value)
+);
+
+export const getNamespaceMetricService = () => {
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem(
+      PROMETHEUS_NAMESPACE_METRIC_SERVICE_STORAGE_KEY
+    );
+    if (stored && VALID_NAMESPACE_METRIC_SERVICES.has(stored)) {
+      return stored;
+    }
+  }
+  return VALID_NAMESPACE_METRIC_SERVICES.has(DEFAULT_NAMESPACE_METRIC_SERVICE)
+    ? DEFAULT_NAMESPACE_METRIC_SERVICE
+    : 'prom-app-v71';
+};
+
+export const setNamespaceMetricService = (value) => {
+  if (!VALID_NAMESPACE_METRIC_SERVICES.has(value)) {
+    return getNamespaceMetricService();
+  }
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(
+      PROMETHEUS_NAMESPACE_METRIC_SERVICE_STORAGE_KEY,
+      value
+    );
+  }
+  return value;
+};
+
+export const getNamespaceMetricServiceOption = (value) => {
+  return (
+    PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS.find(
+      (option) => option.value === value
+    ) || PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS[0]
+  );
+};
+
 export const escapePrometheusRegex = (value) => {
   if (!value) {
     return '.*';
@@ -126,11 +183,26 @@ export const promQueryRange = async ({
   return data;
 };
 
-export const buildNamespaceQuery = (metric, namespacePattern) => {
+export const buildNamespaceQuery = (
+  metric,
+  namespacePattern,
+  serviceName = getNamespaceMetricService()
+) => {
+  const trimmed = (namespacePattern || '').trim();
+  const selectorParts = [`service="${serviceName}"`];
+  if (trimmed && trimmed !== '.*') {
+    selectorParts.push(`exported_namespace=~"${trimmed}"`);
+  } else {
+    selectorParts.push('exported_namespace=~".*"');
+  }
+  return `max by (exported_namespace) (${metric}{${selectorParts.join(',')}})`;
+};
+
+export const buildUserNamespaceQuery = (metric, namespacePattern) => {
   const trimmed = (namespacePattern || '').trim();
   const selector =
     trimmed && trimmed !== '.*'
-      ? `{exported_namespace=~"${trimmed}"}`
-      : '{exported_namespace=~".*"}';
-  return `${metric}${selector}`;
+      ? `{user_namespace=~"${trimmed}"}`
+      : '{user_namespace=~".*"}';
+  return `sum by (user_namespace) (${metric}${selector})`;
 };

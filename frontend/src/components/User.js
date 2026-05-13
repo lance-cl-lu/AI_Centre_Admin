@@ -6,54 +6,24 @@ import { Button, Card, Box, Spinner } from '@chakra-ui/react';
 import jwt_decode from "jwt-decode";
 import ListNoteBook from './ListNoteBook';
 import Swal from 'sweetalert2';
-import { promQueryRange, buildNamespaceQuery, buildNamespacePattern } from '../api/prometheus';
-
-// Fallback mock data when Prometheus data is unavailable.
-const buildFallbackUsageData = () => {
-    const formatPeriod = (date) => `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const now = new Date();
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    return [
-        {
-            period: formatPeriod(now),
-            cpuHours: 1345,
-            cpuCost: 1345,
-            gpuHours: 2234,
-            gpuCost: 2222,
-            totalCost: 3567,
-        },
-        {
-            period: formatPeriod(lastMonth),
-            cpuHours: 1280,
-            cpuCost: 1280,
-            gpuHours: 2015,
-            gpuCost: 2015,
-            totalCost: 3295,
-        },
-        {
-            period: formatPeriod(twoMonthsAgo),
-            cpuHours: 1175,
-            cpuCost: 1175,
-            gpuHours: 1890,
-            gpuCost: 1890,
-            totalCost: 3065,
-        },
-    ];
-};
+import {
+    promQueryRange,
+    buildUserNamespaceQuery,
+    buildNamespacePattern,
+} from '../api/prometheus';
 
 const createMonthlyPeriods = (count = 3, now = new Date()) => {
     const periods = [];
     const base = new Date(now);
     for (let index = 0; index < count; index += 1) {
-        const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - index, 1, 0, 0, 0));
+        const start = new Date(base.getFullYear(), base.getMonth() - index, 1, 0, 0, 0);
         let end;
         if (index === 0) {
             end = new Date(base);
         } else {
-            end = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - index + 1, 1, 0, 0, 0));
+            end = new Date(base.getFullYear(), base.getMonth() - index + 1, 1, 0, 0, 0);
         }
-        const label = `${start.getUTCFullYear()}/${String(start.getUTCMonth() + 1).padStart(2, '0')}`;
+        const label = `${start.getFullYear()}/${String(start.getMonth() + 1).padStart(2, '0')}`;
         periods.push({
             label,
             start,
@@ -64,61 +34,274 @@ const createMonthlyPeriods = (count = 3, now = new Date()) => {
 };
 
 const secondsFromDate = (date) => Math.floor(date.getTime() / 1000);
+const USAGE_QUERY_STEP_MINUTES = 1;
+const USAGE_QUERY_STEP = `${USAGE_QUERY_STEP_MINUTES}m`;
+const USAGE_QUERY_CHUNK_MAX_POINTS = 10000;
+
+const parsePrometheusDurationToSeconds = (value) => {
+    const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)(ms|s|m|h|d|w|y)$/);
+    if (!match) {
+        return 60;
+    }
+    const amount = Number(match[1]);
+    const multipliers = {
+        ms: 0.001,
+        s: 1,
+        m: 60,
+        h: 60 * 60,
+        d: 24 * 60 * 60,
+        w: 7 * 24 * 60 * 60,
+        y: 365 * 24 * 60 * 60,
+    };
+    return amount * multipliers[match[2]];
+};
+
+const getMetricKey = (metricInfo = {}) => {
+    return JSON.stringify(
+        Object.keys(metricInfo)
+            .sort()
+            .reduce((entry, key) => ({
+                ...entry,
+                [key]: metricInfo[key],
+            }), {})
+    );
+};
+
+const combineRangeChunks = (chunks) => {
+    const seriesByMetric = new Map();
+    chunks.forEach((chunk) => {
+        if (!chunk || !Array.isArray(chunk.result)) {
+            return;
+        }
+        chunk.result.forEach((series) => {
+            const metric = series.metric || {};
+            const key = getMetricKey(metric);
+            if (!seriesByMetric.has(key)) {
+                seriesByMetric.set(key, {
+                    metric,
+                    values: new Map(),
+                });
+            }
+            const entry = seriesByMetric.get(key);
+            (series.values || []).forEach(([rawTimestamp, rawValue]) => {
+                const timestamp = Number(rawTimestamp);
+                const value = Number(rawValue);
+                if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+                    return;
+                }
+                entry.values.set(timestamp, value.toString());
+            });
+        });
+    });
+
+    return {
+        result: Array.from(seriesByMetric.values()).map((series) => ({
+            metric: series.metric,
+            values: Array.from(series.values.entries())
+                .sort((left, right) => left[0] - right[0])
+                .map(([timestamp, value]) => [timestamp, value]),
+        })),
+    };
+};
+
+const promQueryRangeChunked = async ({
+    query,
+    start,
+    end,
+    step,
+    signal,
+}) => {
+    const stepSeconds = parsePrometheusDurationToSeconds(step);
+    const stepMs = Math.max(1000, stepSeconds * 1000);
+    const maxChunkSpanMs = stepMs * (USAGE_QUERY_CHUNK_MAX_POINTS - 1);
+    const endMs = end.getTime();
+    let cursorMs = start.getTime();
+    const chunks = [];
+
+    while (cursorMs <= endMs) {
+        const chunkEndMs = Math.min(endMs, cursorMs + maxChunkSpanMs);
+        const chunk = await promQueryRange({
+            query,
+            start: new Date(cursorMs),
+            end: new Date(chunkEndMs),
+            step,
+            signal,
+        });
+        chunks.push(chunk);
+        cursorMs = chunkEndMs + stepMs;
+    }
+
+    return combineRangeChunks(chunks);
+};
 
 const extractSeriesValues = (rangeData) => {
     if (!rangeData || !Array.isArray(rangeData.result) || !rangeData.result.length) {
         return [];
     }
-    const [series] = rangeData.result;
-    if (!series || !Array.isArray(series.values)) {
-        return [];
-    }
-    return series.values
-        .map(([timestamp, value]) => [Number(timestamp), Number(value)])
-        .filter(([, value]) => Number.isFinite(value));
-};
-
-const getValueAtOrBefore = (values, targetSeconds) => {
-    let candidate = null;
-    for (let index = 0; index < values.length; index += 1) {
-        const [timestamp, value] = values[index];
-        if (timestamp <= targetSeconds) {
-            candidate = value;
-        } else {
-            break;
+    const valuesByTimestamp = new Map();
+    rangeData.result.forEach((series) => {
+        if (!series || !Array.isArray(series.values)) {
+            return;
         }
-    }
-    if (candidate === null && values.length) {
-        candidate = values[0][1];
-    }
-    return candidate;
+        series.values.forEach(([timestamp, value]) => {
+            const numericTimestamp = Number(timestamp);
+            const numericValue = Number(value);
+            if (!Number.isFinite(numericTimestamp) || !Number.isFinite(numericValue)) {
+                return;
+            }
+            valuesByTimestamp.set(
+                numericTimestamp,
+                (valuesByTimestamp.get(numericTimestamp) || 0) + numericValue
+            );
+        });
+    });
+    return Array.from(valuesByTimestamp.entries()).sort((left, right) => left[0] - right[0]);
 };
 
-const computeDiffWithinRange = (values, startDate, endDate) => {
-    if (!values || !values.length) {
-        return 0;
+const getEarliestSeriesTimestamp = (rangeData) => {
+    if (!rangeData || !Array.isArray(rangeData.result)) {
+        return null;
     }
+    let earliest = null;
+    rangeData.result.forEach((series) => {
+        if (!series || !Array.isArray(series.values) || !series.values.length) {
+            return;
+        }
+        const [rawTimestamp] = series.values[0];
+        const timestamp = Number(rawTimestamp);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        if (earliest === null || timestamp < earliest) {
+            earliest = timestamp;
+        }
+    });
+    return earliest;
+};
+
+const normaliseSteppedRangeValues = (values, startSeconds, endSeconds, stepSeconds) => {
+    const sortedValues = (values || [])
+        .filter(([timestamp, value]) => (
+            Number.isFinite(timestamp)
+            && Number.isFinite(value)
+            && timestamp >= startSeconds
+            && timestamp <= endSeconds
+        ))
+        .sort((left, right) => left[0] - right[0]);
+
+    const normalised = [];
+    sortedValues.forEach(([timestamp, value], index) => {
+        normalised.push([timestamp, value]);
+        const nextTimestamp = sortedValues[index + 1]?.[0] ?? endSeconds;
+        const staleTimestamp = timestamp + stepSeconds;
+        if (staleTimestamp < Math.min(nextTimestamp, endSeconds)) {
+            normalised.push([staleTimestamp, 0]);
+        }
+    });
+    return normalised.sort((left, right) => left[0] - right[0]);
+};
+
+const summariseBillableUsage = ({
+    cpuUsageValues,
+    gpuUsageValues,
+    cpuCostRateValues,
+    gpuCostRateValues,
+    startDate,
+    endDate,
+    cpuCostPerMinute,
+    gpuCostPerMinute,
+}) => {
     const startSeconds = secondsFromDate(startDate);
     const endSeconds = secondsFromDate(endDate);
-    const startValue = getValueAtOrBefore(values, startSeconds);
-    const endValue = getValueAtOrBefore(values, endSeconds);
-    if (endValue === null) {
-        return 0;
-    }
-    if (startValue !== null) {
-        const diff = endValue - startValue;
-        if (Number.isFinite(diff) && diff > 0) {
-            return diff;
-        }
-    }
-    return Number.isFinite(endValue) && endValue > 0 ? endValue : 0;
-};
+    const stepSeconds = parsePrometheusDurationToSeconds(USAGE_QUERY_STEP);
+    const cpuSeries = normaliseSteppedRangeValues(
+        cpuUsageValues,
+        startSeconds,
+        endSeconds,
+        stepSeconds,
+    );
+    const gpuSeries = normaliseSteppedRangeValues(
+        gpuUsageValues,
+        startSeconds,
+        endSeconds,
+        stepSeconds,
+    );
+    const cpuCostRateSeries = normaliseSteppedRangeValues(
+        cpuCostRateValues,
+        startSeconds,
+        endSeconds,
+        stepSeconds,
+    );
+    const gpuCostRateSeries = normaliseSteppedRangeValues(
+        gpuCostRateValues,
+        startSeconds,
+        endSeconds,
+        stepSeconds,
+    );
+    const cpuByTimestamp = new Map(cpuSeries);
+    const gpuByTimestamp = new Map(gpuSeries);
+    const cpuCostRateByTimestamp = new Map(cpuCostRateSeries);
+    const gpuCostRateByTimestamp = new Map(gpuCostRateSeries);
+    const timeline = Array.from(new Set([
+        ...cpuByTimestamp.keys(),
+        ...gpuByTimestamp.keys(),
+        ...cpuCostRateByTimestamp.keys(),
+        ...gpuCostRateByTimestamp.keys(),
+    ])).sort((left, right) => left - right);
 
-const minutesToHours = (minutes) => {
-    if (!Number.isFinite(minutes)) {
-        return 0;
-    }
-    return minutes / 60;
+    let currentCpu = 0;
+    let currentGpu = 0;
+    let currentCpuCostRate = 0;
+    let currentGpuCostRate = 0;
+    let previousTimestamp = startSeconds;
+    const totals = {
+        cpuActiveMinutes: 0,
+        gpuActiveMinutes: 0,
+        cpuCost: 0,
+        gpuCost: 0,
+    };
+
+    const addInterval = (nextTimestamp) => {
+        const boundedTimestamp = Math.min(nextTimestamp, endSeconds);
+        const durationMinutes = Math.max(0, boundedTimestamp - previousTimestamp) / 60;
+        if (!durationMinutes) {
+            return;
+        }
+        if (currentCpuCostRate > 0) {
+            totals.cpuActiveMinutes += durationMinutes;
+            totals.cpuCost += currentCpu * durationMinutes * cpuCostPerMinute;
+        }
+        if (currentGpuCostRate > 0) {
+            totals.gpuActiveMinutes += durationMinutes;
+            totals.gpuCost += currentGpu * durationMinutes * gpuCostPerMinute;
+        }
+    };
+
+    timeline.forEach((timestamp) => {
+        addInterval(timestamp);
+        previousTimestamp = Math.min(timestamp, endSeconds);
+        if (cpuByTimestamp.has(timestamp)) {
+            currentCpu = cpuByTimestamp.get(timestamp);
+        }
+        if (gpuByTimestamp.has(timestamp)) {
+            currentGpu = gpuByTimestamp.get(timestamp);
+        }
+        if (cpuCostRateByTimestamp.has(timestamp)) {
+            currentCpuCostRate = cpuCostRateByTimestamp.get(timestamp);
+        }
+        if (gpuCostRateByTimestamp.has(timestamp)) {
+            currentGpuCostRate = gpuCostRateByTimestamp.get(timestamp);
+        }
+    });
+    addInterval(endSeconds);
+
+    return {
+        cpuHours: totals.cpuActiveMinutes / 60,
+        gpuHours: totals.gpuActiveMinutes / 60,
+        cpuCost: totals.cpuCost,
+        gpuCost: totals.gpuCost,
+        totalCost: totals.cpuCost + totals.gpuCost,
+    };
 };
 
 const usageRecordHasData = (record) => {
@@ -142,7 +325,6 @@ function User() {
     const [usageRecords, setUsageRecords] = useState([]);
     const [selectedUsagePeriod, setSelectedUsagePeriod] = useState('');
     const usageFetchAbort = useRef(null);
-    const usageFallbackRef = useRef(buildFallbackUsageData());
     const [usageNotice, setUsageNotice] = useState('');
     useEffect(() => {
         if (usageFetchAbort.current) {
@@ -419,71 +601,107 @@ function User() {
             const now = new Date();
             const periods = createMonthlyPeriods(3, now);
             const rangeStart = periods[periods.length - 1].start;
-            const rangeEnd = new Date(periods[0].end);
-            const queryOptions = {
-                start: rangeStart,
-                end: rangeEnd,
-                step: '1d',
+            const costConfigResponse = await fetch('/api/node-resource-monitor/config/', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 signal: controller.signal,
-            };
-            const queryConfigs = [
-                { key: 'cpuCost', metric: 'namespace_cpu_cost' },
-                { key: 'cpuTime', metric: 'namespace_cpu_cost_time' },
-                { key: 'gpuCost', metric: 'namespace_gpu_cost' },
-                { key: 'gpuTime', metric: 'namespace_gpu_cost_time' },
-            ];
-            const queryResults = await Promise.allSettled(
-                queryConfigs.map(({ metric }) =>
-                    promQueryRange({
-                        query: buildNamespaceQuery(metric, namespacePattern),
-                        ...queryOptions,
-                    })
-                )
-            );
-            const ranges = {};
-            const missingMetrics = [];
-            queryResults.forEach((result, index) => {
-                const { key, metric } = queryConfigs[index];
-                if (result.status === 'fulfilled') {
-                    ranges[key] = result.value;
-                } else {
-                    ranges[key] = null;
-                    missingMetrics.push(metric);
-                    console.warn(`Prometheus query failed for ${metric}`, result.reason);
-                }
             });
-            const successfulCount = queryResults.filter((result) => result.status === 'fulfilled').length;
+            if (!costConfigResponse.ok) {
+                throw new Error('Failed to load Node Resource Monitor cost config.');
+            }
+            const costConfig = await costConfigResponse.json();
+            const cpuCostPerMinute = toNumber(costConfig?.cpuCostPerMinute);
+            const gpuCostPerMinute = toNumber(costConfig?.gpuCostPerMinute);
+            const queryConfigs = [
+                { key: 'cpuUsage', metric: 'cgu_namespace_billable_cpu_cores' },
+                { key: 'gpuUsage', metric: 'cgu:namespace_billable_gpu_cards_total' },
+                { key: 'cpuCostRate', metric: 'cgu_namespace_billable_cpu_cost_per_minute' },
+                { key: 'gpuCostRate', metric: 'cgu_namespace_billable_gpu_cost_per_minute' },
+            ];
+            const missingMetrics = new Set();
+            let successfulCount = 0;
+            let earliestAvailableTimestamp = null;
+            const records = await Promise.all(periods.map(async ({ label, start, end }) => {
+                const queryResults = await Promise.allSettled(
+                    queryConfigs.map(({ metric }) =>
+                        promQueryRangeChunked({
+                            query: buildUserNamespaceQuery(metric, namespacePattern),
+                            start,
+                            end,
+                            step: USAGE_QUERY_STEP,
+                            signal: controller.signal,
+                        })
+                    )
+                );
+                const ranges = {};
+                queryResults.forEach((result, index) => {
+                    const { key, metric } = queryConfigs[index];
+                    if (result.status === 'fulfilled') {
+                        ranges[key] = result.value;
+                        successfulCount += 1;
+                        const metricEarliest = getEarliestSeriesTimestamp(result.value);
+                        if (
+                            Number.isFinite(metricEarliest)
+                            && (
+                                earliestAvailableTimestamp === null
+                                || metricEarliest < earliestAvailableTimestamp
+                            )
+                        ) {
+                            earliestAvailableTimestamp = metricEarliest;
+                        }
+                    } else {
+                        ranges[key] = null;
+                        missingMetrics.add(metric);
+                        console.warn(`Prometheus query failed for ${metric}`, result.reason);
+                    }
+                });
+                const cpuUsageValues = extractSeriesValues(ranges.cpuUsage);
+                const gpuUsageValues = extractSeriesValues(ranges.gpuUsage);
+                const cpuCostRateValues = extractSeriesValues(ranges.cpuCostRate);
+                const gpuCostRateValues = extractSeriesValues(ranges.gpuCostRate);
+                const usageSummary = summariseBillableUsage({
+                    cpuUsageValues,
+                    gpuUsageValues,
+                    cpuCostRateValues,
+                    gpuCostRateValues,
+                    startDate: start,
+                    endDate: end,
+                    cpuCostPerMinute,
+                    gpuCostPerMinute,
+                });
+                return {
+                    period: label,
+                    cpuHours: usageSummary.cpuHours,
+                    cpuCost: usageSummary.cpuCost,
+                    gpuHours: usageSummary.gpuHours,
+                    gpuCost: usageSummary.gpuCost,
+                    totalCost: usageSummary.totalCost,
+                };
+            }));
             if (successfulCount === 0) {
                 throw new Error('All Prometheus usage queries failed.');
             }
-            const cpuCostValues = extractSeriesValues(ranges.cpuCost);
-            const cpuTimeValues = extractSeriesValues(ranges.cpuTime);
-            const gpuCostValues = extractSeriesValues(ranges.gpuCost);
-            const gpuTimeValues = extractSeriesValues(ranges.gpuTime);
-            const records = periods.map(({ label, start, end }) => {
-                const cpuCostDelta = computeDiffWithinRange(cpuCostValues, start, end);
-                const gpuCostDelta = computeDiffWithinRange(gpuCostValues, start, end);
-                const cpuMinutes = computeDiffWithinRange(cpuTimeValues, start, end);
-                const gpuMinutes = computeDiffWithinRange(gpuTimeValues, start, end);
-                const cpuHours = minutesToHours(cpuMinutes);
-                const gpuHours = minutesToHours(gpuMinutes);
-                const totalCost = cpuCostDelta + gpuCostDelta;
-                return {
-                    period: label,
-                    cpuHours,
-                    cpuCost: cpuCostDelta,
-                    gpuHours,
-                    gpuCost: gpuCostDelta,
-                    totalCost,
-                };
-            });
             applyUsageRecords(records);
             const hasData = records.some(usageRecordHasData);
             if (hasData) {
-                if (missingMetrics.length) {
-                    setUsageNotice(`資料來源：Prometheus；部分指標 (${missingMetrics.join(', ')}) 尚未回報，已以 0 顯示。`);
+                const notices = [
+                    `資料來源：Prometheus v71；只列入歷史費用率大於 0 的區段，費用使用目前設定 CPU ${cpuCostPerMinute} / min、GPU ${gpuCostPerMinute} / min。`
+                ];
+                if (
+                    earliestAvailableTimestamp !== null
+                    && earliestAvailableTimestamp > secondsFromDate(rangeStart)
+                ) {
+                    notices.push(
+                        `目前最早僅查得到 ${new Date(earliestAvailableTimestamp * 1000).toLocaleDateString()} 之後的歷史資料，較早月份會顯示 0。`
+                    );
+                }
+                if (missingMetrics.size) {
+                    notices.push(`部分指標 (${Array.from(missingMetrics).join(', ')}) 尚未回報，已以 0 顯示。`);
+                    setUsageNotice(notices.join(' '));
                 } else {
-                    setUsageNotice('資料來源：Prometheus namespace_cpu_cost / namespace_gpu_cost 指標。');
+                    setUsageNotice(notices.join(' '));
                 }
             } else {
                 setUsageNotice('Prometheus 尚未回報此使用者的使用紀錄，顯示為 0。');
@@ -492,15 +710,10 @@ function User() {
             if (error.name === 'AbortError') {
                 return;
             }
-            console.warn('Failed to load usage data from Prometheus, fallback to mock data.', error);
-            setUsageError('');
-            setUsageNotice('暫以示意資料呈現，後續將串接 K8s/Prometheus 資料。');
-            const fallbackRecords = usageFallbackRef.current;
-            if (fallbackRecords && fallbackRecords.length) {
-                applyUsageRecords(fallbackRecords);
-            } else {
-                applyUsageRecords([]);
-            }
+            console.warn('Failed to load usage data from Prometheus.', error);
+            setUsageError(error.message || '無法取得 Prometheus usage 資料。');
+            setUsageNotice('');
+            applyUsageRecords([]);
         } finally {
             if (!controller.signal.aborted) {
                 setUsageLoading(false);
@@ -645,22 +858,24 @@ function User() {
                 {usageVisible && (
                     <Card className="card-css usage-card">
                         <div className="usage-card-header">
-                            <Form.Select
-                                className="usage-select"
-                                value={selectedUsagePeriod || ''}
-                                onChange={(event) => setSelectedUsagePeriod(event.target.value)}
-                                disabled={usageRecords.length === 0 || usageLoading}
-                            >
-                                {usageRecords.length === 0 ? (
-                                    <option value="">No usage data</option>
-                                ) : (
-                                    usageRecords.map((record) => (
-                                        <option key={record.period} value={record.period}>
-                                            {record.period}
-                                        </option>
-                                    ))
-                                )}
-                            </Form.Select>
+                            <div className="d-flex gap-2 flex-wrap w-100">
+                                <Form.Select
+                                    className="usage-select"
+                                    value={selectedUsagePeriod || ''}
+                                    onChange={(event) => setSelectedUsagePeriod(event.target.value)}
+                                    disabled={usageRecords.length === 0 || usageLoading}
+                                >
+                                    {usageRecords.length === 0 ? (
+                                        <option value="">No usage data</option>
+                                    ) : (
+                                        usageRecords.map((record) => (
+                                            <option key={record.period} value={record.period}>
+                                                {record.period}
+                                            </option>
+                                        ))
+                                    )}
+                                </Form.Select>
+                            </div>
                         </div>
                         <div className="usage-card-body">
                             {usageLoading ? (

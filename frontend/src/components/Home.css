@@ -161,4 +161,14 @@
     font-size: 0.85rem;
     text-align: right;
 }
+.usage-detail-title {
+    margin-top: 16px;
+    font-weight: 600;
+    color: #343a40;
+}
+.usage-detail-table td:nth-child(2),
+.usage-detail-table td:nth-child(3) {
+    text-align: left;
+    white-space: nowrap;
+}
   

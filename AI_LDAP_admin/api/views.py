@@ -36,6 +36,19 @@ NODE_RESOURCE_MONITOR_CONFIGMAP = os.environ.get(
     'NODE_RESOURCE_MONITOR_CONFIGMAP',
     'node-resource-monitor-config',
 )
+NODE_RESOURCE_MONITOR_V2_CONFIGMAP = os.environ.get(
+    'NODE_RESOURCE_MONITOR_V2_CONFIGMAP',
+    'node-resource-monitor-config-v71',
+)
+NODE_RESOURCE_MONITOR_CONFIGMAPS = [
+    name.strip()
+    for name in os.environ.get(
+        'NODE_RESOURCE_MONITOR_CONFIGMAPS',
+        f'{NODE_RESOURCE_MONITOR_CONFIGMAP},{NODE_RESOURCE_MONITOR_V2_CONFIGMAP}',
+    ).split(',')
+    if name.strip()
+]
+NODE_RESOURCE_MONITOR_CONFIGMAPS = list(dict.fromkeys(NODE_RESOURCE_MONITOR_CONFIGMAPS))
 NODE_RESOURCE_MONITOR_NAMESPACE = os.environ.get(
     'NODE_RESOURCE_MONITOR_NAMESPACE',
     'cgu',
@@ -54,14 +67,33 @@ def ensure_k8s_config():
         config.load_kube_config()
 
 
-def build_cost_response(config_map):
+def cost_config_payload(config_map):
     data = getattr(config_map, 'data', None) or {}
     return {
-        'name': NODE_RESOURCE_MONITOR_CONFIGMAP,
+        'name': config_map.metadata.name,
         'namespace': NODE_RESOURCE_MONITOR_NAMESPACE,
         'cpuCostPerMinute': data.get('CPU_COST_PER_MINUTE'),
         'gpuCostPerMinute': data.get('GPU_COST_PER_MINUTE'),
     }
+
+
+def build_cost_response(config_maps):
+    primary = config_maps[0]
+    response = cost_config_payload(primary)
+    response['configMaps'] = [cost_config_payload(config_map) for config_map in config_maps]
+    return response
+
+
+def read_monitor_config_maps(v1):
+    config_maps = []
+    for name in NODE_RESOURCE_MONITOR_CONFIGMAPS:
+        config_maps.append(
+            v1.read_namespaced_config_map(
+                name,
+                NODE_RESOURCE_MONITOR_NAMESPACE,
+            )
+        )
+    return config_maps
 
 
 def format_cost_value(value):
@@ -2205,17 +2237,14 @@ def node_resource_monitor_config(request):
 
     v1 = client.CoreV1Api()
     try:
-        config_map = v1.read_namespaced_config_map(
-            NODE_RESOURCE_MONITOR_CONFIGMAP,
-            NODE_RESOURCE_MONITOR_NAMESPACE,
-        )
+        config_maps = read_monitor_config_maps(v1)
     except ApiException as exc:
         status_code = exc.status or 500
         message = exc.reason or '讀取 ConfigMap 失敗。'
         return Response({'detail': message}, status=status_code)
 
     if request.method == 'GET':
-        return Response(build_cost_response(config_map), status=200)
+        return Response(build_cost_response(config_maps), status=200)
 
     payload = request.data or {}
     updates = {}
@@ -2237,18 +2266,30 @@ def node_resource_monitor_config(request):
     if not updates:
         return Response({'detail': '請至少提供一個費率數值。'}, status=400)
 
-    try:
-        patched = v1.patch_namespaced_config_map(
-            NODE_RESOURCE_MONITOR_CONFIGMAP,
-            NODE_RESOURCE_MONITOR_NAMESPACE,
-            {'data': updates},
-        )
-    except ApiException as exc:
-        status_code = exc.status or 500
-        message = exc.reason or '更新 ConfigMap 失敗。'
-        return Response({'detail': message}, status=status_code)
+    patched_config_maps = []
+    patch_errors = {}
+    for config_map_name in NODE_RESOURCE_MONITOR_CONFIGMAPS:
+        try:
+            patched_config_maps.append(
+                v1.patch_namespaced_config_map(
+                    config_map_name,
+                    NODE_RESOURCE_MONITOR_NAMESPACE,
+                    {'data': updates},
+                )
+            )
+        except ApiException as exc:
+            patch_errors[config_map_name] = exc.reason or '更新 ConfigMap 失敗。'
 
-    return Response(build_cost_response(patched), status=200)
+    if patch_errors:
+        return Response(
+            {
+                'detail': '部分 Node Resource Monitor ConfigMap 更新失敗。',
+                'errors': patch_errors,
+            },
+            status=500,
+        )
+
+    return Response(build_cost_response(patched_config_maps), status=200)
 
 # Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
 @api_view(["POST"])
