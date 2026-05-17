@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: announcement-configmap-access
+  namespace: kubeflow
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: announcement-configmap-access-binding
+  namespace: kubeflow
+subjects:
+  - kind: ServiceAccount
+    name: backend-service-account
+    namespace: ldap
+roleRef:
+  kind: Role
+  name: announcement-configmap-access
+  apiGroup: rbac.authorization.k8s.io
+

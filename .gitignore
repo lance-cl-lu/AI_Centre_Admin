@@ -38,6 +38,12 @@ flymd.*
 package-lock.json
 
 # Go compiled binaries
+
+# Python venv
+AI_LDAP_admin/venv/
+node_modules/
+AI_LDAP_admin/node_modules/
+frontend/build_old/
 controller101/main
 controller101/mykubeclient
 QNAPController/main

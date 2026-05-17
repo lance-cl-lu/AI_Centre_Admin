@@ -2,6 +2,10 @@
   "name": "CGU_AI_LDAP_admin_frontend",
   "version": "0.3.0",
   "private": true,
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  },
   "dependencies": {
     "@canvas-fonts/helvetica": "^1.0.4",
     "@chakra-ui/react": "^2.8.2",
@@ -10,7 +14,7 @@
     "@fontsource/roboto": "^5.0.13",
     "@mui/icons-material": "^5.16.7",
     "@mui/lab": "^5.0.0-alpha.122",
-    "@mui/material": " 5.10.0",
+    "@mui/material": "^5.16.7",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",

@@ -1,5 +1,6 @@
 from django.urls import path, re_path
 from .views import *
+from .announcement_api import AnnouncementList, AnnouncementDetail
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -54,6 +55,9 @@ urlpatterns = [
     # path("ldap/danger/", remove_all_entr, name="danger"),
     path("broadcast/", broadcast_email, name="broadcast_email"),
     path("group/broadcast/", group_broadcast_email, name="group_broadcast_email"),
+    # Announcement API
+    path("announcements/", AnnouncementList.as_view(), name="announcement_list"),
+    path("announcements/<int:pk>/", AnnouncementDetail.as_view(), name="announcement_detail"),
 ]
 
 # LDAP_IP = '120.126.23.245'

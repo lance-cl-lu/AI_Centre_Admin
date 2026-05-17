@@ -39,12 +39,16 @@ function Dropdown() {
           null
           }
         </li> */}
-        { permission === 'root' ? 
-        <li>
-          <Link to="/broadcast" className="dropdown-item">Broadcast</Link>
-        </li>
-        : null
-        }
+        { (permission === 'root' || (permission && permission.endsWith('admin'))) && (
+        <>
+          <li>
+            <Link to="/announcement" className="dropdown-item">Announcement</Link>
+          </li>
+          <li>
+            <Link to="/broadcast" className="dropdown-item">Broadcast</Link>
+          </li>
+        </>
+        ) }
         <li>
           <Link to="/" className="dropdown-item" onClick={logoutUser}>
             Logout
