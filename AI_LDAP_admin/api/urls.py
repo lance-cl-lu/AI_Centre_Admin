@@ -1,8 +1,8 @@
 from django.urls import path, re_path
 from .views import *
 from .announcement_api import AnnouncementList, AnnouncementDetail
+from .serializers import MyTokenObtainPairView
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
 
@@ -10,7 +10,7 @@ urlpatterns = [
     path("check/syschronize/", db_ldap_check, name="db_ldap_check"),
     path("home/", user_group_num, name="user_group_num"),
     path("syschronize_ldap/", syschronize_ldap, name="syschronize_ldap"),
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path("ldap/info/", get_group_corresponding_user, name="get_group_corresponding_user"),
     

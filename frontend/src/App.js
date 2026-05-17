@@ -28,6 +28,7 @@ import Move from "./components/Move"
 import './components/Lab.css';    
 import Broadcast from './components/Broadcast';
 import Announcement from './components/Announcement';
+import AnnouncementEdit from './components/AnnouncementEdit';
 function App() {
   let user = useContext(AuthContext).user;
   const [ permission ] = useState(() =>localStorage.getItem('authToken') ? jwt_decode(localStorage.getItem('authToken'))['permission'] : null)
@@ -69,6 +70,7 @@ function App() {
                     <Route path="move/" element={<Move/>}/>
                     <Route path="broadcast/" element={<Broadcast/>}/>
                     <Route path="announcement" element={<Announcement />} />
+                    <Route path="announcement/edit/:id" element={<AnnouncementEdit />} />
                     <Route path="/group/broadcast" element={<Broadcast isGroupBroadcast={true} />}/>
                     <Route path="*" element={<Home />} />
                   </Routes>

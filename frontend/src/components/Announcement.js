@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getAuthHeaders, handleUnauthorized } from '../utils/auth';
 
 const MOCK_ANNOUNCEMENTS = {
   announcements: [
@@ -28,71 +30,10 @@ const MOCK_ANNOUNCEMENTS = {
 
 const USE_MOCK_DATA = process.env.REACT_APP_ANNOUNCEMENT_MODE === 'mock';
 
-const decodeJwtPayload = (token) => {
-  if (!token || typeof token !== 'string') {
-    return null;
-  }
-
-  const segments = token.split('.');
-  if (segments.length !== 3) {
-    return null;
-  }
-
-  try {
-    const base64 = segments[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
-    return JSON.parse(atob(padded));
-  } catch (error) {
-    return null;
-  }
-};
-
-const getAccessToken = () => {
-  const raw = localStorage.getItem('authToken');
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.access) {
-      const payload = decodeJwtPayload(parsed.access);
-      if (payload?.token_type === 'access' && (!payload.exp || payload.exp * 1000 > Date.now())) {
-        return parsed.access;
-      }
-      return null;
-    }
-  } catch (error) {
-    // Legacy format may store only the access token string.
-  }
-
-  const payload = decodeJwtPayload(raw);
-  if (payload?.token_type === 'access' && (!payload.exp || payload.exp * 1000 > Date.now())) {
-    return raw;
-  }
-
-  return null;
-};
-
-const getAuthHeaders = () => {
-  const token = getAccessToken();
-  if (!token) {
-    return {
-      'Content-Type': 'application/json',
-    };
-  }
-
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
-};
-
 const Announcement = () => {
+  const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({});
   const [isAppendOpen, setIsAppendOpen] = useState(false);
   const [appendData, setAppendData] = useState({
     date: '',
@@ -118,8 +59,9 @@ const Announcement = () => {
     setError('');
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/announcements/', {
-        headers: getAuthHeaders(),
+        headers,
       });
 
       let payload = null;
@@ -130,6 +72,10 @@ const Announcement = () => {
       }
 
       if (!res.ok) {
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         const detail = payload && payload.detail ? payload.detail : `HTTP ${res.status}`;
         throw new Error(detail);
       }
@@ -164,13 +110,22 @@ const Announcement = () => {
       return;
     }
     try {
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) {
+        handleUnauthorized();
+        return;
+      }
       const res = await fetch('/api/announcements/', {
         method: 'DELETE',
-        headers: getAuthHeaders(),
+        headers,
         body: JSON.stringify({ ids: selected }),
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         throw new Error(`HTTP ${res.status}`);
       }
 
@@ -182,13 +137,7 @@ const Announcement = () => {
   };
 
   const handleEditOpen = (row) => {
-    setEditData(row);
-    setEditingId(row.id);
-  };
-
-  const handleEditClose = () => {
-    setEditingId(null);
-    setEditData({});
+    navigate(`/announcement/edit/${row.id}`);
   };
 
   const handleAppendOpen = () => {
@@ -227,15 +176,24 @@ const Announcement = () => {
     }
 
     try {
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) {
+        handleUnauthorized();
+        return;
+      }
       const res = await fetch('/api/announcements/', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers,
         body: JSON.stringify({
           announcements: [nextItem, ...announcements],
         }),
       });
 
       if (!res.ok) {
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         throw new Error(`HTTP ${res.status}`);
       }
 
@@ -243,33 +201,6 @@ const Announcement = () => {
       fetchAnnouncements();
     } catch (err) {
       setError(`新增失敗：${err.message}`);
-    }
-  };
-
-  const handleEditSave = async () => {
-    setError('');
-    if (USE_MOCK_DATA) {
-      setAnnouncements((prev) =>
-        prev.map((item) => (item.id === editData.id ? { ...item, ...editData } : item))
-      );
-      setEditingId(null);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/announcements/${editData.id}/`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(editData),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      setEditingId(null);
-      fetchAnnouncements();
-    } catch (err) {
-      setError(`更新失敗：${err.message}`);
     }
   };
 
@@ -383,33 +314,6 @@ const Announcement = () => {
         </div>
       )}
 
-      {editingId !== null && (
-        <div style={{ marginTop: '16px', padding: '12px', border: '1px solid #ccc', borderRadius: '10px', background: '#fcfcfc' }}>
-          <h3>編輯 Announcement #{editingId}</h3>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <input
-              value={editData.title || ''}
-              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-              placeholder="標題"
-            />
-            <textarea
-              value={editData.content || ''}
-              onChange={(e) => setEditData({ ...editData, content: e.target.value })}
-              placeholder="內容"
-              rows={3}
-            />
-            <input
-              value={editData.type || ''}
-              onChange={(e) => setEditData({ ...editData, type: e.target.value })}
-              placeholder="類型"
-            />
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="button" onClick={handleEditSave} style={{ border: '1px solid #146c43', background: '#e8f5ee', color: '#146c43', padding: '8px 14px', borderRadius: '8px' }}>儲存</button>
-              <button type="button" onClick={handleEditClose} style={{ border: '1px solid #667085', background: '#f2f4f7', color: '#344054', padding: '8px 14px', borderRadius: '8px' }}>取消</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

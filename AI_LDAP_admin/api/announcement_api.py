@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import date
 
 import yaml
 from kubernetes import client, config
@@ -8,6 +9,7 @@ from kubernetes.config.config_exception import ConfigException
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from .models import UserDetail
 
 ANNOUNCEMENT_CONFIGMAP_NAME = os.environ.get(
     'ANNOUNCEMENT_CONFIGMAP_NAME',
@@ -19,14 +21,14 @@ ANNOUNCEMENT_CONFIGMAP_NAMESPACE = os.environ.get(
 )
 ANNOUNCEMENT_DATA_KEY = os.environ.get(
     'ANNOUNCEMENT_CONFIGMAP_KEY',
-    'announcements.yaml',
+    'announcements.json',
 )
 ANNOUNCEMENT_CANDIDATE_KEYS = (
     ANNOUNCEMENT_DATA_KEY,
-    'announcements',
-    'announcements.yaml',
-    'announcements.yml',
     'announcements.json',
+    'announcements',
+    'announcements.yml',
+    'announcements.yaml',
 )
 
 
@@ -104,6 +106,10 @@ def normalize_announcements(items):
     return normalized
 
 
+def current_announcement_date():
+    return date.today().isoformat()
+
+
 def get_announcement_configmap():
     ensure_k8s_config()
     v1 = client.CoreV1Api()
@@ -129,11 +135,15 @@ def read_announcements_from_configmap(config_map):
 
 def save_announcements_to_configmap(v1, config_map, announcements, data_key):
     current_data = dict(getattr(config_map, 'data', None) or {})
-    current_data[data_key] = yaml.safe_dump(
-        {'announcements': announcements},
-        allow_unicode=True,
-        sort_keys=False,
-    )
+    payload = {
+        'announcements': announcements,
+    }
+    target_key = ANNOUNCEMENT_DATA_KEY or 'announcements.json'
+    current_data[target_key] = json.dumps(payload, ensure_ascii=False, indent=2)
+
+    if data_key and data_key != target_key and data_key in current_data:
+        del current_data[data_key]
+
     return v1.patch_namespaced_config_map(
         ANNOUNCEMENT_CONFIGMAP_NAME,
         ANNOUNCEMENT_CONFIGMAP_NAMESPACE,
@@ -141,8 +151,34 @@ def save_announcements_to_configmap(v1, config_map, announcements, data_key):
     )
 
 
+class AnnouncementWritePermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return False
+
+        if user.is_staff or user.is_superuser or user.username == 'root':
+            return True
+
+        if UserDetail.objects.filter(uid=user.id, permission__in=[0, 1]).exists():
+            return True
+
+        token = getattr(request, 'auth', None)
+        permission = None
+        if token is not None:
+            if hasattr(token, 'get'):
+                permission = token.get('permission')
+            else:
+                permission = getattr(token, 'payload', {}).get('permission')
+
+        return permission in {'admin', 'root'}
+
+
 class AnnouncementList(APIView):
-    permission_classes = [permissions.AllowAny]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return [AnnouncementWritePermission()]
 
     def get(self, request):
         try:
@@ -198,9 +234,32 @@ class AnnouncementList(APIView):
         return Response({'status': 'deleted', 'announcements': announcements})
 
 class AnnouncementDetail(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [permissions.AllowAny()]
+        return [AnnouncementWritePermission()]
+
+    def get(self, request, pk):
+        try:
+            _, config_map = get_announcement_configmap()
+            announcements, _ = read_announcements_from_configmap(config_map)
+        except ConfigException as exc:
+            return Response({'detail': f'無法載入 Kubernetes 設定：{exc}'}, status=500)
+        except ApiException as exc:
+            status_code = exc.status or 500
+            message = exc.reason or '讀取 ConfigMap 失敗。'
+            return Response({'detail': message}, status=status_code)
+
+        for item in announcements:
+            if item.get('id') == pk:
+                return Response({'announcement': item})
+
+        return Response({'detail': 'announcement not found'}, status=404)
 
     def patch(self, request, pk):
+        if not isinstance(request.data, dict):
+            return Response({'detail': 'invalid payload'}, status=400)
+
         try:
             v1, config_map = get_announcement_configmap()
             announcements, data_key = read_announcements_from_configmap(config_map)
@@ -215,7 +274,12 @@ class AnnouncementDetail(APIView):
         for index, item in enumerate(announcements):
             if item.get('id') == pk:
                 merged = dict(item)
-                merged.update(request.data or {})
+                merged.update({
+                    'title': request.data.get('title', item.get('title', '')),
+                    'content': request.data.get('content', item.get('content', '')),
+                    'type': request.data.get('type', item.get('type', '')),
+                    'date': current_announcement_date(),
+                })
                 updated_announcement = normalize_announcement(merged, pk)
                 announcements[index] = updated_announcement
                 break

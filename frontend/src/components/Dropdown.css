@@ -2,16 +2,19 @@
     position: relative;
     display: inline-block;
     width: 100%;
+    overflow: visible;
 }
 .dropdown ul{
     position: absolute;
     z-index: 999;
-    width: 60px;
+    min-width: 220px;
+    width: max-content;
+    max-width: calc(100vw - 24px);
     display: inline-flex;
     flex-direction: column;
     list-style: none;
     padding: 0;
-    right: -17px;
+    right: 0;
     margin-top: 57px;
     background-color: #333;
     border: 1px solid #333;
@@ -19,12 +22,12 @@
     transition: all 0.5s ease-in-out;
 }
 .dropdown li{
-    height: 50px;
+    min-height: 50px;
     display: flex;
     padding: 8px 12px;
     background-color: #333;
     border: none;
-    margin: 8px;
+    margin: 6px 8px;
 }
 .dropdown li:hover {
     cursor: pointer;
@@ -42,8 +45,9 @@
 .dropdown a{
     display: flex;
     width: 100%;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
+    white-space: nowrap;
 }
 .dropdown a:hover{
     background-color: #333;
