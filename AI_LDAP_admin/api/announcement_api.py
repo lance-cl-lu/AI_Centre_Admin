@@ -214,6 +214,9 @@ class AnnouncementList(APIView):
 
     def delete(self, request):
         ids = request.data.get('ids', [])
+        if not isinstance(ids, list) or len(ids) == 0:
+            return Response({'detail': 'ids is required'}, status=400)
+
         try:
             ids = {int(value) for value in ids}
         except (TypeError, ValueError):
@@ -222,6 +225,8 @@ class AnnouncementList(APIView):
         try:
             v1, config_map = get_announcement_configmap()
             announcements, data_key = read_announcements_from_configmap(config_map)
+            existing_ids = {item.get('id') for item in announcements}
+            deleted_ids = sorted([item_id for item_id in ids if item_id in existing_ids])
             announcements = [item for item in announcements if item.get('id') not in ids]
             save_announcements_to_configmap(v1, config_map, announcements, data_key)
         except ConfigException as exc:
@@ -231,7 +236,12 @@ class AnnouncementList(APIView):
             message = exc.reason or '更新 ConfigMap 失敗。'
             return Response({'detail': message}, status=status_code)
 
-        return Response({'status': 'deleted', 'announcements': announcements})
+        return Response({
+            'status': 'deleted',
+            'deleted_ids': deleted_ids,
+            'deleted_count': len(deleted_ids),
+            'announcements': announcements,
+        })
 
 class AnnouncementDetail(APIView):
     def get_permissions(self):

@@ -5,8 +5,9 @@ import { getAuthHeaders, handleUnauthorized } from '../utils/auth';
 const USE_MOCK_DATA = process.env.REACT_APP_ANNOUNCEMENT_MODE === 'mock';
 
 const ANNOUNCEMENT_TYPE_OPTIONS = [
-  { value: '公告', label: '公告' },
-  { value: '注意', label: '注意' },
+  { value: 'warning', label: '警告' },
+  { value: 'info', label: '資訊' },
+  { value: 'success', label: '成功' },
 ];
 
 const toDisplayType = (type) => {
@@ -237,7 +238,7 @@ const AnnouncementEdit = () => {
             <div style={styles.label}>類型</div>
             <select
               value={formData.type}
-              onChange={handleChange('type')}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               style={styles.input}
             >
               {ANNOUNCEMENT_TYPE_OPTIONS.map((option) => (
