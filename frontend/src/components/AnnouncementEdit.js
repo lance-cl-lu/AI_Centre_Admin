@@ -5,9 +5,8 @@ import { getAuthHeaders, handleUnauthorized } from '../utils/auth';
 const USE_MOCK_DATA = process.env.REACT_APP_ANNOUNCEMENT_MODE === 'mock';
 
 const ANNOUNCEMENT_TYPE_OPTIONS = [
-  { value: 'warning', label: '警告' },
-  { value: 'info', label: '資訊' },
-  { value: 'success', label: '成功' },
+  { value: '注意', label: '注意' },
+  { value: '公告', label: '公告' },
 ];
 
 const toDisplayType = (type) => {
@@ -25,12 +24,12 @@ const toDisplayType = (type) => {
 
 const toStoredType = (type) => {
   if (type === '注意') {
-    return 'warning';
+    return '注意';
   }
   if (type === '公告') {
-    return 'info';
+    return '公告';
   }
-  return type || 'info';
+  return type || '公告';
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -88,12 +87,26 @@ const AnnouncementEdit = () => {
     date: today(),
   });
 
+  const isCreateMode = id === 'new';
   const announcementId = useMemo(() => Number(id), [id]);
 
   useEffect(() => {
     const loadCurrent = async () => {
       setLoading(true);
       setError('');
+
+      if (isCreateMode) {
+        setFormData((prev) => ({
+          ...prev,
+          id: null,
+          title: '',
+          content: '',
+          type: '公告',
+          date: today(),
+        }));
+        setLoading(false);
+        return;
+      }
 
       if (!Number.isFinite(announcementId)) {
         setError('Announcement ID 不正確');
@@ -151,17 +164,12 @@ const AnnouncementEdit = () => {
     }
 
     loadCurrent();
-  }, [announcementId]);
+  }, [announcementId, isCreateMode]);
 
-  const handleSave = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setSaving(true);
     setError('');
-
-    const payload = {
-      title: formData.title,
-      content: formData.content,
-      type: toStoredType(formData.type),
-    };
 
     try {
       const headers = await getAuthHeaders();
@@ -169,76 +177,139 @@ const AnnouncementEdit = () => {
         handleUnauthorized();
         return;
       }
-      const res = await fetch(`/api/announcements/${announcementId}/`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(payload),
-      });
 
-      let responsePayload = null;
-      try {
-        responsePayload = await res.json();
-      } catch (parseError) {
-        responsePayload = null;
-      }
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
+      if (isCreateMode) {
+        const listRes = await fetch('/api/announcements/', { headers });
+        let listPayload = null;
+        try {
+          listPayload = await listRes.json();
+        } catch (parseError) {
+          listPayload = null;
         }
-        const detail = responsePayload && responsePayload.detail ? responsePayload.detail : `HTTP ${res.status}`;
-        throw new Error(detail);
+
+        if (!listRes.ok) {
+          if (listRes.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          const detail = listPayload && listPayload.detail ? listPayload.detail : `HTTP ${listRes.status}`;
+          throw new Error(detail);
+        }
+
+        const listData = typeof listPayload === 'string' ? JSON.parse(listPayload) : listPayload;
+        const currentAnnouncements = Array.isArray(listData?.announcements) ? listData.announcements : [];
+        const nextItem = {
+          id: currentAnnouncements.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1,
+          date: today(),
+          title: formData.title,
+          content: formData.content,
+          type: toStoredType(formData.type),
+        };
+
+        const createRes = await fetch('/api/announcements/', {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ announcements: [nextItem, ...currentAnnouncements] }),
+        });
+
+        let createPayload = null;
+        try {
+          createPayload = await createRes.json();
+        } catch (parseError) {
+          createPayload = null;
+        }
+
+        if (!createRes.ok) {
+          if (createRes.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          const detail = createPayload && createPayload.detail ? createPayload.detail : `HTTP ${createRes.status}`;
+          throw new Error(detail);
+        }
+      } else {
+        const payload = {
+          title: formData.title,
+          content: formData.content,
+          type: toStoredType(formData.type),
+        };
+
+        const res = await fetch(`/api/announcements/${announcementId}/`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(payload),
+        });
+
+        let responsePayload = null;
+        try {
+          responsePayload = await res.json();
+        } catch (parseError) {
+          responsePayload = null;
+        }
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          const detail = responsePayload && responsePayload.detail ? responsePayload.detail : `HTTP ${res.status}`;
+          throw new Error(detail);
+        }
       }
 
       navigate('/announcement');
     } catch (err) {
-      setError(`更新失敗：${err.message}`);
+      setError(`${isCreateMode ? '新增' : '更新'}失敗：${err.message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChange = (field) => (event) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: event.target.value,
-    }));
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   return (
     <div style={{ padding: '16px', background: '#fff' }}>
       <div style={{ marginBottom: '16px', padding: '16px', border: '1px solid #d8d8d8', borderRadius: '12px', background: '#fafafa' }}>
-        <h2 style={{ margin: 0 }}>編輯 Announcement #{id}</h2>
+        <h2 style={{ margin: 0 }}>{isCreateMode ? '新增 Announcement' : `編輯 Announcement #${id}`}</h2>
       </div>
 
       {loading && <p>載入中...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      {!loading && !error && (
-        <div style={{ display: 'grid', gap: '10px', maxWidth: '720px' }}>
+      {!loading && (
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '10px', maxWidth: '720px' }}>
           <div style={styles.row}>
             <div style={styles.label}>標題</div>
             <input
               type="text"
+              name="title"
               value={formData.title}
-              onChange={handleChange('title')}
+              onChange={handleChange}
               style={styles.input}
+              required
             />
           </div>
+
           <div style={styles.row}>
             <div style={styles.label}>內容</div>
             <textarea
+              name="content"
               value={formData.content}
-              onChange={handleChange('content')}
+              onChange={handleChange}
               style={styles.textarea}
+              required
             />
           </div>
-          <div style={styles.row}>
+
+          <div style={{ ...styles.row, display: 'none' }}>
             <div style={styles.label}>類型</div>
             <select
+              name="type"
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              onChange={handleChange}
               style={styles.input}
             >
               {ANNOUNCEMENT_TYPE_OPTIONS.map((option) => (
@@ -248,14 +319,17 @@ const AnnouncementEdit = () => {
               ))}
             </select>
           </div>
-          <div style={styles.row}>
-            <div style={styles.label}>最後修改日期</div>
-            <div style={styles.value}>{formData.date}</div>
-          </div>
+
+          {!isCreateMode && (
+            <div style={styles.row}>
+              <div style={styles.label}>最後修改日期</div>
+              <div style={styles.value}>{formData.date}</div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              type="button"
-              onClick={handleSave}
+              type="submit"
               disabled={saving}
               style={{ border: '1px solid #146c43', background: '#e8f5ee', color: '#146c43', padding: '8px 14px', borderRadius: '8px', opacity: saving ? 0.6 : 1 }}
             >
@@ -269,7 +343,7 @@ const AnnouncementEdit = () => {
               取消
             </button>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );

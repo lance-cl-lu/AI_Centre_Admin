@@ -34,13 +34,6 @@ const Announcement = () => {
   const navigate = useNavigate();
   const [announcements, setAnnouncements] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [isAppendOpen, setIsAppendOpen] = useState(false);
-  const [appendData, setAppendData] = useState({
-    date: '',
-    title: '',
-    content: '',
-    type: '',
-  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -51,6 +44,7 @@ const Announcement = () => {
       setError('目前為前端假資料模式，未呼叫後端 API。');
       return;
     }
+
     fetchAnnouncements();
   }, []);
 
@@ -141,67 +135,7 @@ const Announcement = () => {
   };
 
   const handleAppendOpen = () => {
-    setAppendData({
-      date: new Date().toISOString().slice(0, 10),
-      title: '',
-      content: '',
-      type: '',
-    });
-    setIsAppendOpen(true);
-  };
-
-  const handleAppendClose = () => {
-    setIsAppendOpen(false);
-    setAppendData({
-      date: '',
-      title: '',
-      content: '',
-      type: '',
-    });
-  };
-
-  const appendAnnouncement = async () => {
-    const nextItem = {
-      id: announcements.reduce((maxId, item) => Math.max(maxId, Number(item.id) || 0), 0) + 1,
-      date: appendData.date || new Date().toISOString().slice(0, 10),
-      title: appendData.title,
-      content: appendData.content,
-      type: appendData.type,
-    };
-
-    if (USE_MOCK_DATA) {
-      setAnnouncements((prev) => [nextItem, ...prev]);
-      handleAppendClose();
-      return;
-    }
-
-    try {
-      const headers = await getAuthHeaders();
-      if (!headers.Authorization) {
-        handleUnauthorized();
-        return;
-      }
-      const res = await fetch('/api/announcements/', {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          announcements: [nextItem, ...announcements],
-        }),
-      });
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      handleAppendClose();
-      fetchAnnouncements();
-    } catch (err) {
-      setError(`新增失敗：${err.message}`);
-    }
+    navigate('/announcement/edit/new');
   };
 
   return (
@@ -247,7 +181,7 @@ const Announcement = () => {
             <th style={{ border: '1px solid #ccc', padding: '8px' }}>日期</th>
             <th style={{ border: '1px solid #ccc', padding: '8px' }}>標題</th>
             <th style={{ border: '1px solid #ccc', padding: '8px' }}>內容</th>
-            <th style={{ border: '1px solid #ccc', padding: '8px' }}>類型</th>
+            <th style={{ border: '1px solid #ccc', padding: '8px', display: 'none' }}>類型</th>
             <th style={{ border: '1px solid #ccc', padding: '8px' }}>操作</th>
           </tr>
         </thead>
@@ -265,7 +199,7 @@ const Announcement = () => {
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{row.date}</td>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{row.title}</td>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>{row.content}</td>
-              <td style={{ border: '1px solid #ccc', padding: '8px' }}>{row.type}</td>
+              <td style={{ border: '1px solid #ccc', padding: '8px', display: 'none' }}>{row.type}</td>
               <td style={{ border: '1px solid #ccc', padding: '8px' }}>
                 <button
                   type="button"
@@ -279,41 +213,6 @@ const Announcement = () => {
           ))}
         </tbody>
       </table>
-
-      {isAppendOpen && (
-        <div style={{ marginTop: '16px', padding: '12px', border: '1px solid #ccc', borderRadius: '10px', background: '#fcfcfc' }}>
-          <h3>新增 Announcement</h3>
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <input
-              value={appendData.date}
-              onChange={(e) => setAppendData({ ...appendData, date: e.target.value })}
-              placeholder="日期"
-              type="date"
-            />
-            <input
-              value={appendData.title}
-              onChange={(e) => setAppendData({ ...appendData, title: e.target.value })}
-              placeholder="標題"
-            />
-            <textarea
-              value={appendData.content}
-              onChange={(e) => setAppendData({ ...appendData, content: e.target.value })}
-              placeholder="內容"
-              rows={3}
-            />
-            <input
-              value={appendData.type}
-              onChange={(e) => setAppendData({ ...appendData, type: e.target.value })}
-              placeholder="類型"
-            />
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="button" onClick={appendAnnouncement} style={{ border: '1px solid #146c43', background: '#e8f5ee', color: '#146c43', padding: '8px 14px', borderRadius: '8px' }}>儲存</button>
-              <button type="button" onClick={handleAppendClose} style={{ border: '1px solid #667085', background: '#f2f4f7', color: '#344054', padding: '8px 14px', borderRadius: '8px' }}>取消</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };
