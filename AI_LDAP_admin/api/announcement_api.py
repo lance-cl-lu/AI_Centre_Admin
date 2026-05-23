@@ -1,5 +1,7 @@
 import json
 import os
+import logging
+import re
 from datetime import date
 
 import yaml
@@ -23,6 +25,16 @@ ANNOUNCEMENT_DATA_KEY = os.environ.get(
     'ANNOUNCEMENT_CONFIGMAP_KEY',
     'announcements.json',
 )
+ANNOUNCEMENT_K8S_AUTH_MODE = os.environ.get(
+    'ANNOUNCEMENT_K8S_AUTH_MODE',
+    'auto',
+).lower()
+ANNOUNCEMENT_KUBECONFIG = os.environ.get('ANNOUNCEMENT_KUBECONFIG', None)
+ANNOUNCEMENT_K8S_CONTEXT = os.environ.get('ANNOUNCEMENT_K8S_CONTEXT', None)
+ANNOUNCEMENT_K8S_FALLBACK_TO_KUBECONFIG = os.environ.get(
+    'ANNOUNCEMENT_K8S_FALLBACK_TO_KUBECONFIG',
+    'true',
+).lower() in {'1', 'true', 'yes', 'on'}
 ANNOUNCEMENT_CANDIDATE_KEYS = (
     ANNOUNCEMENT_DATA_KEY,
     'announcements.json',
@@ -31,17 +43,105 @@ ANNOUNCEMENT_CANDIDATE_KEYS = (
     'announcements.yaml',
 )
 
+logger = logging.getLogger(__name__)
 
-def ensure_k8s_config():
+
+def _fix_incluster_auth_v36(cfg):
+    """
+    Workaround for kubernetes Python client v27+/v36+ where load_incluster_config()
+    stores the token in api_key['authorization'] but auth_settings() only checks
+    api_key['BearerToken'].  Copy the token to the expected key so the ApiClient
+    actually sends the Authorization header.
+    """
+    if 'authorization' in cfg.api_key and 'BearerToken' not in cfg.api_key:
+        raw = cfg.api_key['authorization']
+        if raw.lower().startswith('bearer '):
+            raw = raw[7:]
+        cfg.api_key['BearerToken'] = raw
+        cfg.api_key_prefix['BearerToken'] = 'Bearer'
+
+
+def _make_k8s_core_v1(mode=None, kubeconfig=None, context=None):
+    """Create a per-request CoreV1Api client — does NOT mutate global config (thread-safe)."""
+    m = (mode or ANNOUNCEMENT_K8S_AUTH_MODE).lower()
+    cfg = client.Configuration()
+
+    if m in {'incluster', 'serviceaccount'}:
+        config.load_incluster_config(client_configuration=cfg)
+        _fix_incluster_auth_v36(cfg)
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'incluster'
+
+    if m == 'kubeconfig':
+        config.load_kube_config(
+            config_file=kubeconfig if kubeconfig is not None else ANNOUNCEMENT_KUBECONFIG,
+            context=context if context is not None else ANNOUNCEMENT_K8S_CONTEXT,
+            client_configuration=cfg,
+        )
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
+
+    # auto: prefer incluster, fallback kubeconfig
     try:
-        config.load_incluster_config()
+        config.load_incluster_config(client_configuration=cfg)
+        _fix_incluster_auth_v36(cfg)
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'incluster'
     except ConfigException:
-        config.load_kube_config()
+        config.load_kube_config(
+            config_file=kubeconfig if kubeconfig is not None else ANNOUNCEMENT_KUBECONFIG,
+            context=context if context is not None else ANNOUNCEMENT_K8S_CONTEXT,
+            client_configuration=cfg,
+        )
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
 
 
 def build_announcement_response(announcements):
     return {
         'announcements': announcements,
+    }
+
+
+def extract_k8s_forbidden_detail(exc):
+    body = getattr(exc, 'body', None)
+    message_text = ''
+
+    if body:
+        try:
+            parsed = json.loads(body)
+            message_text = str(parsed.get('message', '') or '')
+        except Exception:
+            message_text = str(body)
+
+    if not message_text:
+        message_text = str(exc)
+
+    # Typical K8s message:
+    # User "system:serviceaccount:ldap:backend-service-account" cannot get resource "configmaps" in API group "" in the namespace "kubeflow"
+    user = None
+    verb = None
+    resource = None
+    namespace = None
+    api_group = None
+
+    user_match = re.search(r'User "([^"]+)"', message_text)
+    if user_match:
+        user = user_match.group(1)
+
+    permission_match = re.search(
+        r'cannot\s+([a-z]+)\s+resource\s+"([^"]+)"\s+in\s+API\s+group\s+"([^"]*)"\s+in\s+the\s+namespace\s+"([^"]+)"',
+        message_text,
+    )
+    if permission_match:
+        verb = permission_match.group(1)
+        resource = permission_match.group(2)
+        api_group = permission_match.group(3)
+        namespace = permission_match.group(4)
+
+    return {
+        'message': message_text,
+        'user': user,
+        'verb': verb,
+        'resource': resource,
+        'api_group': api_group,
+        'namespace': namespace,
     }
 
 
@@ -111,12 +211,11 @@ def current_announcement_date():
 
 
 def get_announcement_configmap():
-    ensure_k8s_config()
-    v1 = client.CoreV1Api()
+    v1, auth_source = _make_k8s_core_v1()
     return v1, v1.read_namespaced_config_map(
         ANNOUNCEMENT_CONFIGMAP_NAME,
         ANNOUNCEMENT_CONFIGMAP_NAMESPACE,
-    )
+    ), auth_source
 
 
 def read_announcements_from_configmap(config_map):
@@ -181,12 +280,60 @@ class AnnouncementList(APIView):
         return [AnnouncementWritePermission()]
 
     def get(self, request):
+        auth_source = 'unknown'
         try:
-            _, config_map = get_announcement_configmap()
+            _, config_map, auth_source = get_announcement_configmap()
             announcements, _ = read_announcements_from_configmap(config_map)
+            logger.info(
+                'Announcement GET via k8s auth source=%s mode=%s namespace=%s configmap=%s',
+                auth_source,
+                ANNOUNCEMENT_K8S_AUTH_MODE,
+                ANNOUNCEMENT_CONFIGMAP_NAMESPACE,
+                ANNOUNCEMENT_CONFIGMAP_NAME,
+            )
         except ConfigException as exc:
             return Response({'detail': f'無法載入 Kubernetes 設定：{exc}'}, status=500)
         except ApiException as exc:
+            if (exc.status or 0) == 403:
+                forbidden = extract_k8s_forbidden_detail(exc)
+                if (
+                    auth_source == 'incluster'
+                    and forbidden.get('user') == 'system:anonymous'
+                    and ANNOUNCEMENT_K8S_FALLBACK_TO_KUBECONFIG
+                ):
+                    try:
+                        v1_fb, _ = _make_k8s_core_v1(mode='kubeconfig')
+                        fallback_config_map = v1_fb.read_namespaced_config_map(
+                            ANNOUNCEMENT_CONFIGMAP_NAME,
+                            ANNOUNCEMENT_CONFIGMAP_NAMESPACE,
+                        )
+                        announcements, _ = read_announcements_from_configmap(fallback_config_map)
+                        logger.warning(
+                            'Announcement GET switched from incluster to kubeconfig fallback due to anonymous 403 cfg_ns=%s cfg_name=%s kubeconfig=%s context=%s',
+                            ANNOUNCEMENT_CONFIGMAP_NAMESPACE,
+                            ANNOUNCEMENT_CONFIGMAP_NAME,
+                            ANNOUNCEMENT_KUBECONFIG,
+                            ANNOUNCEMENT_K8S_CONTEXT,
+                        )
+                        return Response(build_announcement_response(announcements), status=200)
+                    except Exception as fallback_exc:
+                        logger.warning(
+                            'Announcement kubeconfig fallback failed after anonymous 403: %s',
+                            fallback_exc,
+                        )
+                logger.warning(
+                    'Announcement GET fallback due to K8s 403 mode=%s cfg_ns=%s cfg_name=%s denied_user=%s denied_verb=%s denied_resource=%s denied_api_group=%s denied_ns=%s raw=%s',
+                    ANNOUNCEMENT_K8S_AUTH_MODE,
+                    ANNOUNCEMENT_CONFIGMAP_NAMESPACE,
+                    ANNOUNCEMENT_CONFIGMAP_NAME,
+                    forbidden.get('user'),
+                    forbidden.get('verb'),
+                    forbidden.get('resource'),
+                    forbidden.get('api_group'),
+                    forbidden.get('namespace'),
+                    forbidden.get('message'),
+                )
+                return Response(build_announcement_response([]), status=200)
             status_code = exc.status or 500
             message = exc.reason or '讀取 ConfigMap 失敗。'
             return Response({'detail': message}, status=status_code)
@@ -200,7 +347,7 @@ class AnnouncementList(APIView):
 
         announcements = normalize_announcements(payload.get('announcements', []))
         try:
-            v1, config_map = get_announcement_configmap()
+            v1, config_map, _ = get_announcement_configmap()
             _, data_key = read_announcements_from_configmap(config_map)
             save_announcements_to_configmap(v1, config_map, announcements, data_key)
         except ConfigException as exc:
@@ -223,7 +370,7 @@ class AnnouncementList(APIView):
             return Response({'detail': 'invalid ids'}, status=400)
 
         try:
-            v1, config_map = get_announcement_configmap()
+            v1, config_map, _ = get_announcement_configmap()
             announcements, data_key = read_announcements_from_configmap(config_map)
             existing_ids = {item.get('id') for item in announcements}
             deleted_ids = sorted([item_id for item_id in ids if item_id in existing_ids])
@@ -251,7 +398,7 @@ class AnnouncementDetail(APIView):
 
     def get(self, request, pk):
         try:
-            _, config_map = get_announcement_configmap()
+            _, config_map, _ = get_announcement_configmap()
             announcements, _ = read_announcements_from_configmap(config_map)
         except ConfigException as exc:
             return Response({'detail': f'無法載入 Kubernetes 設定：{exc}'}, status=500)
@@ -271,7 +418,7 @@ class AnnouncementDetail(APIView):
             return Response({'detail': 'invalid payload'}, status=400)
 
         try:
-            v1, config_map = get_announcement_configmap()
+            v1, config_map, _ = get_announcement_configmap()
             announcements, data_key = read_announcements_from_configmap(config_map)
         except ConfigException as exc:
             return Response({'detail': f'無法載入 Kubernetes 設定：{exc}'}, status=500)

@@ -19,11 +19,21 @@ spec:
       labels:
         app: backend
     spec:
+      automountServiceAccountToken: true
       containers:
         - name: backend
           image: docker.io/cguaicadmin/ldap_backend:v0.2.29
           # image: docker.io/cguaicadmin/backend_dev:v0.3
           imagePullPolicy: Always
+          env:
+            - name: K8S_AUTH_MODE
+              value: "incluster"
+            - name: ANNOUNCEMENT_K8S_AUTH_MODE
+              value: "incluster"
+            - name: ANNOUNCEMENT_CONFIGMAP_NAMESPACE
+              value: "kubeflow"
+            - name: ANNOUNCEMENT_CONFIGMAP_NAME
+              value: "kubeflow-announcements"
           ports:
             - containerPort: 8000
           volumeMounts:
@@ -77,3 +87,4 @@ kind: ServiceAccount
 metadata:
   name: backend-service-account
   namespace: ldap
+automountServiceAccountToken: true

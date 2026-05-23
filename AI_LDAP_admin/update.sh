@@ -1,5 +1,9 @@
 [ -d frontend/templates/ ] || mkdir frontend/templates/
 [ -d frontend/templates/frontend/ ] || mkdir frontend/templates/frontend/
+if [ ! -f ../frontend/build/index.html ]; then
+    echo "ERROR: ../frontend/build/index.html not found. Run 'npm run build' in frontend/ first." >&2
+    exit 1
+fi
 cp -f ../frontend/build/index.html frontend/templates/frontend/
 rm -rf static
 mkdir static

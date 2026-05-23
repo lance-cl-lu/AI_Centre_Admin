@@ -5,6 +5,7 @@ from django.contrib.auth.models import User, Group
 import datetime, openpyxl
 from django.core.files.storage import default_storage
 import os
+import logging
 
 from passlib.hash import ldap_md5
 
@@ -41,13 +42,91 @@ NODE_RESOURCE_MONITOR_KEYS = {
     'cpuCostPerMinute': 'CPU_COST_PER_MINUTE',
     'gpuCostPerMinute': 'GPU_COST_PER_MINUTE',
 }
+K8S_AUTH_MODE = os.environ.get('K8S_AUTH_MODE', 'auto').lower()
+K8S_KUBECONFIG = os.environ.get('K8S_KUBECONFIG', None)
+K8S_CONTEXT = os.environ.get('K8S_CONTEXT', None)
+K8S_FALLBACK_TO_KUBECONFIG = os.environ.get(
+    'K8S_FALLBACK_TO_KUBECONFIG',
+    'true',
+).lower() in {'1', 'true', 'yes', 'on'}
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_k8s_config():
+    if K8S_AUTH_MODE in {'incluster', 'serviceaccount'}:
+        config.load_incluster_config()
+        return 'incluster'
+
+    if K8S_AUTH_MODE == 'kubeconfig':
+        config.load_kube_config(config_file=K8S_KUBECONFIG, context=K8S_CONTEXT)
+        return 'kubeconfig'
+
     try:
         config.load_incluster_config()
+        return 'incluster'
     except ConfigException:
-        config.load_kube_config()
+        config.load_kube_config(config_file=K8S_KUBECONFIG, context=K8S_CONTEXT)
+        return 'kubeconfig'
+
+
+def _fix_incluster_auth_v36(cfg):
+    """
+    Workaround for kubernetes Python client v27+/v36+ where load_incluster_config()
+    stores the token in api_key['authorization'] but auth_settings() only checks
+    api_key['BearerToken'].  Copy the token to the expected key so the ApiClient
+    actually sends the Authorization header.
+    """
+    if 'authorization' in cfg.api_key and 'BearerToken' not in cfg.api_key:
+        raw = cfg.api_key['authorization']
+        if raw.lower().startswith('bearer '):
+            raw = raw[7:]
+        cfg.api_key['BearerToken'] = raw
+        cfg.api_key_prefix['BearerToken'] = 'Bearer'
+
+
+def _make_k8s_core_v1_views(mode=None, kubeconfig=None, context=None):
+    """Create a per-request CoreV1Api client — does NOT mutate global config (thread-safe)."""
+    m = (mode or K8S_AUTH_MODE).lower()
+    cfg = client.Configuration()
+
+    if m in {'incluster', 'serviceaccount'}:
+        config.load_incluster_config(client_configuration=cfg)
+        _fix_incluster_auth_v36(cfg)
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'incluster'
+
+    if m == 'kubeconfig':
+        config.load_kube_config(
+            config_file=kubeconfig if kubeconfig is not None else K8S_KUBECONFIG,
+            context=context if context is not None else K8S_CONTEXT,
+            client_configuration=cfg,
+        )
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
+
+    try:
+        config.load_incluster_config(client_configuration=cfg)
+        _fix_incluster_auth_v36(cfg)
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'incluster'
+    except ConfigException:
+        config.load_kube_config(
+            config_file=kubeconfig if kubeconfig is not None else K8S_KUBECONFIG,
+            context=context if context is not None else K8S_CONTEXT,
+            client_configuration=cfg,
+        )
+        return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
+
+
+def is_k8s_anonymous_forbidden(exc):
+    body = getattr(exc, 'body', None)
+    if body:
+        try:
+            parsed = json.loads(body)
+            message = str(parsed.get('message', '') or '')
+        except Exception:
+            message = str(body)
+    else:
+        message = str(exc)
+    return 'User "system:anonymous"' in message
 
 
 def build_cost_response(config_map):
@@ -2556,23 +2635,57 @@ def remove_null(data):
 @api_view(['GET', 'PATCH'])
 def node_resource_monitor_config(request):
     try:
-        ensure_k8s_config()
+        v1, auth_source = _make_k8s_core_v1_views()
+        logger.info(
+            'node_resource_monitor_config k8s auth source=%s mode=%s namespace=%s configmap=%s',
+            auth_source,
+            K8S_AUTH_MODE,
+            NODE_RESOURCE_MONITOR_NAMESPACE,
+            NODE_RESOURCE_MONITOR_CONFIGMAP,
+        )
     except ConfigException as exc:
         return Response(
             {'detail': f'無法載入 Kubernetes 設定：{exc}'},
             status=500,
         )
 
-    v1 = client.CoreV1Api()
     try:
         config_map = v1.read_namespaced_config_map(
             NODE_RESOURCE_MONITOR_CONFIGMAP,
             NODE_RESOURCE_MONITOR_NAMESPACE,
         )
     except ApiException as exc:
-        status_code = exc.status or 500
-        message = exc.reason or '讀取 ConfigMap 失敗。'
-        return Response({'detail': message}, status=status_code)
+        if (
+            (exc.status or 0) == 403
+            and auth_source == 'incluster'
+            and K8S_FALLBACK_TO_KUBECONFIG
+            and is_k8s_anonymous_forbidden(exc)
+        ):
+            try:
+                v1, _ = _make_k8s_core_v1_views(mode='kubeconfig')
+                config_map = v1.read_namespaced_config_map(
+                    NODE_RESOURCE_MONITOR_CONFIGMAP,
+                    NODE_RESOURCE_MONITOR_NAMESPACE,
+                )
+                logger.warning(
+                    'node_resource_monitor_config switched from incluster to kubeconfig fallback due to anonymous 403 namespace=%s configmap=%s kubeconfig=%s context=%s',
+                    NODE_RESOURCE_MONITOR_NAMESPACE,
+                    NODE_RESOURCE_MONITOR_CONFIGMAP,
+                    K8S_KUBECONFIG,
+                    K8S_CONTEXT,
+                )
+            except Exception as fallback_exc:
+                logger.warning(
+                    'node_resource_monitor_config kubeconfig fallback failed after anonymous 403: %s',
+                    fallback_exc,
+                )
+                status_code = exc.status or 500
+                message = exc.reason or '讀取 ConfigMap 失敗。'
+                return Response({'detail': message}, status=status_code)
+        else:
+            status_code = exc.status or 500
+            message = exc.reason or '讀取 ConfigMap 失敗。'
+            return Response({'detail': message}, status=status_code)
 
     if request.method == 'GET':
         return Response(build_cost_response(config_map), status=200)
@@ -2604,9 +2717,38 @@ def node_resource_monitor_config(request):
             {'data': updates},
         )
     except ApiException as exc:
-        status_code = exc.status or 500
-        message = exc.reason or '更新 ConfigMap 失敗。'
-        return Response({'detail': message}, status=status_code)
+        if (
+            (exc.status or 0) == 403
+            and auth_source == 'incluster'
+            and K8S_FALLBACK_TO_KUBECONFIG
+            and is_k8s_anonymous_forbidden(exc)
+        ):
+            try:
+                v1_fb, _ = _make_k8s_core_v1_views(mode='kubeconfig')
+                patched = v1_fb.patch_namespaced_config_map(
+                    NODE_RESOURCE_MONITOR_CONFIGMAP,
+                    NODE_RESOURCE_MONITOR_NAMESPACE,
+                    {'data': updates},
+                )
+                logger.warning(
+                    'node_resource_monitor_config PATCH switched from incluster to kubeconfig fallback due to anonymous 403 namespace=%s configmap=%s kubeconfig=%s context=%s',
+                    NODE_RESOURCE_MONITOR_NAMESPACE,
+                    NODE_RESOURCE_MONITOR_CONFIGMAP,
+                    K8S_KUBECONFIG,
+                    K8S_CONTEXT,
+                )
+            except Exception as fallback_exc:
+                logger.warning(
+                    'node_resource_monitor_config PATCH kubeconfig fallback failed after anonymous 403: %s',
+                    fallback_exc,
+                )
+                status_code = exc.status or 500
+                message = exc.reason or '更新 ConfigMap 失敗。'
+                return Response({'detail': message}, status=status_code)
+        else:
+            status_code = exc.status or 500
+            message = exc.reason or '更新 ConfigMap 失敗。'
+            return Response({'detail': message}, status=status_code)
 
     return Response(build_cost_response(patched), status=200)
 
