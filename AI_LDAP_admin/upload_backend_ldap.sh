@@ -1,5 +1,5 @@
 
-POD=backend-deployment-67d86d9fb8-ss7m7
+POD=backend-deployment-5bd984cd57-fw654
 
 kubectl cp api -n ldap ${POD}:/code
 

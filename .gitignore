@@ -38,7 +38,6 @@ flymd.*
 package-lock.json
 
 # Go compiled binaries
-
 # Python venv
 AI_LDAP_admin/venv/
 node_modules/
