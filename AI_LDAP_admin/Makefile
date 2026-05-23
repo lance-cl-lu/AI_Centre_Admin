@@ -1,7 +1,7 @@
 docker:
 	./update.sh
-	docker build -t cguaicadmin/ldap_backend:v0.2.31 .
-	docker push cguaicadmin/ldap_backend:v0.2.31
+	docker build -t cguaicadmin/ldap_backend:v0.2.32 .
+	docker push cguaicadmin/ldap_backend:v0.2.32
 	kubectl apply -f cluster-role.yaml
 	kubectl apply -f cluster-role-binding.yaml
 	kubectl apply -f announcement-configmap-rbac.yaml
