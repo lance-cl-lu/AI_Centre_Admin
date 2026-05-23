@@ -824,8 +824,8 @@ def get_group_corresponding_user(request):
                         found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
                         if not found or len(conn.entries) == 0:
                             print(f"LDAP search: user '{user.username}' not found.")
-                        else:
-                            print(f"LDAP search: user '{user.username}' found.")
+                        # else:
+                        #    print(f"LDAP search: user '{user.username}' found.")
                             user_list.append(user.username)
                     except Exception as e:
                         print(f"LDAP search error: {e}")
@@ -1677,6 +1677,10 @@ def user_group_num(requset):
     # return the number of group and user
     data = {'lab_num': group_num, 'lab_list': group_list, 'user_num': user_num, 'user_list': user_list}
 
+    for user_obj in User.objects.all():
+        user_groups = [group.name for group in user_obj.groups.all()]
+        # print(f"User {user_obj.username} groups: {user_groups}")
+
     # 建立 TRASH group (如果不存在)
     try:
         Group.objects.get(name="TRASH")
@@ -2375,8 +2379,8 @@ def db_ldap_check(request):
     # Lance fix TypeError: unhashable type: 'list'
     ldap_user = [u[0] if isinstance(u, list) else u for u in ldap_user]
     django_user = [u[0] if isinstance(u, list) else u for u in django_user]
-    print("ldap_user = ", ldap_user)
-    print("django_user = ", django_user)
+    # print("ldap_user = ", ldap_user)
+    # print("django_user = ", django_user)
     # find the user in ldap but not in django
     unsycho_user = list(set(ldap_user) - set(django_user))
     if unsycho_user != []:
