@@ -133,6 +133,37 @@ def _make_k8s_core_v1_views(mode=None, kubeconfig=None, context=None):
         return client.CoreV1Api(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
 
 
+def _make_k8s_custom_objects_api_views(mode=None, kubeconfig=None, context=None):
+    """Create a per-request CustomObjectsApi client with the same auth handling as CoreV1Api."""
+    m = (mode or K8S_AUTH_MODE).lower()
+    cfg = client.Configuration()
+
+    if m in {'incluster', 'serviceaccount'}:
+        config.load_incluster_config(client_configuration=cfg)
+        _fix_incluster_auth_v36(cfg)
+        return client.CustomObjectsApi(api_client=client.ApiClient(configuration=cfg)), 'incluster'
+
+    if m == 'kubeconfig':
+        config.load_kube_config(
+            config_file=kubeconfig if kubeconfig is not None else K8S_KUBECONFIG,
+            context=context if context is not None else K8S_CONTEXT,
+            client_configuration=cfg,
+        )
+        return client.CustomObjectsApi(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
+
+    try:
+        config.load_incluster_config(client_configuration=cfg)
+        _fix_incluster_auth_v36(cfg)
+        return client.CustomObjectsApi(api_client=client.ApiClient(configuration=cfg)), 'incluster'
+    except ConfigException:
+        config.load_kube_config(
+            config_file=kubeconfig if kubeconfig is not None else K8S_KUBECONFIG,
+            context=context if context is not None else K8S_CONTEXT,
+            client_configuration=cfg,
+        )
+        return client.CustomObjectsApi(api_client=client.ApiClient(configuration=cfg)), 'kubeconfig'
+
+
 def is_k8s_anonymous_forbidden(exc):
     body = getattr(exc, 'body', None)
     if body:
@@ -576,13 +607,8 @@ def list_notebooks(request):
     
 def list_notebooks_api(namespace):
     try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
-    try:
         # Create an API client for the CustomResourceDefinition API
-        api = client.CustomObjectsApi()
+        api, _ = _make_k8s_custom_objects_api_views()
 
         # Get the profile
         all_notebooks = api.list_namespaced_custom_object(group, version,  namespace, "notebooks")
@@ -697,12 +723,7 @@ def delete_profile(name, email, fullname):
     if name is None:
         return
     # delete profile
-    try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
-    api_instance = client.CustomObjectsApi()
+    api_instance, _ = _make_k8s_custom_objects_api_views()
     # convert name to lower case, and deal with 'NoneType' object has no attribute 'lower'
     print("name = ", name)
     api_response = api_instance.delete_cluster_custom_object(
@@ -719,11 +740,6 @@ def delete_profile(name, email, fullname):
     send_delete_account_email(k8s_name, k8s_account, k8s_date, email)
 
 def create_profile(username, email, cpu, gpu, memory, manager, fullname, password):
-    try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
     # print("create profile: username = {}, email = {}, cpu = {}, gpu = {}, memory = {}".format(username, email, cpu, gpu, memory))
 
     # memoryStr = str(int(float(memory)*1000)) + "Mi"
@@ -787,7 +803,7 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
     if gpu != '0' or gpu != 0:
         profile_data["spec"]["resourceQuotaSpec"]["hard"]["requests.nvidia.com/gpu"] = gpu
     print("profile_data = ", profile_data)
-    api_instance = client.CustomObjectsApi()
+    api_instance, _ = _make_k8s_custom_objects_api_views()
 
     api_response = api_instance.create_cluster_custom_object(
         group=group,
@@ -805,13 +821,8 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
 
 def get_profile_content(profile_name):
     try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
-    try:
         # Create an API client for the CustomResourceDefinition API
-        api = client.CustomObjectsApi()
+        api, _ = _make_k8s_custom_objects_api_views()
 
         # Get the profile
         profile = api.get_cluster_custom_object(group, version, plural, profile_name)
@@ -853,7 +864,7 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
     # update resourceQuotaSpec of profile
     profile['spec']['resourceQuotaSpec'] = resourceQuotaSpec
 
-    api = client.CustomObjectsApi()
+    api, _ = _make_k8s_custom_objects_api_views()
     # replace the profile 
     api_response = api.replace_cluster_custom_object(
         group=group,
@@ -866,12 +877,8 @@ def replace_quota_of_profile(profile,cpu,gpu,memory):
 
 def get_all_profiles():
     # get cluster custom object profile of kubeflow.org
-    try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
-    api_instance = client.CustomObjectsApi()
+    api_instance, auth_source = _make_k8s_custom_objects_api_views()
+    logger.info('get_all_profiles k8s auth source=%s mode=%s', auth_source, K8S_AUTH_MODE)
     return api_instance.list_cluster_custom_object(group, version, plural)
 
 # This is a test function
