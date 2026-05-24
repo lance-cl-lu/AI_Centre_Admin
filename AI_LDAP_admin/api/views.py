@@ -1200,15 +1200,22 @@ def get_lab_info(request):
         user_list.append(user.username)
         # get group default quota and gpu vendor
     try:
-        cpuQuota = GroupDefaultQuota.objects.get(labname=group).cpu_quota
-        memQuota = GroupDefaultQuota.objects.get(labname=group).mem_quota
-        gpuQuota = GroupDefaultQuota.objects.get(labname=group).gpu_quota
-        gpuVendor = GroupDefaultQuota.objects.get(labname=group).gpu_vendor
+        group_quota = GroupDefaultQuota.objects.get(labname=group)
+        cpuQuota = group_quota.cpu_quota
+        memQuota = group_quota.mem_quota
+        gpuQuota = group_quota.gpu_quota
+        gpuVendor = group_quota.gpu_vendor
+        expiryDate = group_quota.expiry_date.isoformat() if group_quota.expiry_date else None
+        remainingDays = group_quota.remaining_days
+        isExpired = group_quota.is_expired
     except:
         cpuQuota = 0
         memQuota = 0
         gpuQuota = 0
         gpuVendor = "NVIDIA"
+        expiryDate = None
+        remainingDays = None
+        isExpired = False
     
     # 獲取群組到期資訊
     expiry_date = None
@@ -1243,7 +1250,8 @@ def get_lab_info(request):
         "gpuVendor": gpuVendor,
         "memberUid": get_all_user_permission(user_list, labname),
         "expiryDate": expiry_date,
-        "remainingDays": remaining_days
+        "remainingDays": remaining_days,
+        "isExpired": isExpired,
     }
     return Response(data, status=200)
 
@@ -1325,8 +1333,8 @@ def editlab(request):
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
     gpuVendor = data['gpu_vendor']
-    expiryDate = data.get('expiry_date', None)  # 取得到期日期，如果沒有則為 None
-    
+    expiryDate = data.get('expiry_date', None)  # 獲取到期日期，可能為空
+
     # 處理空字串的情況，將空字串轉為 None
     if expiryDate == '' or expiryDate == 'null' or expiryDate == 'undefined':
         expiryDate = None
@@ -1335,7 +1343,7 @@ def editlab(request):
             expiryDate = datetime.date.fromisoformat(expiryDate)
         except ValueError:
             return Response(status=400, data="expiry_date is not valid")
-    
+
     print(f"===== EDIT LAB DEBUG =====")
     print(f"Lab name: {labname}")
     print(f"Expiry date received: {expiryDate}")
@@ -1451,7 +1459,6 @@ def editlab(request):
                 # Avoid failing the whole edit when k8s profile update conflicts.
                 print(f"Profile update failed for {user.username}: {e}")
                 continue
-
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
 @api_view(['POST'])
