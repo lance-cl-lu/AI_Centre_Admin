@@ -1,0 +1,260 @@
+apiVersion: v1
+data:
+  app.py: |
+    import logging
+    import os
+    from typing import Dict
+
+    from flask import Flask, jsonify, request
+    from kubernetes import client, config
+    from kubernetes.client.rest import ApiException
+
+    from rules import evaluate_rules, parse_csv
+
+
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
+    logger = logging.getLogger("groupshare-webhook")
+
+    PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
+    NAMESPACE_SHARE_PODDEFAULT_NAME = os.getenv("NAMESPACE_SHARE_PODDEFAULT_NAME", "namespace-share")
+    PODDEFAULT_GROUP = "kubeflow.org"
+    PODDEFAULT_VERSION = "v1alpha1"
+    PODDEFAULT_PLURAL = "poddefaults"
+
+    app = Flask(__name__)
+    config.load_incluster_config()
+    co_api = client.CustomObjectsApi()
+
+
+    def admission_response(uid: str, allowed: bool, message: str = "", code: int = 403) -> Dict:
+        response = {"uid": uid, "allowed": allowed}
+        if not allowed:
+            response["status"] = {"code": code, "message": message}
+        return {"apiVersion": "admission.k8s.io/v1", "kind": "AdmissionReview", "response": response}
+
+
+    def load_poddefault_annotations(namespace: str, poddefault_name: str, required: bool = True) -> Dict:
+        try:
+            poddefault = co_api.get_namespaced_custom_object(
+                group=PODDEFAULT_GROUP,
+                version=PODDEFAULT_VERSION,
+                namespace=namespace,
+                plural=PODDEFAULT_PLURAL,
+                name=poddefault_name,
+            )
+            return poddefault.get("metadata", {}).get("annotations", {}) or {}
+        except ApiException as exc:
+            if exc.status == 404 and not required:
+                return {}
+            raise
+
+
+    def load_namespace_policy(namespace: str) -> Dict:
+        groupshare_annotations = load_poddefault_annotations(namespace, PODDEFAULT_NAME, required=True)
+        namespace_share_annotations = load_poddefault_annotations(
+            namespace,
+            NAMESPACE_SHARE_PODDEFAULT_NAME,
+            required=False,
+        )
+        expected_servers = {
+            server
+            for server in [
+                groupshare_annotations.get("groupshare.kubeflow.org/nfs-server", ""),
+                namespace_share_annotations.get("namespace-share.kubeflow.org/nfs-server", ""),
+            ]
+            if server
+        }
+        if len(expected_servers) > 1:
+            raise RuntimeError(f"conflicting managed NFS servers detected: {sorted(expected_servers)}")
+
+        expected_nfs_server = next(iter(expected_servers), "")
+        allowed_volume_names = parse_csv(groupshare_annotations.get("groupshare.kubeflow.org/allowed-volumes", ""))
+        allowed_volume_names.update(
+            parse_csv(namespace_share_annotations.get("namespace-share.kubeflow.org/allowed-volumes", ""))
+        )
+        allowed_nfs_paths = parse_csv(groupshare_annotations.get("groupshare.kubeflow.org/allowed-paths", ""))
+        allowed_nfs_paths.update(
+            parse_csv(namespace_share_annotations.get("namespace-share.kubeflow.org/allowed-paths", ""))
+        )
+        admin_volume_names = parse_csv(groupshare_annotations.get("groupshare.kubeflow.org/admin-groups", ""))
+        writable_volume_names = parse_csv(
+            namespace_share_annotations.get("namespace-share.kubeflow.org/writable-volumes", "")
+        )
+
+        return {
+            "expected_nfs_server": expected_nfs_server,
+            "allowed_volume_names": allowed_volume_names,
+            "allowed_nfs_paths": allowed_nfs_paths,
+            "admin_volume_names": admin_volume_names,
+            "writable_volume_names": writable_volume_names,
+        }
+
+
+    @app.route("/healthz", methods=["GET"])
+    def healthz():
+        return "ok", 200
+
+
+    @app.route("/validate", methods=["POST"])
+    def validate():
+        try:
+            review = request.get_json(force=True)
+            req = review["request"]
+            uid = req["uid"]
+            operation = req.get("operation", "")
+            namespace = req.get("namespace", "")
+            user = req.get("userInfo", {}).get("username", "unknown")
+            user_groups = req.get("userInfo", {}).get("groups", [])
+            obj = req.get("object", {})
+
+            if req.get("kind", {}).get("group") != "kubeflow.org" or req.get("kind", {}).get("kind") != "Notebook":
+                return jsonify(admission_response(uid, True))
+
+            if operation not in {"CREATE", "UPDATE"}:
+                return jsonify(admission_response(uid, True))
+
+            policy = load_namespace_policy(namespace)
+            allowed, rule, message = evaluate_rules(
+                notebook_obj=obj,
+                user_groups=user_groups,
+                expected_nfs_server=policy["expected_nfs_server"],
+                allowed_volume_names=policy["allowed_volume_names"],
+                allowed_nfs_paths=policy["allowed_nfs_paths"],
+                admin_volume_names=policy["admin_volume_names"],
+                writable_volume_names=policy["writable_volume_names"],
+            )
+
+            if not allowed:
+                attempted_paths = []
+                for volume in (obj.get("spec", {}).get("template", {}).get("spec", {}).get("volumes", []) or []):
+                    if volume.get("nfs", {}).get("path"):
+                        attempted_paths.append(volume["nfs"]["path"])
+                logger.warning(
+                    "[DENY] Request rejected: rule=%s user=%s namespace=%s paths=%s reason=%s",
+                    rule,
+                    user,
+                    namespace,
+                    attempted_paths,
+                    message,
+                )
+                return jsonify(admission_response(uid, False, f"Security Violation ({rule}): {message}"))
+
+            return jsonify(admission_response(uid, True))
+        except Exception as exc:
+            logger.exception("[DENY] Request rejected: webhook internal error fail-closed: %s", exc)
+            uid = "unknown"
+            try:
+                uid = request.get_json(force=True).get("request", {}).get("uid", "unknown")
+            except Exception:
+                pass
+            return jsonify(admission_response(uid, False, "webhook internal error (fail-closed)", 500))
+
+
+    if __name__ == "__main__":
+        port = int(os.getenv("PORT", "8443"))
+        cert = os.getenv("TLS_CERT_FILE", "/tls/tls.crt")
+        key = os.getenv("TLS_KEY_FILE", "/tls/tls.key")
+        app.run(host="0.0.0.0", port=port, ssl_context=(cert, key))
+  rules.py: |
+    from typing import List, Set, Tuple
+
+
+    def parse_csv(raw: str) -> Set[str]:
+        if not raw:
+            return set()
+        return {item.strip() for item in raw.split(',') if item.strip()}
+
+
+    def sanitize_group(group: str) -> str:
+        import re
+
+        token = group.lower()
+        token = re.sub(r'[^a-z0-9-]+', '-', token)
+        token = re.sub(r'-{2,}', '-', token)
+        return token.strip('-')
+
+
+    def user_admin_volume_names(user_groups: List[str]) -> Set[str]:
+        out = set()
+        for group in user_groups or []:
+            token = sanitize_group(group)
+            if token:
+                out.add(f"gs-{token}")
+        return out
+
+
+    def extract_pod_spec(notebook_obj: dict) -> dict:
+        spec = notebook_obj.get("spec", {})
+        if "template" in spec and isinstance(spec["template"], dict):
+            return spec["template"].get("spec", {})
+        return spec.get("podSpec", {})
+
+
+    def evaluate_rules(
+        notebook_obj: dict,
+        user_groups: List[str],
+        expected_nfs_server: str,
+        allowed_volume_names: Set[str],
+        allowed_nfs_paths: Set[str],
+        admin_volume_names: Set[str],
+        writable_volume_names: Set[str],
+    ) -> Tuple[bool, str, str]:
+        metadata = notebook_obj.get("metadata", {})
+        labels = metadata.get("labels", {}) or {}
+        pod_spec = extract_pod_spec(notebook_obj)
+        volumes = pod_spec.get("volumes", []) or []
+        if labels.get("groupshare") != "enabled":
+            for volume in volumes:
+                nfs = volume.get("nfs")
+                if not nfs:
+                    continue
+                volume_name = volume.get("name", "")
+                path = nfs.get("path", "")
+                if volume_name in allowed_volume_names or path in allowed_nfs_paths or path.startswith("/group"):
+                    return False, "Rule D", "groupshare label is required: groupshare=enabled"
+            return True, "ALLOW", "groupshare disabled: skip rules"
+
+        containers = pod_spec.get("containers", []) or []
+        mount_readonly = {}
+        for container in containers:
+            for vm in (container.get("volumeMounts", []) or []):
+                if "name" in vm and "readOnly" in vm:
+                    mount_readonly[vm["name"]] = bool(vm["readOnly"])
+        requested_admin_volumes = user_admin_volume_names(user_groups).intersection(admin_volume_names)
+
+        for volume in volumes:
+            nfs = volume.get("nfs")
+            if not nfs:
+                continue
+
+            volume_name = volume.get("name", "")
+            path = nfs.get("path", "")
+            server = nfs.get("server", "")
+            read_only = bool(nfs.get("readOnly", False))
+            is_admin_for_volume = volume_name in requested_admin_volumes
+            is_namespace_writable = volume_name in writable_volume_names
+
+            if path.startswith("/group"):
+                return False, "Rule A", f"forbidden NFS path: {path}"
+
+            if server != expected_nfs_server:
+                return False, "Rule B", f"NFS server mismatch: {server}"
+
+            if volume_name not in allowed_volume_names:
+                return False, "Rule B", f"volume not in allowed whitelist: {volume_name}"
+
+            if path not in allowed_nfs_paths:
+                return False, "Rule B", f"NFS path not in allowed whitelist: {path}"
+
+            if not is_admin_for_volume and not is_namespace_writable and not read_only:
+                return False, "Rule C", f"readOnly=false denied for non-admin on volume {volume_name}"
+
+            if not is_admin_for_volume and not is_namespace_writable and mount_readonly.get(volume_name) is False:
+                return False, "Rule C", f"volumeMount readOnly=false denied for non-admin on volume {volume_name}"
+
+        return True, "ALLOW", "request accepted"
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: groupshare-webhook-code
+  namespace: kubeflow

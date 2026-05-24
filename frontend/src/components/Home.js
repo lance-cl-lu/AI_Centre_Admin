@@ -7,7 +7,17 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { KUBEFLOW_HTTP } from './Urls';
 import CountUp from 'react-countup';
-import { promQuery, promQueryRange, buildNamespaceQuery, buildNamespacePattern } from '../api/prometheus';
+import {
+  promQuery,
+  promQueryRange,
+  buildNamespaceQuery,
+  buildUserNamespaceQuery,
+  buildNamespacePattern,
+  getNamespaceMetricService,
+  setNamespaceMetricService,
+  getNamespaceMetricServiceOption,
+  PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS,
+} from '../api/prometheus';
 
 
 function getRandomBlueShade() {
@@ -68,6 +78,13 @@ const formatTimestamp = (seconds) => {
   return new Date(seconds * 1000).toLocaleString();
 };
 
+const formatMinutes = (minutes, maximumFractionDigits = 1) => {
+  if (!Number.isFinite(minutes)) {
+    return '無資料';
+  }
+  return `${formatMetricValue(minutes, maximumFractionDigits)} 分鐘`;
+};
+
 const summariseSeriesDiff = (values) => {
   if (!values.length) {
     return {
@@ -100,6 +117,405 @@ const summariseSeriesDiff = (values) => {
     minTimestamp,
     maxTimestamp,
   };
+};
+
+const HOME_USAGE_QUERY_MAX_POINTS = 50000;
+const HOME_USAGE_QUERY_CHUNK_MAX_POINTS = 10000;
+const V71_NAMESPACE_METRIC_SERVICE = 'prom-app-v71';
+
+const V71_USAGE_METRICS = {
+  namespace_cpu_cost: {
+    cpu: true,
+    gpu: false,
+    usageUnit: 'CPU core',
+  },
+  namespace_gpu_cost: {
+    cpu: false,
+    gpu: true,
+    usageUnit: 'GPU card',
+  },
+  namespace_total_cost: {
+    cpu: true,
+    gpu: true,
+    usageUnit: '',
+  },
+};
+
+const toNumericValue = (value) => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/[^0-9.-]+/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const getCostRatesFromConfig = (costConfig) => ({
+  cpuCostPerMinute: toNumericValue(costConfig.cpuCostPerMinute),
+  gpuCostPerMinute: toNumericValue(costConfig.gpuCostPerMinute),
+});
+
+const getV71RangeQueryStep = ({ startDate, endDate, namespacePattern }) => {
+  const durationMinutes = Math.max(
+    1,
+    Math.ceil((endDate.getTime() - startDate.getTime()) / 60000)
+  );
+  const minimumStepMinutes = 1;
+  const boundedStepMinutes = Math.max(
+    minimumStepMinutes,
+    Math.ceil(durationMinutes / HOME_USAGE_QUERY_MAX_POINTS)
+  );
+  return `${boundedStepMinutes}m`;
+};
+
+const parsePrometheusDurationToSeconds = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)(ms|s|m|h|d|w|y)$/);
+  if (!match) {
+    return 60;
+  }
+  const amount = Number(match[1]);
+  const multipliers = {
+    ms: 0.001,
+    s: 1,
+    m: 60,
+    h: 60 * 60,
+    d: 24 * 60 * 60,
+    w: 7 * 24 * 60 * 60,
+    y: 365 * 24 * 60 * 60,
+  };
+  return amount * multipliers[match[2]];
+};
+
+const getMetricKey = (metricInfo = {}) => {
+  return JSON.stringify(
+    Object.keys(metricInfo)
+      .sort()
+      .reduce((entry, key) => ({
+        ...entry,
+        [key]: metricInfo[key],
+      }), {})
+  );
+};
+
+const combineRangeChunks = (chunks) => {
+  const seriesByMetric = new Map();
+  chunks.forEach((chunk) => {
+    if (!chunk || !Array.isArray(chunk.result)) {
+      return;
+    }
+    chunk.result.forEach((series) => {
+      const metric = series.metric || {};
+      const key = getMetricKey(metric);
+      if (!seriesByMetric.has(key)) {
+        seriesByMetric.set(key, {
+          metric,
+          values: new Map(),
+        });
+      }
+      const entry = seriesByMetric.get(key);
+      (series.values || []).forEach(([rawTimestamp, rawValue]) => {
+        const timestamp = Number(rawTimestamp);
+        const value = Number(rawValue);
+        if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+          return;
+        }
+        entry.values.set(timestamp, value.toString());
+      });
+    });
+  });
+
+  return {
+    result: Array.from(seriesByMetric.values()).map((series) => ({
+      metric: series.metric,
+      values: Array.from(series.values.entries())
+        .sort((left, right) => left[0] - right[0])
+        .map(([timestamp, value]) => [timestamp, value]),
+    })),
+  };
+};
+
+const promQueryRangeChunked = async ({
+  query,
+  start,
+  end,
+  step,
+  signal,
+}) => {
+  const stepSeconds = parsePrometheusDurationToSeconds(step);
+  const stepMs = Math.max(1000, stepSeconds * 1000);
+  const maxChunkSpanMs = stepMs * (HOME_USAGE_QUERY_CHUNK_MAX_POINTS - 1);
+  const endMs = end.getTime();
+  let cursorMs = start.getTime();
+  const chunks = [];
+
+  while (cursorMs <= endMs) {
+    const chunkEndMs = Math.min(endMs, cursorMs + maxChunkSpanMs);
+    const chunk = await promQueryRange({
+      query,
+      start: new Date(cursorMs),
+      end: new Date(chunkEndMs),
+      step,
+      signal,
+    });
+    chunks.push(chunk);
+    cursorMs = chunkEndMs + stepMs;
+  }
+
+  return combineRangeChunks(chunks);
+};
+
+const extractInstantNamespaceValues = (dataset) => {
+  const values = new Map();
+  if (!dataset || !Array.isArray(dataset.result)) {
+    return values;
+  }
+  dataset.result.forEach((item) => {
+    const metricInfo = item.metric || {};
+    const namespaceLabel =
+      metricInfo.user_namespace
+      || metricInfo.exported_namespace
+      || metricInfo.namespace
+      || '(unknown)';
+    const [rawTimestamp, rawValue] = item.value || [];
+    const numericValue = Number(rawValue);
+    if (!namespaceLabel || !Number.isFinite(numericValue)) {
+      return;
+    }
+    const timestamp = Number(rawTimestamp);
+    values.set(namespaceLabel, {
+      value: numericValue,
+      timestamp: Number.isFinite(timestamp) ? timestamp : null,
+    });
+  });
+  return values;
+};
+
+const extractRangeNamespaceValues = (dataset) => {
+  const values = new Map();
+  if (!dataset || !Array.isArray(dataset.result)) {
+    return values;
+  }
+  dataset.result.forEach((series) => {
+    const metricInfo = series.metric || {};
+    const namespaceLabel =
+      metricInfo.user_namespace
+      || metricInfo.exported_namespace
+      || metricInfo.namespace
+      || '(unknown)';
+    if (!namespaceLabel) {
+      return;
+    }
+    values.set(namespaceLabel, normaliseRangeValues(series));
+  });
+  return values;
+};
+
+const normaliseSteppedRangeValues = (values, startSeconds, endSeconds, stepSeconds) => {
+  const sortedValues = (values || [])
+    .filter(([timestamp, value]) => (
+      Number.isFinite(timestamp)
+      && Number.isFinite(value)
+      && timestamp >= startSeconds
+      && timestamp <= endSeconds
+    ))
+    .sort((left, right) => left[0] - right[0]);
+
+  if (!sortedValues.length) {
+    return [];
+  }
+
+  const normalised = [];
+  sortedValues.forEach(([timestamp, value], index) => {
+    normalised.push([timestamp, value]);
+    if (!Number.isFinite(stepSeconds) || stepSeconds <= 0) {
+      return;
+    }
+    const nextTimestamp = sortedValues[index + 1]?.[0] ?? endSeconds;
+    const staleTimestamp = timestamp + stepSeconds;
+    if (staleTimestamp < Math.min(nextTimestamp, endSeconds)) {
+      normalised.push([staleTimestamp, 0]);
+    }
+  });
+  return normalised.sort((left, right) => left[0] - right[0]);
+};
+
+const buildUsageSegments = ({
+  cpuValues,
+  gpuValues,
+  startDate,
+  endDate,
+  costRates,
+  includeCpu,
+  includeGpu,
+  stepSeconds,
+}) => {
+  const startSeconds = Math.floor(startDate.getTime() / 1000);
+  const endSeconds = Math.floor(endDate.getTime() / 1000);
+  const cpuSeries = includeCpu
+    ? normaliseSteppedRangeValues(cpuValues, startSeconds, endSeconds, stepSeconds)
+    : [];
+  const gpuSeries = includeGpu
+    ? normaliseSteppedRangeValues(gpuValues, startSeconds, endSeconds, stepSeconds)
+    : [];
+  const cpuCostRateSeries = includeCpu
+    ? normaliseSteppedRangeValues(
+      costRates.cpuCostRateValues,
+      startSeconds,
+      endSeconds,
+      stepSeconds,
+    )
+    : [];
+  const gpuCostRateSeries = includeGpu
+    ? normaliseSteppedRangeValues(
+      costRates.gpuCostRateValues,
+      startSeconds,
+      endSeconds,
+      stepSeconds,
+    )
+    : [];
+  const cpuByTimestamp = new Map(cpuSeries);
+  const gpuByTimestamp = new Map(gpuSeries);
+  const cpuCostRateByTimestamp = new Map(cpuCostRateSeries);
+  const gpuCostRateByTimestamp = new Map(gpuCostRateSeries);
+  const timeline = Array.from(new Set([
+    ...cpuSeries.map(([timestamp]) => timestamp),
+    ...gpuSeries.map(([timestamp]) => timestamp),
+    ...cpuCostRateSeries.map(([timestamp]) => timestamp),
+    ...gpuCostRateSeries.map(([timestamp]) => timestamp),
+  ])).sort((left, right) => left - right);
+
+  if (!timeline.length) {
+    return [];
+  }
+
+  let currentCpu = 0;
+  let currentGpu = 0;
+  let currentCpuCostRate = 0;
+  let currentGpuCostRate = 0;
+  let previousTimestamp = startSeconds;
+  let currentSegment = null;
+  const segments = [];
+
+  const closeSegment = () => {
+    if (!currentSegment) {
+      return;
+    }
+    if (currentSegment.durationMinutes > 0) {
+      segments.push(currentSegment);
+    }
+    currentSegment = null;
+  };
+
+  const addInterval = (nextTimestamp) => {
+    const boundedTimestamp = Math.min(nextTimestamp, endSeconds);
+    const durationSeconds = Math.max(0, boundedTimestamp - previousTimestamp);
+    if (!durationSeconds) {
+      return;
+    }
+    const durationMinutes = durationSeconds / 60;
+    const hasCpuUsage = includeCpu && currentCpuCostRate > 0;
+    const hasGpuUsage = includeGpu && currentGpuCostRate > 0;
+    if (!hasCpuUsage && !hasGpuUsage) {
+      closeSegment();
+      return;
+    }
+    if (!currentSegment) {
+      currentSegment = {
+        startTimestamp: previousTimestamp,
+        endTimestamp: boundedTimestamp,
+        durationMinutes: 0,
+        cpuActiveMinutes: 0,
+        gpuActiveMinutes: 0,
+        cpuUsageMinutes: 0,
+        gpuUsageMinutes: 0,
+        cost: 0,
+      };
+    }
+    currentSegment.endTimestamp = boundedTimestamp;
+    currentSegment.durationMinutes += durationMinutes;
+    if (hasCpuUsage) {
+      currentSegment.cpuActiveMinutes += durationMinutes;
+      currentSegment.cpuUsageMinutes += currentCpu * durationMinutes;
+      currentSegment.cost += currentCpu * durationMinutes * costRates.cpuCostPerMinute;
+    }
+    if (hasGpuUsage) {
+      currentSegment.gpuActiveMinutes += durationMinutes;
+      currentSegment.gpuUsageMinutes += currentGpu * durationMinutes;
+      currentSegment.cost += currentGpu * durationMinutes * costRates.gpuCostPerMinute;
+    }
+  };
+
+  timeline.forEach((timestamp) => {
+    addInterval(timestamp);
+    previousTimestamp = Math.min(timestamp, endSeconds);
+    if (cpuByTimestamp.has(timestamp)) {
+      currentCpu = cpuByTimestamp.get(timestamp);
+    }
+    if (gpuByTimestamp.has(timestamp)) {
+      currentGpu = gpuByTimestamp.get(timestamp);
+    }
+    if (cpuCostRateByTimestamp.has(timestamp)) {
+      currentCpuCostRate = cpuCostRateByTimestamp.get(timestamp);
+    }
+    if (gpuCostRateByTimestamp.has(timestamp)) {
+      currentGpuCostRate = gpuCostRateByTimestamp.get(timestamp);
+    }
+  });
+  addInterval(endSeconds);
+  closeSegment();
+
+  return segments.map((segment) => ({
+    ...segment,
+    averageCpu: segment.cpuActiveMinutes > 0
+      ? segment.cpuUsageMinutes / segment.cpuActiveMinutes
+      : 0,
+    averageGpu: segment.gpuActiveMinutes > 0
+      ? segment.gpuUsageMinutes / segment.gpuActiveMinutes
+      : 0,
+  }));
+};
+
+const fetchV71UsageLeaders = async ({ costRates, signal }) => {
+  const [cpuData, gpuData] = await Promise.all([
+    promQuery({
+      query: buildUserNamespaceQuery('cgu_namespace_billable_cpu_cores', '.*'),
+      signal,
+    }).catch(() => null),
+    promQuery({
+      query: buildUserNamespaceQuery('cgu:namespace_billable_gpu_cards_total', '.*'),
+      signal,
+    }).catch(() => null),
+  ]);
+  const cpuValues = extractInstantNamespaceValues(cpuData);
+  const gpuValues = extractInstantNamespaceValues(gpuData);
+  const namespaceLabels = new Set([
+    ...Array.from(cpuValues.keys()),
+    ...Array.from(gpuValues.keys()),
+  ]);
+  return Array.from(namespaceLabels)
+    .map((namespaceLabel) => {
+      const cpu = cpuValues.get(namespaceLabel)?.value || 0;
+      const gpu = gpuValues.get(namespaceLabel)?.value || 0;
+      return {
+        namespaceLabel,
+        cpu,
+        gpu,
+        costRate:
+          cpu * costRates.cpuCostPerMinute
+          + gpu * costRates.gpuCostPerMinute,
+      };
+    })
+    .filter((row) => row.cpu > 0 || row.gpu > 0 || row.costRate > 0)
+    .sort((left, right) => right.costRate - left.costRate)
+    .slice(0, 5);
 };
 
 const filterNamespaces = (namespaces, keyword) => {
@@ -283,10 +699,11 @@ const TIME_METRIC_MAP = {
 const fetchFixedNamespaceMetric = async ({
   metric,
   namespacePattern,
+  serviceName,
   time,
   signal,
 }) => {
-  const query = buildNamespaceQuery(metric, namespacePattern);
+  const query = buildNamespaceQuery(metric, namespacePattern, serviceName);
   const data = await promQuery({
     query,
     time,
@@ -300,12 +717,12 @@ const fetchFixedNamespaceMetric = async ({
   }
   const [cpuData, gpuData] = await Promise.all([
     promQuery({
-      query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern),
+      query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern, serviceName),
       time,
       signal,
     }).catch(() => null),
     promQuery({
-      query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern),
+      query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern, serviceName),
       time,
       signal,
     }).catch(() => null),
@@ -316,6 +733,7 @@ const fetchFixedNamespaceMetric = async ({
 const fetchFixedNamespaceTimeMetric = async ({
   metric,
   namespacePattern,
+  serviceName,
   time,
   signal,
 }) => {
@@ -326,7 +744,7 @@ const fetchFixedNamespaceTimeMetric = async ({
   const datasets = await Promise.all(
     metricNames.map((metricName) =>
       promQuery({
-        query: buildNamespaceQuery(metricName, namespacePattern),
+        query: buildNamespaceQuery(metricName, namespacePattern, serviceName),
         time,
         signal,
       }).catch(() => null),
@@ -338,12 +756,13 @@ const fetchFixedNamespaceTimeMetric = async ({
 const fetchRangeNamespaceMetric = async ({
   metric,
   namespacePattern,
+  serviceName,
   start,
   end,
   step,
   signal,
 }) => {
-  const query = buildNamespaceQuery(metric, namespacePattern);
+  const query = buildNamespaceQuery(metric, namespacePattern, serviceName);
   const data = await promQueryRange({
     query,
     start,
@@ -359,14 +778,14 @@ const fetchRangeNamespaceMetric = async ({
   }
   const [cpuData, gpuData] = await Promise.all([
     promQueryRange({
-      query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern),
+      query: buildNamespaceQuery('namespace_cpu_cost', namespacePattern, serviceName),
       start,
       end,
       step,
       signal,
     }).catch(() => null),
     promQueryRange({
-      query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern),
+      query: buildNamespaceQuery('namespace_gpu_cost', namespacePattern, serviceName),
       start,
       end,
       step,
@@ -379,9 +798,11 @@ const fetchRangeNamespaceMetric = async ({
 const fetchRangeNamespaceTimeMetric = async ({
   metric,
   namespacePattern,
+  serviceName,
   start,
   end,
   step,
+  costRates,
   signal,
 }) => {
   const metricNames = TIME_METRIC_MAP[metric];
@@ -391,7 +812,7 @@ const fetchRangeNamespaceTimeMetric = async ({
   const datasets = await Promise.all(
     metricNames.map((metricName) =>
       promQueryRange({
-        query: buildNamespaceQuery(metricName, namespacePattern),
+        query: buildNamespaceQuery(metricName, namespacePattern, serviceName),
         start,
         end,
         step,
@@ -400,6 +821,201 @@ const fetchRangeNamespaceTimeMetric = async ({
     ),
   );
   return combineRangeNamespaceResults(...datasets);
+};
+
+const fetchV71FixedNamespaceSummary = async ({
+  metric,
+  namespacePattern,
+  time,
+  costRates,
+  signal,
+}) => {
+  const metricConfig = V71_USAGE_METRICS[metric] || V71_USAGE_METRICS.namespace_cpu_cost;
+  const queryRequests = [];
+  if (metricConfig.cpu) {
+    queryRequests.push({
+      key: 'cpu',
+      request: promQuery({
+        query: buildUserNamespaceQuery('cgu_namespace_billable_cpu_cores', namespacePattern),
+        time,
+        signal,
+      }).catch(() => null),
+    });
+  }
+  if (metricConfig.gpu) {
+    queryRequests.push({
+      key: 'gpu',
+      request: promQuery({
+        query: buildUserNamespaceQuery('cgu:namespace_billable_gpu_cards_total', namespacePattern),
+        time,
+        signal,
+      }).catch(() => null),
+    });
+  }
+
+  const resolved = await Promise.all(queryRequests.map((item) => item.request));
+  const datasets = {};
+  resolved.forEach((dataset, index) => {
+    datasets[queryRequests[index].key] = extractInstantNamespaceValues(dataset);
+  });
+
+  const namespaceLabels = new Set();
+  Object.values(datasets).forEach((values) => {
+    values.forEach((_, namespaceLabel) => namespaceLabels.add(namespaceLabel));
+  });
+
+  return Array.from(namespaceLabels).map((namespaceLabel) => {
+    const cpuEntry = datasets.cpu?.get(namespaceLabel);
+    const gpuEntry = datasets.gpu?.get(namespaceLabel);
+    const cpuValue = cpuEntry?.value || 0;
+    const gpuValue = gpuEntry?.value || 0;
+    const cost =
+      (metricConfig.cpu ? cpuValue * costRates.cpuCostPerMinute : 0)
+      + (metricConfig.gpu ? gpuValue * costRates.gpuCostPerMinute : 0);
+    const usageValue =
+      metric === 'namespace_cpu_cost'
+        ? cpuValue
+        : metric === 'namespace_gpu_cost'
+          ? gpuValue
+          : null;
+    const usageText =
+      metric === 'namespace_total_cost'
+        ? `CPU ${formatMetricValue(cpuValue, 2)} core / GPU ${formatMetricValue(gpuValue, 2)} card`
+        : '';
+    const timestamps = [cpuEntry?.timestamp, gpuEntry?.timestamp].filter(Number.isFinite);
+    return {
+      namespaceLabel,
+      cost,
+      time: usageValue,
+      timeText: usageText,
+      timestamp: timestamps.length ? Math.max(...timestamps) : null,
+      usageUnit: metricConfig.usageUnit,
+      source: 'v71',
+    };
+  });
+};
+
+const fetchV71RangeNamespaceSummary = async ({
+  metric,
+  namespacePattern,
+  start,
+  end,
+  step,
+  costRates,
+  signal,
+}) => {
+  const metricConfig = V71_USAGE_METRICS[metric] || V71_USAGE_METRICS.namespace_cpu_cost;
+  const queryRequests = [];
+  if (metricConfig.cpu) {
+    queryRequests.push({
+      key: 'cpu',
+      request: promQueryRangeChunked({
+        query: buildUserNamespaceQuery('cgu_namespace_billable_cpu_cores', namespacePattern),
+        start,
+        end,
+        step,
+        signal,
+      }).catch(() => null),
+    });
+    queryRequests.push({
+      key: 'cpuCostRate',
+      request: promQueryRangeChunked({
+        query: buildUserNamespaceQuery('cgu_namespace_billable_cpu_cost_per_minute', namespacePattern),
+        start,
+        end,
+        step,
+        signal,
+      }).catch(() => null),
+    });
+  }
+  if (metricConfig.gpu) {
+    queryRequests.push({
+      key: 'gpu',
+      request: promQueryRangeChunked({
+        query: buildUserNamespaceQuery('cgu:namespace_billable_gpu_cards_total', namespacePattern),
+        start,
+        end,
+        step,
+        signal,
+      }).catch(() => null),
+    });
+    queryRequests.push({
+      key: 'gpuCostRate',
+      request: promQueryRangeChunked({
+        query: buildUserNamespaceQuery('cgu_namespace_billable_gpu_cost_per_minute', namespacePattern),
+        start,
+        end,
+        step,
+        signal,
+      }).catch(() => null),
+    });
+  }
+
+  const resolved = await Promise.all(queryRequests.map((item) => item.request));
+  const datasets = {};
+  resolved.forEach((dataset, index) => {
+    datasets[queryRequests[index].key] = extractRangeNamespaceValues(dataset);
+  });
+
+  const namespaceLabels = new Set();
+  Object.values(datasets).forEach((values) => {
+    values.forEach((_, namespaceLabel) => namespaceLabels.add(namespaceLabel));
+  });
+
+  return Array.from(namespaceLabels).map((namespaceLabel) => {
+    const cpuValues = datasets.cpu?.get(namespaceLabel) || [];
+    const gpuValues = datasets.gpu?.get(namespaceLabel) || [];
+    const cpuCostRateValues = datasets.cpuCostRate?.get(namespaceLabel) || [];
+    const gpuCostRateValues = datasets.gpuCostRate?.get(namespaceLabel) || [];
+    const usageSegments = buildUsageSegments({
+      cpuValues,
+      gpuValues,
+      startDate: start,
+      endDate: end,
+      costRates: {
+        cpuCostRateValues,
+        gpuCostRateValues,
+        cpuCostPerMinute: costRates.cpuCostPerMinute,
+        gpuCostPerMinute: costRates.gpuCostPerMinute,
+      },
+      includeCpu: metricConfig.cpu,
+      includeGpu: metricConfig.gpu,
+      stepSeconds: parsePrometheusDurationToSeconds(step),
+    });
+    const costTotal = usageSegments.reduce((sum, segment) => sum + segment.cost, 0);
+    const cpuUsageMinutes = usageSegments.reduce(
+      (sum, segment) => sum + segment.cpuUsageMinutes,
+      0,
+    );
+    const gpuUsageMinutes = usageSegments.reduce(
+      (sum, segment) => sum + segment.gpuUsageMinutes,
+      0,
+    );
+    const cpuActiveMinutes = usageSegments.reduce(
+      (sum, segment) => sum + segment.cpuActiveMinutes,
+      0,
+    );
+    const gpuActiveMinutes = usageSegments.reduce(
+      (sum, segment) => sum + segment.gpuActiveMinutes,
+      0,
+    );
+
+    return {
+      namespaceLabel,
+      costSummary: { diff: costTotal },
+      cpuUsageMinutes: metricConfig.cpu ? cpuUsageMinutes : null,
+      gpuUsageMinutes: metricConfig.gpu ? gpuUsageMinutes : null,
+      cpuActiveMinutes: metricConfig.cpu ? cpuActiveMinutes : null,
+      gpuActiveMinutes: metricConfig.gpu ? gpuActiveMinutes : null,
+      cpuAverageCores:
+        metricConfig.cpu && cpuActiveMinutes > 0 ? cpuUsageMinutes / cpuActiveMinutes : null,
+      gpuAverageCards:
+        metricConfig.gpu && gpuActiveMinutes > 0 ? gpuUsageMinutes / gpuActiveMinutes : null,
+      usageSegments,
+      usageUnit: metricConfig.usageUnit,
+      source: 'v71',
+    };
+  }).filter((row) => row.costSummary.diff > 0 || row.usageSegments.length > 0);
 };
 
 const buildInstantNamespaceSummary = (costData, timeData) => {
@@ -497,7 +1113,7 @@ function Home() {
   const [fixedLoading, setFixedLoading] = useState(false);
   const [rangeNs, setRangeNs] = useState('');
   const [rangeSearchKeyword, setRangeSearchKeyword] = useState('');
-  const [rangeMetric, setRangeMetric] = useState('namespace_cpu_cost');
+  const [rangeMetric, setRangeMetric] = useState('namespace_total_cost');
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [rangeOutput, setRangeOutput] = useState('請查詢…');
@@ -507,6 +1123,12 @@ function Home() {
   const [fixedRows, setFixedRows] = useState([]);
   const [rangeRows, setRangeRows] = useState([]);
   const [rangeWindowLabel, setRangeWindowLabel] = useState('');
+  const [usageLeaders, setUsageLeaders] = useState([]);
+  const [usageLeadersLoading, setUsageLeadersLoading] = useState(false);
+  const [usageLeadersError, setUsageLeadersError] = useState('');
+  const [namespaceMetricService, setNamespaceMetricServiceState] = useState(
+    () => getNamespaceMetricService()
+  );
   const initialCostState = {
     cpuCostPerMinute: '',
     gpuCostPerMinute: '',
@@ -536,6 +1158,72 @@ function Home() {
     () => filterNamespaces(namespaceOptions, rangeSearchKeyword),
     [namespaceOptions, rangeSearchKeyword],
   );
+  const namespaceMetricServiceOption = useMemo(
+    () => getNamespaceMetricServiceOption(namespaceMetricService),
+    [namespaceMetricService],
+  );
+  const isV71NamespaceMetricService =
+    namespaceMetricService === V71_NAMESPACE_METRIC_SERVICE;
+  const fixedCostColumnLabel = isV71NamespaceMetricService ? '即時費用率 / 分鐘' : '費用';
+  const fixedTimeColumnLabel = isV71NamespaceMetricService ? '即時使用量' : '時間';
+  const rangeCostColumnLabel = isV71NamespaceMetricService ? '區間費用' : '費用增量';
+  const rangeCostMaxColumnLabel =
+    isV71NamespaceMetricService ? '最大即時費用率 / 分鐘' : '費用最大值';
+  const rangeCostMinColumnLabel =
+    isV71NamespaceMetricService ? '最小即時費用率 / 分鐘' : '費用最小值';
+  const rangeTimeColumnLabel = isV71NamespaceMetricService ? '區間計費使用量' : '時間增量';
+  const rangeTimeMaxColumnLabel =
+    isV71NamespaceMetricService ? '最大即時使用量' : '時間最大值';
+  const rangeTimeMinColumnLabel =
+    isV71NamespaceMetricService ? '最小即時使用量' : '時間最小值';
+  const rangeUsageSegments = useMemo(() => {
+    return rangeRows.flatMap((row) => {
+      return (row.usageSegments || []).map((segment, index) => ({
+        ...segment,
+        namespaceLabel: row.namespaceLabel,
+        segmentKey: `${row.namespaceLabel}-${segment.startTimestamp}-${segment.endTimestamp}-${index}`,
+      }));
+    }).sort((left, right) => {
+      if (left.startTimestamp !== right.startTimestamp) {
+        return left.startTimestamp - right.startTimestamp;
+      }
+      return left.namespaceLabel.localeCompare(right.namespaceLabel);
+    });
+  }, [rangeRows]);
+  const hasCostConfigLoaded =
+    costOriginal.cpuCostPerMinute !== '' || costOriginal.gpuCostPerMinute !== '';
+  useEffect(() => {
+    if (!isV71NamespaceMetricService || !hasCostConfigLoaded) {
+      setUsageLeaders([]);
+      setUsageLeadersError('');
+      setUsageLeadersLoading(false);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setUsageLeadersLoading(true);
+    setUsageLeadersError('');
+    fetchV71UsageLeaders({
+      costRates: getCostRatesFromConfig(costOriginal),
+      signal: controller.signal,
+    })
+      .then((rows) => {
+        if (!controller.signal.aborted) {
+          setUsageLeaders(rows);
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted && error.name !== 'AbortError') {
+          setUsageLeaders([]);
+          setUsageLeadersError(error.message || '無法取得目前用量前五名。');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setUsageLeadersLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [isV71NamespaceMetricService, hasCostConfigLoaded, costOriginal]);
   useEffect(() => {
     setNsFixed((current) => {
       if (!fixedSearchTrimmed) {
@@ -766,16 +1454,38 @@ function Home() {
         throw new Error('時間格式錯誤，請使用 YYYY-MM-DD HH:MM:SS 或 now');
       }
       const namespacePattern = buildNamespacePattern(namespaceInput);
+      if (namespaceMetricService === V71_NAMESPACE_METRIC_SERVICE) {
+        if (!hasCostConfigLoaded) {
+          throw new Error('費率設定尚未載入，請稍後再查詢。');
+        }
+        const rows = await fetchV71FixedNamespaceSummary({
+          metric: metricFixed,
+          namespacePattern,
+          time: timeValue || undefined,
+          costRates: getCostRatesFromConfig(costOriginal),
+          signal: controller.signal,
+        });
+        if (!rows.length) {
+          setFixedOutput('No data');
+          setFixedRows([]);
+          return;
+        }
+        setFixedRows(rows);
+        setFixedOutput('');
+        return;
+      }
       const [costData, timeData] = await Promise.all([
         fetchFixedNamespaceMetric({
           metric: metricFixed,
           namespacePattern,
+          serviceName: namespaceMetricService,
           time: timeValue || undefined,
           signal: controller.signal,
         }),
         fetchFixedNamespaceTimeMetric({
           metric: metricFixed,
           namespacePattern,
+          serviceName: namespaceMetricService,
           time: timeValue || undefined,
           signal: controller.signal,
         }),
@@ -831,10 +1541,42 @@ function Home() {
         throw new Error('結束時間需晚於開始時間');
       }
       const namespacePattern = buildNamespacePattern(namespaceInput);
+      const header = `區間: ${startDate.toLocaleString()} → ${endDate.toLocaleString()}`;
+      if (namespaceMetricService === V71_NAMESPACE_METRIC_SERVICE) {
+        if (!hasCostConfigLoaded) {
+          throw new Error('費率設定尚未載入，請稍後再查詢。');
+        }
+        const rangeStep = getV71RangeQueryStep({
+          startDate,
+          endDate,
+          namespacePattern,
+        });
+        const rows = await fetchV71RangeNamespaceSummary({
+          metric: rangeMetric,
+          namespacePattern,
+          start: startDate,
+          end: endDate,
+          step: rangeStep,
+          costRates: getCostRatesFromConfig(costOriginal),
+          signal: controller.signal,
+        });
+        setRangeWindowLabel(
+          `${header}；資料粒度：${rangeStep}；只列入歷史費用率大於 0 的區段，費用用目前費率設定計算`
+        );
+        if (!rows.length) {
+          setRangeRows([]);
+          setRangeOutput('No data');
+          return;
+        }
+        setRangeRows(rows);
+        setRangeOutput('');
+        return;
+      }
       const [costData, timeData] = await Promise.all([
         fetchRangeNamespaceMetric({
           metric: rangeMetric,
           namespacePattern,
+          serviceName: namespaceMetricService,
           start: startDate,
           end: endDate,
           step: '6h',
@@ -843,13 +1585,13 @@ function Home() {
         fetchRangeNamespaceTimeMetric({
           metric: rangeMetric,
           namespacePattern,
+          serviceName: namespaceMetricService,
           start: startDate,
           end: endDate,
           step: '6h',
           signal: controller.signal,
         }),
       ]);
-      const header = `區間: ${startDate.toLocaleString()} → ${endDate.toLocaleString()}`;
       const summaries = buildRangeNamespaceSummary(costData, timeData);
       if (!summaries.length) {
         setRangeWindowLabel(header);
@@ -902,6 +1644,17 @@ function Home() {
     const start = new Date(y, m, 1, 0, 0, 0);
     setRangeStart(fmt(start));
     setRangeEnd(fmt(now));
+  };
+
+  const handleNamespaceMetricServiceChange = (event) => {
+    const next = setNamespaceMetricService(event.target.value);
+    setNamespaceMetricServiceState(next);
+    setFixedRows([]);
+    setRangeRows([]);
+    setFixedOutput('請查詢…');
+    setRangeOutput('請查詢…');
+    setFixedError('');
+    setRangeError('');
   };
 
 
@@ -1123,6 +1876,62 @@ function Home() {
         <Card className="mt-4">
           <Card.Header>Usage 查詢（Namespace Cost）</Card.Header>
           <Card.Body className="text-start">
+            <div className="mb-3">
+              <label className="form-label" htmlFor="namespace-metric-service-home">
+                Prometheus 資料來源
+              </label>
+              <select
+                id="namespace-metric-service-home"
+                className="form-select"
+                value={namespaceMetricService}
+                onChange={handleNamespaceMetricServiceChange}
+              >
+                {PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label} ({option.value})
+                  </option>
+                ))}
+              </select>
+              <div className="form-text">
+                目前來源：{namespaceMetricServiceOption.label}。
+                {namespaceMetricServiceOption.description}
+              </div>
+            </div>
+            {isV71NamespaceMetricService ? (
+              <div className="mb-3">
+                <div className="usage-notice">
+                  目前有用量的 Namespace 前五名（依即時費用率排序）
+                </div>
+                {usageLeadersLoading ? (
+                  <div className="usage-loading">讀取中…</div>
+                ) : usageLeadersError ? (
+                  <div className="usage-error">{usageLeadersError}</div>
+                ) : usageLeaders.length ? (
+                  <table className="usage-table usage-table-compact">
+                    <thead>
+                      <tr>
+                        <th>Namespace</th>
+                        <th>即時費用率 / 分鐘</th>
+                        <th>CPU</th>
+                        <th>GPU</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usageLeaders.map((row) => (
+                        <tr key={row.namespaceLabel}>
+                          <th scope="row">{row.namespaceLabel}</th>
+                          <td>{formatMetricValue(row.costRate, 4)}</td>
+                          <td>{formatMetricValue(row.cpu, 2)} core</td>
+                          <td>{formatMetricValue(row.gpu, 2)} card</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="usage-empty">目前沒有正在計費的 Namespace。</div>
+                )}
+              </div>
+            ) : null}
             <div className="usage-tabs">
               <button
                 type="button"
@@ -1136,7 +1945,7 @@ function Home() {
                 className={`usage-tab-btn ${activeUsageTab === 'range' ? 'active' : ''}`}
                 onClick={() => setActiveUsageTab('range')}
               >
-                區間查詢 (max-min)
+                {isV71NamespaceMetricService ? '區間查詢（用量積分）' : '區間查詢 (max-min)'}
               </button>
             </div>
 
@@ -1202,8 +2011,8 @@ function Home() {
                         <thead>
                           <tr>
                             <th>Namespace</th>
-                            <th>費用</th>
-                            <th>時間</th>
+                            <th>{fixedCostColumnLabel}</th>
+                            <th>{fixedTimeColumnLabel}</th>
                             <th>查詢時間</th>
                           </tr>
                         </thead>
@@ -1217,9 +2026,10 @@ function Home() {
                                   : '無資料'}
                               </td>
                               <td>
-                                {row.time !== null
-                                  ? formatMetricValue(row.time, 2)
-                                  : '無資料'}
+                                {row.timeText
+                                  || (row.time !== null
+                                    ? `${formatMetricValue(row.time, 2)}${row.usageUnit ? ` ${row.usageUnit}` : ''}`
+                                    : '無資料')}
                               </td>
                               <td>
                                 {row.timestamp !== null
@@ -1324,92 +2134,207 @@ function Home() {
                   ) : null}
                   {!rangeLoading && !rangeError ? (
                     rangeRows.length ? (
-                      <table className="usage-table usage-table-compact">
-                        <thead>
-                          <tr>
-                            <th>Namespace</th>
-                            <th>費用增量</th>
-                            <th>費用最大值</th>
-                            <th>費用最小值</th>
-                            <th>時間增量</th>
-                            <th>時間最大值</th>
-                            <th>時間最小值</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rangeRows.map((row) => (
-                            <tr key={row.namespaceLabel}>
-                              <th scope="row">{row.namespaceLabel}</th>
-                              <td>
-                                {row.costSummary
-                                  ? formatMetricValue(row.costSummary.diff, 2)
-                                  : '無資料'}
-                              </td>
-                              <td>
-                                {row.costSummary ? (
-                                  <div className="usage-cell">
-                                    <span className="usage-cell-value">
-                                      {formatMetricValue(row.costSummary.maxValue, 2)}
-                                    </span>
-                                    <span className="usage-cell-time">
-                                      {formatTimestamp(row.costSummary.maxTimestamp)}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  '無資料'
-                                )}
-                              </td>
-                              <td>
-                                {row.costSummary ? (
-                                  <div className="usage-cell">
-                                    <span className="usage-cell-value">
-                                      {formatMetricValue(row.costSummary.minValue, 2)}
-                                    </span>
-                                    <span className="usage-cell-time">
-                                      {formatTimestamp(row.costSummary.minTimestamp)}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  '無資料'
-                                )}
-                              </td>
-                              <td>
-                                {row.timeSummary
-                                  ? formatMetricValue(row.timeSummary.diff, 2)
-                                  : '無資料'}
-                              </td>
-                              <td>
-                                {row.timeSummary ? (
-                                  <div className="usage-cell">
-                                    <span className="usage-cell-value">
-                                      {formatMetricValue(row.timeSummary.maxValue, 2)}
-                                    </span>
-                                    <span className="usage-cell-time">
-                                      {formatTimestamp(row.timeSummary.maxTimestamp)}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  '無資料'
-                                )}
-                              </td>
-                              <td>
-                                {row.timeSummary ? (
-                                  <div className="usage-cell">
-                                    <span className="usage-cell-value">
-                                      {formatMetricValue(row.timeSummary.minValue, 2)}
-                                    </span>
-                                    <span className="usage-cell-time">
-                                      {formatTimestamp(row.timeSummary.minTimestamp)}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  '無資料'
-                                )}
-                              </td>
+                      isV71NamespaceMetricService ? (
+                        <>
+                          <table className="usage-table usage-table-compact">
+                            <thead>
+                              <tr>
+                                <th>Namespace</th>
+                                <th>區間費用</th>
+                                <th>CPU core</th>
+                                <th>平均 CPU 分鐘</th>
+                                <th>GPU card</th>
+                                <th>平均 GPU 分鐘</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rangeRows.map((row) => (
+                                <tr key={row.namespaceLabel}>
+                                  <th scope="row">{row.namespaceLabel}</th>
+                                  <td>
+                                    {row.costSummary
+                                      ? formatMetricValue(row.costSummary.diff, 2)
+                                      : '無資料'}
+                                  </td>
+                                  <td>
+                                    {row.cpuAverageCores !== null
+                                      ? `${formatMetricValue(row.cpuAverageCores, 2)} core`
+                                      : '無資料'}
+                                  </td>
+                                  <td>
+                                    {row.cpuActiveMinutes !== null
+                                      ? formatMinutes(row.cpuActiveMinutes)
+                                      : '無資料'}
+                                  </td>
+                                  <td>
+                                    {row.gpuAverageCards !== null
+                                      ? `${formatMetricValue(row.gpuAverageCards, 2)} card`
+                                      : '無資料'}
+                                  </td>
+                                  <td>
+                                    {row.gpuActiveMinutes !== null
+                                      ? formatMinutes(row.gpuActiveMinutes)
+                                      : '無資料'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <div className="usage-detail-title">使用區段明細</div>
+                          {rangeUsageSegments.length ? (
+                            <table className="usage-table usage-table-compact usage-detail-table">
+                              <thead>
+                                <tr>
+                                  <th>Namespace</th>
+                                  <th>開始</th>
+                                  <th>結束</th>
+                                  <th>使用分鐘</th>
+                                  <th>CPU</th>
+                                  <th>CPU 分鐘</th>
+                                  <th>GPU</th>
+                                  <th>GPU 分鐘</th>
+                                  <th>費用</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rangeUsageSegments.map((segment) => (
+                                  <tr key={segment.segmentKey}>
+                                    <th scope="row">{segment.namespaceLabel}</th>
+                                    <td>{formatTimestamp(segment.startTimestamp)}</td>
+                                    <td>{formatTimestamp(segment.endTimestamp)}</td>
+                                    <td>{formatMinutes(segment.durationMinutes)}</td>
+                                    <td>
+                                      {segment.cpuActiveMinutes > 0
+                                        ? `${formatMetricValue(segment.averageCpu, 2)} core`
+                                        : '無資料'}
+                                    </td>
+                                    <td>
+                                      {segment.cpuActiveMinutes > 0
+                                        ? formatMinutes(segment.cpuActiveMinutes)
+                                        : '無資料'}
+                                    </td>
+                                    <td>
+                                      {segment.gpuActiveMinutes > 0
+                                        ? `${formatMetricValue(segment.averageGpu, 2)} card`
+                                        : '無資料'}
+                                    </td>
+                                    <td>
+                                      {segment.gpuActiveMinutes > 0
+                                        ? formatMinutes(segment.gpuActiveMinutes)
+                                        : '無資料'}
+                                    </td>
+	                                    <td>{formatMetricValue(segment.cost, 2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div className="usage-empty">沒有可列出的使用區段。</div>
+                          )}
+                        </>
+                      ) : (
+                        <table className="usage-table usage-table-compact">
+                          <thead>
+                            <tr>
+                              <th>Namespace</th>
+                              <th>{rangeCostColumnLabel}</th>
+                              <th>{rangeCostMaxColumnLabel}</th>
+                              <th>{rangeCostMinColumnLabel}</th>
+                              <th>{rangeTimeColumnLabel}</th>
+                              <th>{rangeTimeMaxColumnLabel}</th>
+                              <th>{rangeTimeMinColumnLabel}</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {rangeRows.map((row) => (
+                              <tr key={row.namespaceLabel}>
+                                <th scope="row">{row.namespaceLabel}</th>
+                                <td>
+                                  {row.costSummary
+                                    ? formatMetricValue(row.costSummary.diff, 2)
+                                    : '無資料'}
+                                </td>
+                                <td>
+                                  {row.costSummary ? (
+                                    <div className="usage-cell">
+                                      <span className="usage-cell-value">
+                                        {formatMetricValue(row.costSummary.maxValue, 2)}
+                                      </span>
+                                      <span className="usage-cell-time">
+                                        {formatTimestamp(row.costSummary.maxTimestamp)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    '無資料'
+                                  )}
+                                </td>
+                                <td>
+                                  {row.costSummary ? (
+                                    <div className="usage-cell">
+                                      <span className="usage-cell-value">
+                                        {formatMetricValue(row.costSummary.minValue, 2)}
+                                      </span>
+                                      <span className="usage-cell-time">
+                                        {formatTimestamp(row.costSummary.minTimestamp)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    '無資料'
+                                  )}
+                                </td>
+                                <td>
+                                  {row.timeSummaryText
+                                    || (row.timeSummary
+                                      ? `${formatMetricValue(row.timeSummary.diff, 2)}${row.timeUnit ? ` ${row.timeUnit}` : ''}`
+                                      : '無資料')}
+                                </td>
+                                <td>
+                                  {row.timeMaxText ? (
+                                    <div className="usage-cell">
+                                      <span className="usage-cell-value">
+                                        {row.timeMaxText}
+                                      </span>
+                                    </div>
+                                  ) : row.timeSummary ? (
+                                    <div className="usage-cell">
+                                      <span className="usage-cell-value">
+                                        {formatMetricValue(row.timeSummary.maxValue, 2)}
+                                        {row.usageUnit ? ` ${row.usageUnit}` : ''}
+                                      </span>
+                                      <span className="usage-cell-time">
+                                        {formatTimestamp(row.timeSummary.maxTimestamp)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    '無資料'
+                                  )}
+                                </td>
+                                <td>
+                                  {row.timeMinText ? (
+                                    <div className="usage-cell">
+                                      <span className="usage-cell-value">
+                                        {row.timeMinText}
+                                      </span>
+                                    </div>
+                                  ) : row.timeSummary ? (
+                                    <div className="usage-cell">
+                                      <span className="usage-cell-value">
+                                        {formatMetricValue(row.timeSummary.minValue, 2)}
+                                        {row.usageUnit ? ` ${row.usageUnit}` : ''}
+                                      </span>
+                                      <span className="usage-cell-time">
+                                        {formatTimestamp(row.timeSummary.minTimestamp)}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    '無資料'
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )
                     ) : (
                       <div className="usage-empty">{rangeOutput || '請查詢…'}</div>
                     )

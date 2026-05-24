@@ -1,0 +1,26 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: groupshare-validating-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: kubeflow/groupshare-webhook-cert
+webhooks:
+  - name: notebooks.groupshare.kubeflow.org
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        namespace: kubeflow
+        name: groupshare-webhook
+        path: /validate
+        port: 443
+      caBundle: ""
+    namespaceSelector: {}
+    rules:
+      - apiGroups: ["kubeflow.org"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["notebooks"]
+        scope: "Namespaced"

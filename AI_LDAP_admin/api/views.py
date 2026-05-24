@@ -3,6 +3,7 @@ from ldap3 import *
 import json, random 
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
+from django.db import transaction
 from django.core.files.storage import default_storage
 import os
 import logging
@@ -14,6 +15,8 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
+from .groupshare_storage import ensure_groupshare_group_directory
+from .namespace_share_storage import ensure_namespace_share_directory
 from . import urls
 
 from kubernetes import client, config
@@ -34,6 +37,19 @@ NODE_RESOURCE_MONITOR_CONFIGMAP = os.environ.get(
     'NODE_RESOURCE_MONITOR_CONFIGMAP',
     'node-resource-monitor-config',
 )
+NODE_RESOURCE_MONITOR_V2_CONFIGMAP = os.environ.get(
+    'NODE_RESOURCE_MONITOR_V2_CONFIGMAP',
+    'node-resource-monitor-config-v71',
+)
+NODE_RESOURCE_MONITOR_CONFIGMAPS = [
+    name.strip()
+    for name in os.environ.get(
+        'NODE_RESOURCE_MONITOR_CONFIGMAPS',
+        f'{NODE_RESOURCE_MONITOR_CONFIGMAP},{NODE_RESOURCE_MONITOR_V2_CONFIGMAP}',
+    ).split(',')
+    if name.strip()
+]
+NODE_RESOURCE_MONITOR_CONFIGMAPS = list(dict.fromkeys(NODE_RESOURCE_MONITOR_CONFIGMAPS))
 NODE_RESOURCE_MONITOR_NAMESPACE = os.environ.get(
     'NODE_RESOURCE_MONITOR_NAMESPACE',
     'cgu',
@@ -51,6 +67,7 @@ K8S_FALLBACK_TO_KUBECONFIG = os.environ.get(
 ).lower() in {'1', 'true', 'yes', 'on'}
 
 logger = logging.getLogger(__name__)
+ROLE_MARKERS = {"user", "manager"}
 
 
 def ensure_k8s_config():
@@ -129,14 +146,33 @@ def is_k8s_anonymous_forbidden(exc):
     return 'User "system:anonymous"' in message
 
 
-def build_cost_response(config_map):
+def cost_config_payload(config_map):
     data = getattr(config_map, 'data', None) or {}
     return {
-        'name': NODE_RESOURCE_MONITOR_CONFIGMAP,
+        'name': config_map.metadata.name,
         'namespace': NODE_RESOURCE_MONITOR_NAMESPACE,
         'cpuCostPerMinute': data.get('CPU_COST_PER_MINUTE'),
         'gpuCostPerMinute': data.get('GPU_COST_PER_MINUTE'),
     }
+
+
+def build_cost_response(config_maps):
+    primary = config_maps[0]
+    response = cost_config_payload(primary)
+    response['configMaps'] = [cost_config_payload(config_map) for config_map in config_maps]
+    return response
+
+
+def read_monitor_config_maps(v1):
+    config_maps = []
+    for name in NODE_RESOURCE_MONITOR_CONFIGMAPS:
+        config_maps.append(
+            v1.read_namespaced_config_map(
+                name,
+                NODE_RESOURCE_MONITOR_NAMESPACE,
+            )
+        )
+    return config_maps
 
 
 def format_cost_value(value):
@@ -605,6 +641,57 @@ def check_email(email):
         if p['spec']['owner']['name'] == email.lower():
             return True
     return False
+
+def get_user_by_profile_or_email(profile_name=None, owner_email=None):
+    user_obj = None
+    if profile_name:
+        user_obj = User.objects.filter(username=profile_name.lower()).first()
+    if user_obj is None and owner_email:
+        user_obj = User.objects.filter(email__iexact=owner_email).first()
+    return user_obj
+
+
+def resolve_manager_role(profile_name=None, owner_email=None, user_obj=None, fallback_role="user"):
+    role = (fallback_role or "").strip().lower()
+    if role not in ROLE_MARKERS:
+        role = "user"
+
+    if user_obj is None:
+        user_obj = get_user_by_profile_or_email(profile_name=profile_name, owner_email=owner_email)
+
+    if user_obj is None:
+        return role
+
+    has_admin_permission = UserDetail.objects.filter(uid=user_obj, permission=1).exists()
+    return "manager" if has_admin_permission else "user"
+
+
+def build_groupshare_annotations(profile_name=None, owner_email=None):
+    user_obj = get_user_by_profile_or_email(profile_name=profile_name, owner_email=owner_email)
+
+    if user_obj is None:
+        return "", ""
+
+    groups = sorted({g.name for g in user_obj.groups.all() if g.name and g.name != 'root'})
+    manager_candidates = {
+        detail.labname.name
+        for detail in UserDetail.objects.filter(uid=user_obj, permission=1).select_related('labname')
+        if detail.labname and detail.labname.name
+    }
+    manager_groups = [g for g in groups if g in manager_candidates]
+
+    return ",".join(groups), ",".join(manager_groups)
+
+
+def get_manager_groups_from_annotations(annotations):
+    manager_group_raw = (annotations.get("manager-group", "") or "").strip()
+    if manager_group_raw:
+        return manager_group_raw
+    manager_raw = (annotations.get("manager", "") or "").strip()
+    if manager_raw and manager_raw.lower() not in {"user", "manager"}:
+        return manager_raw
+
+    return ""
     
 def delete_profile(name, email, fullname):
     if name is None:
@@ -643,13 +730,26 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
     memoryStr = str(int(float(memory))) + "Gi"
     # print(" memoryStr = {}".format(memoryStr))
     
+    groups_raw, managers_raw = build_groupshare_annotations(
+        profile_name=username.lower(),
+        owner_email=email.lower(),
+    )
+    manager_role = resolve_manager_role(
+        profile_name=username.lower(),
+        owner_email=email.lower(),
+        fallback_role=manager,
+    )
+    ensure_namespace_share_directory(username.lower())
+
     profile_data = {
         "apiVersion": "kubeflow.org/v1",
         "kind": "Profile",
         "metadata": {
             "name": username.lower(),
             "annotations": {
-                "manager": manager,
+                "group": groups_raw,
+                "manager": manager_role,
+                "manager-group": managers_raw,
                 "cpu" : cpu,
                 "gpu" : gpu,
                 "memory" : memory
@@ -791,13 +891,27 @@ def replace_profile_user(name,user,cpu,gpu,memory):
     print("name = ", name)
     for p in profiles:
         if p['metadata']['name'] == name:
-            userAnnotations = {
-                "manager": user,
-                "cpu" : cpu,
-                "gpu" : gpu,
-                "memory" : memory
-            }
-            p['metadata']['annotations'] = userAnnotations
+            groups_raw, managers_raw = build_groupshare_annotations(
+                profile_name=p['metadata'].get('name', ''),
+                owner_email=p.get('spec', {}).get('owner', {}).get('name', ''),
+            )
+            manager_role = resolve_manager_role(
+                profile_name=p['metadata'].get('name', ''),
+                owner_email=p.get('spec', {}).get('owner', {}).get('name', ''),
+                fallback_role=user,
+            )
+            annotations = p['metadata'].get('annotations', {}) or {}
+            annotations.update(
+                {
+                    "group": groups_raw,
+                    "manager": manager_role,
+                    "manager-group": managers_raw,
+                    "cpu": cpu,
+                    "gpu": gpu,
+                    "memory": memory,
+                }
+            )
+            p['metadata']['annotations'] = annotations
             print(" p = ", p)
             api = client.CustomObjectsApi()
             # replace the profile 
@@ -847,6 +961,76 @@ def replace_profile_user_delete_date(name, date):
         return True
     except Exception as e:
         print(f"[delete_date] 更新失敗: {e}")
+        return False
+
+
+def sync_profile_groupshare_annotations(user_obj):
+    """
+    Best-effort sync for group/manager-group annotations after group membership changes.
+    Also normalizes manager role annotation back to user/manager.
+    """
+    try:
+        owner_email = (user_obj.email or "").strip().lower()
+        profile_name = get_profile_by_email(owner_email) if owner_email else None
+        profile = None
+
+        if profile_name:
+            profile = get_profile_content(profile_name)
+        else:
+            # Fallback: profile name is often username.
+            candidate_name = (user_obj.username or "").strip().lower()
+            if candidate_name:
+                profile = get_profile_content(candidate_name)
+                if profile is not None:
+                    profile_name = profile.get('metadata', {}).get('name', candidate_name)
+
+        if profile is None or not profile_name:
+            print(f"[groupshare-sync] profile not found for user={user_obj.username}, skip")
+            return False
+
+        groups_raw, managers_raw = build_groupshare_annotations(
+            profile_name=profile_name,
+            owner_email=owner_email,
+        )
+        manager_role = resolve_manager_role(
+            profile_name=profile_name,
+            owner_email=owner_email,
+            user_obj=user_obj,
+            fallback_role=(profile.get('metadata', {}).get('annotations', {}) or {}).get("manager", "user"),
+        )
+
+        annotations = profile.get('metadata', {}).get('annotations', {}) or {}
+        old_group = (annotations.get("group", "") or "").strip()
+        old_manager_group = get_manager_groups_from_annotations(annotations)
+        old_manager = (annotations.get("manager", "") or "").strip()
+        if old_group == groups_raw and old_manager_group == managers_raw and old_manager == manager_role:
+            print(f"[groupshare-sync] no annotation changes for profile={profile_name}")
+            return True
+
+        annotations.update(
+            {
+                "group": groups_raw,
+                "manager": manager_role,
+                "manager-group": managers_raw,
+            }
+        )
+        profile['metadata']['annotations'] = annotations
+
+        api = client.CustomObjectsApi()
+        api.replace_cluster_custom_object(
+            group=group,
+            version=version,
+            plural=plural,
+            name=profile['metadata']['name'],
+            body=profile,
+        )
+        print(
+            f"[groupshare-sync] updated profile={profile_name} group='{groups_raw}' manager='{manager_role}' manager-group='{managers_raw}'"
+        )
+        return True
+    except Exception:
+        print("[groupshare-sync] failed")
+        print(traceback.format_exc())
         return False
 
 
@@ -1110,16 +1294,28 @@ def addlab(request):
     if gpuVendor != "NVIDIA" and gpuVendor != "AMD":
         return Response(status=500, data="gpuVendor is not valid")
     
-    group = Group.objects.create(name=labname)
-    GroupDefaultQuota.objects.create(
-        labname=group, 
-        cpu_quota=cpuQuota, 
-        mem_quota=memQuota, 
-        gpu_quota=gpuQuota, 
-        gpu_vendor=gpuVendor,
-        expiry_date=expiryDate if expiryDate else None  # 儲存到期日期
+    try:
+        with transaction.atomic():
+            group = Group.objects.create(name=labname)
+            GroupDefaultQuota.objects.create(
+                labname=group,
+                cpu_quota=cpuQuota,
+                mem_quota=memQuota,
+                gpu_quota=gpuQuota,
+                gpu_vendor=gpuVendor,
+                expiry_date=expiryDate if expiryDate else None  # 儲存到期日期
+            )
+            groupshare_path = ensure_groupshare_group_directory(labname)
+    except Exception as exc:
+        return Response(status=500, data={"message": "add lab {} failed: {}".format(labname, exc)})
+
+    return Response(
+        status=200,
+        data={
+            "message": "add lab {} success".format(labname),
+            "groupshare_path": groupshare_path,
+        },
     )
-    return Response(status=200, data={"message": "add lab {} success".format(labname)})
 
 @api_view(['POST'])
 def editlab(request):
@@ -1420,6 +1616,7 @@ def add_admin(request):
     for entry in conn.entries:
         conn.modify(entry.entry_dn, {'Description': [(MODIFY_ADD, ['root'])]})
     conn.unbind()
+    sync_profile_groupshare_annotations(user)
 
     return Response(status=200)
 
@@ -1746,10 +1943,30 @@ def user_delete(request):
 def lab_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     labname = data['lab']
-    if delete_group_core(labname):
-        return Response(status=200, data={"message": f"Group {labname} deleted successfully"})
-    else:
-        return Response(status=500, data={"message": f"Failed to delete group {labname}"})
+    group = Group.objects.get(name=labname)
+    for user in User.objects.filter(groups=group):
+        User.objects.get(username=user).groups.remove(Group.objects.get(name=labname))
+        UserDetail.objects.get(uid=User.objects.get(username=user).id, labname=Group.objects.get(name=labname)).delete()
+        group_list = get_user_all_groups(user)
+        k8s_date = str(datetime.datetime.now())
+        k8s_name = user.first_name + " " + user.last_name
+        send_delete_group_email(k8s_name, labname, k8s_date, user.email)
+        # print(group_list)
+        # check if group is empty
+        if len(group_list) == 0:
+            print("group is empty")
+            deleteUserModel(user)
+        else:
+            print("group is not empty -", len(group_list))
+            sync_profile_groupshare_annotations(user)
+        print(user.username)
+    # delete the group from database
+    Group.objects.get(name=labname).delete()
+    conn = connectLDAP()
+    # delete the group from ldap
+    conn.delete('cn={},ou=Groups,dc=example,dc=org'.format(labname))
+    conn.unbind()
+    return Response(status=200)
 
     
 def user_group_num(requset):
@@ -1934,8 +2151,15 @@ def excel(request):
             row[0].value = row[0].value.lower()
             row[3].value = row[3].value.lower()
             if Group.objects.filter(name=row[1].value).exists() is False:
-                group = Group.objects.create(name=row[1].value)
-                print("add lab {} success".format(row[1].value))
+                try:
+                    group = Group.objects.create(name=row[1].value)
+                    ensure_groupshare_group_directory(row[1].value)
+                    print("add lab {} success".format(row[1].value))
+                except Exception as exc:
+                    failed_user.append({row[0].value: "group {} create failed: {}".format(row[1].value, exc)})
+                    if Group.objects.filter(name=row[1].value).exists():
+                        Group.objects.get(name=row[1].value).delete()
+                    continue
             if User.objects.filter(username=row[0].value).exists() is True:
                 # check the user is in the group or not
                 subuser_obj = User.objects.get(username=row[0].value)
@@ -1984,6 +2208,7 @@ def excel(request):
                                 UserDetail.objects.create(uid=User.objects.get(username=row[0].value), permission=0, labname=Group.objects.get(name=row[1].value))
                         except:
                             pass
+                sync_profile_groupshare_annotations(subuser_obj)
                 continue
             # add user into django
             user_obj = User.objects.create_user(username=row[0].value, password=row[2].value, first_name=row[4].value, last_name=row[5].value, email=row[3].value)
@@ -2144,6 +2369,7 @@ def add_user_to_lab(request):
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
+            sync_profile_groupshare_annotations(user_obj)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -2163,6 +2389,7 @@ def add_user_to_lab(request):
             k8s_date = str(datetime.datetime.now())
             k8s_name = user_obj.first_name + " " + user_obj.last_name
             send_add_group_email(k8s_name, lab, k8s_date, user_obj.email)
+            sync_profile_groupshare_annotations(user_obj)
             return Response(status=200)
         except:
             return Response(status=500)
@@ -2499,6 +2726,7 @@ def remove_user_from_lab(request):
             deleteUserModel(user)
         else:
             print("group is not empty -", len(group_list))
+            sync_profile_groupshare_annotations(user_obj)
         return Response(status=200)
     except:
         return Response(status=500)
@@ -2570,6 +2798,7 @@ def remove_multiple_user_from_lab(request):
             deleteUserModel(user)
         else:
             print("group is not empty -", len(group_list))
+            sync_profile_groupshare_annotations(user_obj)
         conn.search('dc={},ou=Groups,dc=example,dc=org'.format(group), '(objectclass=posixGroup)', attributes=['*'])
         for entry in conn.entries:
             try:
@@ -2650,10 +2879,7 @@ def node_resource_monitor_config(request):
         )
 
     try:
-        config_map = v1.read_namespaced_config_map(
-            NODE_RESOURCE_MONITOR_CONFIGMAP,
-            NODE_RESOURCE_MONITOR_NAMESPACE,
-        )
+        config_maps = read_monitor_config_maps(v1)
     except ApiException as exc:
         if (
             (exc.status or 0) == 403
@@ -2688,7 +2914,7 @@ def node_resource_monitor_config(request):
             return Response({'detail': message}, status=status_code)
 
     if request.method == 'GET':
-        return Response(build_cost_response(config_map), status=200)
+        return Response(build_cost_response(config_maps), status=200)
 
     payload = request.data or {}
     updates = {}
@@ -2710,47 +2936,30 @@ def node_resource_monitor_config(request):
     if not updates:
         return Response({'detail': '請至少提供一個費率數值。'}, status=400)
 
-    try:
-        patched = v1.patch_namespaced_config_map(
-            NODE_RESOURCE_MONITOR_CONFIGMAP,
-            NODE_RESOURCE_MONITOR_NAMESPACE,
-            {'data': updates},
-        )
-    except ApiException as exc:
-        if (
-            (exc.status or 0) == 403
-            and auth_source == 'incluster'
-            and K8S_FALLBACK_TO_KUBECONFIG
-            and is_k8s_anonymous_forbidden(exc)
-        ):
-            try:
-                v1_fb, _ = _make_k8s_core_v1_views(mode='kubeconfig')
-                patched = v1_fb.patch_namespaced_config_map(
-                    NODE_RESOURCE_MONITOR_CONFIGMAP,
+    patched_config_maps = []
+    patch_errors = {}
+    for config_map_name in NODE_RESOURCE_MONITOR_CONFIGMAPS:
+        try:
+            patched_config_maps.append(
+                v1.patch_namespaced_config_map(
+                    config_map_name,
                     NODE_RESOURCE_MONITOR_NAMESPACE,
                     {'data': updates},
                 )
-                logger.warning(
-                    'node_resource_monitor_config PATCH switched from incluster to kubeconfig fallback due to anonymous 403 namespace=%s configmap=%s kubeconfig=%s context=%s',
-                    NODE_RESOURCE_MONITOR_NAMESPACE,
-                    NODE_RESOURCE_MONITOR_CONFIGMAP,
-                    K8S_KUBECONFIG,
-                    K8S_CONTEXT,
-                )
-            except Exception as fallback_exc:
-                logger.warning(
-                    'node_resource_monitor_config PATCH kubeconfig fallback failed after anonymous 403: %s',
-                    fallback_exc,
-                )
-                status_code = exc.status or 500
-                message = exc.reason or '更新 ConfigMap 失敗。'
-                return Response({'detail': message}, status=status_code)
-        else:
-            status_code = exc.status or 500
-            message = exc.reason or '更新 ConfigMap 失敗。'
-            return Response({'detail': message}, status=status_code)
+            )
+        except ApiException as exc:
+            patch_errors[config_map_name] = exc.reason or '更新 ConfigMap 失敗。'
 
-    return Response(build_cost_response(patched), status=200)
+    if patch_errors:
+        return Response(
+            {
+                'detail': '部分 Node Resource Monitor ConfigMap 更新失敗。',
+                'errors': patch_errors,
+            },
+            status=500,
+        )
+
+    return Response(build_cost_response(patched_config_maps), status=200)
 
 # Get yaml's of notebooks for moving notebooks [Patten, 2025/01/06]
 @api_view(["POST"])

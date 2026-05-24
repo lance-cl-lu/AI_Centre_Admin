@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: groupshare-validating-webhook
+  namespace: kubeflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: groupshare-validating-webhook
+  template:
+    metadata:
+      labels:
+        app: groupshare-validating-webhook
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: groupshare-webhook
+      containers:
+        - name: webhook
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - pip install --no-cache-dir kubernetes==26.1.0 flask==3.0.3 && python /app/app.py
+          env:
+            - name: GROUPSHARE_PODDEFAULT_NAME
+              value: groupshare
+            - name: PORT
+              value: "8443"
+            - name: TLS_CERT_FILE
+              value: /tls/tls.crt
+            - name: TLS_KEY_FILE
+              value: /tls/tls.key
+          ports:
+            - name: https
+              containerPort: 8443
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: webhook-code
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: tls
+          secret:
+            secretName: groupshare-webhook-tls
+        - name: webhook-code
+          configMap:
+            name: groupshare-webhook-code
