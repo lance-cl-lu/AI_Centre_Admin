@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+./update.sh
+
 IMAGE_REPO="cguaicadmin/ldap_backend"
 TAG="${TAG:-v$(date +%y%m%d%H%M)}"
 LOCAL_IMAGE="ldap_backend:${TAG}"
