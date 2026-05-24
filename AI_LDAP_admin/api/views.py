@@ -606,6 +606,9 @@ def list_notebooks(request):
     return Response(notebooks, status=200)
     
 def list_notebooks_api(namespace):
+    if not namespace:
+        return []
+
     try:
         # Create an API client for the CustomResourceDefinition API
         api, _ = _make_k8s_custom_objects_api_views()
@@ -820,6 +823,9 @@ def create_profile(username, email, cpu, gpu, memory, manager, fullname, passwor
     send_add_account_email(k8s_name, k8s_account, k8s_password, email)
 
 def get_profile_content(profile_name):
+    if not profile_name:
+        return None
+
     try:
         # Create an API client for the CustomResourceDefinition API
         api, _ = _make_k8s_custom_objects_api_views()
@@ -1693,6 +1699,10 @@ def get_user_info(request):
     user_obj = User.objects.get(username=data['username'])
     detail_obj = UserDetail.objects.filter(uid=user_obj.id)
     profileName = get_profile_by_email(user_obj.email)
+
+    # Fallback: profile name is often the same as username.
+    if not profileName and user_obj.username:
+        profileName = user_obj.username.lower()
     profile = get_profile_content(profileName)
     memory = ""
     cpu = ""
