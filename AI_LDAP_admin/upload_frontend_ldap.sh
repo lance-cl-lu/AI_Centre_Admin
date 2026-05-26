@@ -10,11 +10,10 @@ cp -a ../frontend/build/* static/
 cp -a ../frontend/icons/* static/
 rm -f static/index.html
 
-sed -i 's/"\/manifest.json"/"{% static "\/manifest.json" %}"/' frontend/templates/frontend/index.html 
-sed -i 's/"\/static\/js\/main./"{% static "\/static\/js\/main./' frontend/templates/frontend/index.html
-sed -i 's/.js"/.js" %}"/' frontend/templates/frontend/index.html 
-sed -i 's/"\/static\/css\/main./"{% static "\/static\/css\/main./' frontend/templates/frontend/index.html
-sed -i 's/.css"/.css" %}"/' frontend/templates/frontend/index.html 
+sed -i -E "s#href=\"/logo192\.png\"#href=\"{% static 'logo192.png' %}\"#" frontend/templates/frontend/index.html
+sed -i -E "s#href=\"/manifest\.json\"#href=\"{% static 'manifest.json' %}\"#" frontend/templates/frontend/index.html
+sed -i -E "s#src=\"/static/js/([^\"]+\.js)\"#src=\"{% static 'static/js/\1' %}\"#" frontend/templates/frontend/index.html
+sed -i -E "s#href=\"/static/css/([^\"]+\.css)\"#href=\"{% static 'static/css/\1' %}\"#" frontend/templates/frontend/index.html
 
 tar czvf static.tgz static
 

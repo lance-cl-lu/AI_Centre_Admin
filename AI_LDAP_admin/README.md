@@ -47,15 +47,14 @@ cp -a ../frontend/build/* static/
 cp -a ../frontend/icons/* static/
 rm -f static/index.html
 
-sed -i 's/"\/manifest.json"/"{% static "\/manifest.json" %}"/' frontend/templates/frontend/index.html 
-sed -i 's/"\/static\/js\/main./"{% static "\/static\/js\/main./' frontend/templates/frontend/index.html
-sed -i 's/.js"/.js" %}"/' frontend/templates/frontend/index.html 
-sed -i 's/"\/static\/css\/main./"{% static "\/static\/css\/main./' frontend/templates/frontend/index.html
-sed -i 's/.css"/.css" %}"/' frontend/templates/frontend/index.html 
+sed -i -E "s#href=\"/logo192\.png\"#href=\"{% static 'logo192.png' %}\"#" frontend/templates/frontend/index.html
+sed -i -E "s#href=\"/manifest\.json\"#href=\"{% static 'manifest.json' %}\"#" frontend/templates/frontend/index.html
+sed -i -E "s#src=\"/static/js/([^\"]+\.js)\"#src=\"{% static 'static/js/\1' %}\"#" frontend/templates/frontend/index.html
+sed -i -E "s#href=\"/static/css/([^\"]+\.css)\"#href=\"{% static 'static/css/\1' %}\"#" frontend/templates/frontend/index.html
 ```
 
 ```
-<!doctype html><html lang="en"><head><meta charset="utf-8"/>{% load static %}<title>CGU AI Center Ldap Management System</title><link rel="shortcut icon" type="image" href="{% static 'favicon.ico' %}"><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#000000"/><meta name="description" content="Web site created using create-react-app"/><link rel="apple-touch-icon" href="/logo192.png"/><link rel="manifest" href="{% static "/manifest.json" %}"/><script defer="defer" src="{% static "/static/js/main.8eda82a3.js" %}"></script><link href="{% static "/static/css/main.7695d4f4.css" %}" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>root@devmaster:/home
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>{% load static %}<title>CGU AI Center Ldap Management System</title><link rel="shortcut icon" type="image" href="{% static 'favicon.ico' %}"><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#000000"/><meta name="description" content="Web site created using create-react-app"/><link rel="apple-touch-icon" href="{% static 'logo192.png' %}"/><link rel="manifest" href="{% static 'manifest.json' %}"/><script defer="defer" src="{% static 'static/js/main.8eda82a3.js' %}"></script><link href="{% static 'static/css/main.7695d4f4.css' %}" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>
 ```
 ---
 ### upload_frontend_ldap.sh
@@ -199,4 +198,3 @@ def change_user_info(request):
 3. sync k8s notebook
 4. sync Diango DB
 5. sync ldap
-

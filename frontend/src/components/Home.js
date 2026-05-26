@@ -480,6 +480,91 @@ const buildRangeNamespaceSummary = (costData, timeData) => {
   return Array.from(map.values());
 };
 
+const parseInstantPromValue = (data) => {
+  if (!data || !Array.isArray(data.result) || !data.result.length) {
+    return null;
+  }
+  const [series] = data.result;
+  const numericValue = Number(series?.value?.[1]);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+const formatBytesToGiB = (bytes) => {
+  if (!Number.isFinite(bytes)) {
+    return null;
+  }
+  return bytes / (1024 ** 3);
+};
+
+const LIVE_USAGE_HISTORY_LIMIT = 12;
+const USE_LIVE_USAGE_MOCK = true;
+
+const getMockLiveUsageSample = (sampleIndex = 0) => {
+  const base = Date.now();
+  return {
+    cpuCores: 8.4 + Math.sin(sampleIndex / 2.5) * 1.2,
+    memoryGiB: 42 + Math.cos(sampleIndex / 3) * 3.5,
+    gpuUtilization: 58 + Math.sin(sampleIndex / 1.8) * 18,
+    updatedAt: new Date(base),
+  };
+};
+
+const buildSparklinePoints = (samples, valueKey) => {
+  const numericSamples = (samples || [])
+    .map((sample, index) => ({
+      index,
+      value: Number(sample?.[valueKey]),
+    }))
+    .filter((sample) => Number.isFinite(sample.value));
+  if (!numericSamples.length) {
+    return [];
+  }
+  const width = 100;
+  const height = 44;
+  const padding = 4;
+  const minValue = Math.min(...numericSamples.map((sample) => sample.value));
+  const maxValue = Math.max(...numericSamples.map((sample) => sample.value));
+  const valueRange = maxValue - minValue || 1;
+  const step = numericSamples.length > 1 ? (width - padding * 2) / (numericSamples.length - 1) : 0;
+  return numericSamples.map((sample, pointIndex) => {
+    const x = numericSamples.length > 1 ? padding + step * pointIndex : width / 2;
+    const y = height - padding - ((sample.value - minValue) / valueRange) * (height - padding * 2);
+    return `${x},${y}`;
+  });
+};
+
+const SparklineCard = ({ title, value, unit, history, valueKey, accentClass, emptyText = '無資料' }) => {
+  const points = buildSparklinePoints(history, valueKey);
+  const latest = history && history.length ? history[history.length - 1] : null;
+  return (
+    <div className={`live-usage-item ${accentClass || ''}`}>
+      <div className="live-usage-label">{title}</div>
+      <div className="live-usage-chart-wrap">
+        {points.length ? (
+          <svg viewBox="0 0 100 44" className="live-usage-chart" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id={`live-gradient-${valueKey}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="currentColor" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <polyline points={`0,44 ${points.join(' ')} 100,44`} fill={`url(#live-gradient-${valueKey})`} stroke="none" />
+            <polyline points={points.join(' ')} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <div className="live-usage-chart-empty">{emptyText}</div>
+        )}
+      </div>
+      <div className="live-usage-value">
+        {value !== null ? `${formatMetricValue(value, 2)} ${unit}` : emptyText}
+      </div>
+      {latest?.updatedAt ? (
+        <div className="live-usage-sample-time">{new Date(latest.updatedAt).toLocaleTimeString()}</div>
+      ) : null}
+    </div>
+  );
+};
+
 
 function Home() {
   let {user} = useContext(AuthContext);
@@ -507,6 +592,17 @@ function Home() {
   const [fixedRows, setFixedRows] = useState([]);
   const [rangeRows, setRangeRows] = useState([]);
   const [rangeWindowLabel, setRangeWindowLabel] = useState('');
+  const [liveUsage, setLiveUsage] = useState({
+    cpuCores: null,
+    memoryGiB: null,
+    gpuUtilization: null,
+    updatedAt: null,
+  });
+  const [liveUsageHistory, setLiveUsageHistory] = useState([]);
+  const [liveUsageLoading, setLiveUsageLoading] = useState(false);
+  const [liveUsageError, setLiveUsageError] = useState('');
+  const liveUsageAbort = useRef(null);
+  const liveUsageMockIndex = useRef(0);
   const initialCostState = {
     cpuCostPerMinute: '',
     gpuCostPerMinute: '',
@@ -536,6 +632,81 @@ function Home() {
     () => filterNamespaces(namespaceOptions, rangeSearchKeyword),
     [namespaceOptions, rangeSearchKeyword],
   );
+  const loadLiveUsage = useCallback(async () => {
+    if (USE_LIVE_USAGE_MOCK) {
+      const sample = getMockLiveUsageSample(liveUsageMockIndex.current);
+      liveUsageMockIndex.current += 1;
+      setLiveUsage(sample);
+      setLiveUsageHistory((current) => {
+        const nextHistory = [...current, sample];
+        return nextHistory.slice(-LIVE_USAGE_HISTORY_LIMIT);
+      });
+      setLiveUsageError('');
+      setLiveUsageLoading(false);
+      return;
+    }
+    if (liveUsageAbort.current) {
+      liveUsageAbort.current.abort();
+    }
+    const controller = new AbortController();
+    liveUsageAbort.current = controller;
+    setLiveUsageLoading(true);
+    setLiveUsageError('');
+    try {
+      const cpuQuery = 'sum(rate(container_cpu_usage_seconds_total{container!="",image!="",pod!=""}[5m]))';
+      const memoryQuery = 'sum(container_memory_working_set_bytes{container!="",image!="",pod!=""})';
+      const gpuQuery = 'avg(DCGM_FI_DEV_GPU_UTIL)';
+      const [cpuResult, memoryResult, gpuResult] = await Promise.allSettled([
+        promQuery({ query: cpuQuery, signal: controller.signal }),
+        promQuery({ query: memoryQuery, signal: controller.signal }),
+        promQuery({ query: gpuQuery, signal: controller.signal }),
+      ]);
+      const cpuCores = cpuResult.status === 'fulfilled'
+        ? parseInstantPromValue(cpuResult.value)
+        : null;
+      const memoryBytes = memoryResult.status === 'fulfilled'
+        ? parseInstantPromValue(memoryResult.value)
+        : null;
+      const gpuUtilization = gpuResult.status === 'fulfilled'
+        ? parseInstantPromValue(gpuResult.value)
+        : null;
+      if (controller.signal.aborted) {
+        return;
+      }
+      const nextState = {
+        cpuCores,
+        memoryGiB: formatBytesToGiB(memoryBytes),
+        gpuUtilization,
+        updatedAt: new Date(),
+      };
+      setLiveUsage(nextState);
+      setLiveUsageHistory((current) => {
+        const nextHistory = [
+          ...current,
+          {
+            cpuCores,
+            memoryGiB: formatBytesToGiB(memoryBytes),
+            gpuUtilization,
+            updatedAt: nextState.updatedAt.toISOString(),
+          },
+        ];
+        return nextHistory.slice(-LIVE_USAGE_HISTORY_LIMIT);
+      });
+      if (cpuCores === null && memoryBytes === null && gpuUtilization === null) {
+        setLiveUsageError('目前沒有可用的即時資源指標。');
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+      setLiveUsageError(error.message || '即時資源查詢失敗。');
+    } finally {
+      setLiveUsageLoading(false);
+      if (liveUsageAbort.current === controller) {
+        liveUsageAbort.current = null;
+      }
+    }
+  }, []);
   useEffect(() => {
     setNsFixed((current) => {
       if (!fixedSearchTrimmed) {
@@ -599,6 +770,19 @@ function Home() {
     }
     );
   }, [user]);
+
+  useEffect(() => {
+    loadLiveUsage();
+    const timer = window.setInterval(() => {
+      loadLiveUsage();
+    }, 60000);
+    return () => {
+      window.clearInterval(timer);
+      if (liveUsageAbort.current) {
+        liveUsageAbort.current.abort();
+      }
+    };
+  }, [loadLiveUsage]);
 
   useEffect(() => {
     return () => {
@@ -920,7 +1104,7 @@ function Home() {
           <div className="pie">
             <div className="piediv">
               <h2 style={{ marginTop: '5%', fontFamily: 'Bahnschrift light' }}>
-                ??# of users: <CountUp end={user_num} duration={5} />
+                All of users: <CountUp end={user_num} duration={5} />
               </h2>
               <PieChart
                 className="PieStyle"
@@ -932,7 +1116,7 @@ function Home() {
             </div>
             <div className="piediv">
               <h2 style={{ marginTop: '5%', fontFamily: 'Bahnschrift light' }}>
-                ??# of labs: <CountUp end={lab_num} duration={5} />
+                All of labs: <CountUp end={lab_num} duration={5} />
               </h2>
               <PieChart
                 className="PieStyle"
@@ -944,6 +1128,57 @@ function Home() {
             </div>
           </div>
         </motion.div>
+
+        <Card className="mt-4 live-usage-card">
+          <Card.Header>即時資源監控</Card.Header>
+          <Card.Body>
+            <div className="live-usage-toolbar">
+              <div className="live-usage-hint">
+                CPU / Memory 顯示目前工作負載總用量，GPU 顯示平均利用率。圖表會保留最近 12 次刷新。
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={loadLiveUsage}
+                disabled={liveUsageLoading}
+              >
+                {liveUsageLoading ? '更新中…' : '重新整理'}
+              </button>
+            </div>
+            {liveUsageError ? (
+              <div className="usage-error mt-2">{liveUsageError}</div>
+            ) : null}
+            <div className="live-usage-grid mt-3">
+              <SparklineCard
+                title="CPU"
+                value={liveUsage.cpuCores}
+                unit="cores"
+                history={liveUsageHistory}
+                valueKey="cpuCores"
+                accentClass="live-usage-cpu"
+              />
+              <SparklineCard
+                title="Memory"
+                value={liveUsage.memoryGiB}
+                unit="GiB"
+                history={liveUsageHistory}
+                valueKey="memoryGiB"
+                accentClass="live-usage-memory"
+              />
+              <SparklineCard
+                title="GPU"
+                value={liveUsage.gpuUtilization}
+                unit="%"
+                history={liveUsageHistory}
+                valueKey="gpuUtilization"
+                accentClass="live-usage-gpu"
+              />
+            </div>
+            <div className="live-usage-meta mt-3">
+              {liveUsage.updatedAt ? `最後更新：${liveUsage.updatedAt.toLocaleString()}` : '尚未更新'}
+            </div>
+          </Card.Body>
+        </Card>
 
         <Card className="text-center mt-4">
           <Card.Header>Kubeflow</Card.Header>
