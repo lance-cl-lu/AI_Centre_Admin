@@ -469,11 +469,6 @@ version = 'v1'            # CRD 的 Version
 plural = 'profiles'       # CRD 的 Plural
 
 def change_notebooks_metadata(namespace, notebook, persisitent, proxy_allow_ports):
-    try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
     profile_data = {
         "metadata": {
             "labels": {
@@ -485,10 +480,7 @@ def change_notebooks_metadata(namespace, notebook, persisitent, proxy_allow_port
         },
     }
     try:
-        # Create an API client for the CustomResourceDefinition API
-        api = client.CustomObjectsApi()
-
-        # Get the profile
+        api, _ = _make_k8s_custom_objects_api_views()
         notebook = api.patch_namespaced_custom_object(group, version, namespace, "notebooks", notebook, body=profile_data)
         return notebook
     except Exception as e:
@@ -926,7 +918,7 @@ def replace_profile_user(name,user,cpu,gpu,memory):
             )
             p['metadata']['annotations'] = annotations
             print(" p = ", p)
-            api = client.CustomObjectsApi()
+            api, _ = _make_k8s_custom_objects_api_views()
             # replace the profile 
             api_response = api.replace_cluster_custom_object(
                 group=group,
@@ -938,12 +930,7 @@ def replace_profile_user(name,user,cpu,gpu,memory):
             print(api_response)
 
 def replace_profile_user_delete_date(name, date):
-    try:
-        config.load_incluster_config()
-    except ConfigException:
-        config.load_kube_config()
-
-    api = client.CustomObjectsApi()
+    api, _ = _make_k8s_custom_objects_api_views()
     # 只抓單一 profile，避免直接操作 list 物件
     try:
         profile = api.get_cluster_custom_object(group, version, plural, name)
@@ -1029,7 +1016,7 @@ def sync_profile_groupshare_annotations(user_obj):
         )
         profile['metadata']['annotations'] = annotations
 
-        api = client.CustomObjectsApi()
+        api, _ = _make_k8s_custom_objects_api_views()
         api.replace_cluster_custom_object(
             group=group,
             version=version,
@@ -2990,7 +2977,7 @@ def node_resource_monitor_config(request):
 def get_notebook_yaml(request):
     try:
         data = json.loads(request.body.decode("utf-8"))
-        api = client.CustomObjectsApi()
+        api, _ = _make_k8s_custom_objects_api_views()
         # get notebook.yaml
         notebook_yaml = api.get_namespaced_custom_object(group="kubeflow.org", version="v1", namespace=data["namespace"], plural="notebooks", name=data["notebook_name"])
         del notebook_yaml["metadata"]["creationTimestamp"]
@@ -3011,7 +2998,7 @@ def get_notebook_yaml(request):
         pvc_names = []
         for volume in notebook_yaml["spec"]["template"]["spec"]["volumes"][1:]:
             pvc_names.append(volume["persistentVolumeClaim"]["claimName"])
-        v1 = client.CoreV1Api()
+        v1, _ = _make_k8s_core_v1_views()
         pvc_yamls = []
         for name in pvc_names:
             pvc_yaml = v1.read_namespaced_persistent_volume_claim(name, data["namespace"])
@@ -3057,8 +3044,8 @@ def get_notebook_yaml(request):
 @api_view(["POST"])
 def upload_notebook_yaml(request):
     if request.method == "POST" and request.FILES.get("file"):
-        api_v1 = client.CoreV1Api()
-        api = client.CustomObjectsApi()
+        api_v1, _ = _make_k8s_core_v1_views()
+        api, _ = _make_k8s_custom_objects_api_views()
         uploaded_file = request.FILES.get("file")
         namespace = request.POST.get("namespace")
         with zipfile.ZipFile(uploaded_file, "r") as zip:
