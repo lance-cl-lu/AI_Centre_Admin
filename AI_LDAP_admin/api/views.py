@@ -1096,8 +1096,7 @@ def get_group_corresponding_user(request):
                         found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
                         if not found or len(conn.entries) == 0:
                             print(f"LDAP search: user '{user.username}' not found.")
-                        # else:
-                        #    print(f"LDAP search: user '{user.username}' found.")
+                        else:
                             user_list.append(user.username)
                     except Exception as e:
                         print(f"LDAP search error: {e}")
