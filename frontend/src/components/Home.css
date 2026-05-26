@@ -171,4 +171,104 @@
     text-align: left;
     white-space: nowrap;
 }
+
+.live-usage-card {
+    border: 1px solid #d9d9d9;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+.live-usage-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.live-usage-hint {
+    color: #495057;
+    font-size: 0.95rem;
+}
+
+.live-usage-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.live-usage-item {
+    background: linear-gradient(180deg, #fafafa 0%, #f3f6ff 100%);
+    border: 1px solid #e3e3e3;
+    border-radius: 14px;
+    padding: 16px;
+    min-height: 96px;
+    color: #0f172a;
+}
+
+.live-usage-cpu {
+    color: #0b6efd;
+}
+
+.live-usage-memory {
+    color: #2c7a7b;
+}
+
+.live-usage-gpu {
+    color: #9c2c6f;
+}
+
+.live-usage-label {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.live-usage-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: currentColor;
+    margin-top: 10px;
+}
+
+.live-usage-chart-wrap {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.68);
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+}
+
+.live-usage-chart {
+    width: 100%;
+    height: 100%;
+    display: block;
+    color: currentColor;
+}
+
+.live-usage-chart-empty {
+    color: #8a94a6;
+    font-size: 0.9rem;
+}
+
+.live-usage-sample-time {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: #6c757d;
+}
+
+.live-usage-meta {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+@media(max-width: 768px) {
+    .live-usage-grid {
+        grid-template-columns: 1fr;
+    }
+}
   

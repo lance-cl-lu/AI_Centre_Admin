@@ -19,6 +19,7 @@ const ArrowIcon = ({ expanded }) => (
 const TreeView = () => {
   const { userlist, getUserList, user } = useContext(AuthContext);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [searchKeyword, setSearchKeyword] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -26,6 +27,27 @@ const TreeView = () => {
       getUserList();
     }
   }, [user]);
+
+  const normalizedKeyword = searchKeyword.trim().toLowerCase();
+  const filteredGroups = (userlist || []).reduce((groups, group) => {
+    const members = Array.isArray(group.member_uids) ? group.member_uids : [];
+    const matchedMembers = normalizedKeyword
+      ? members.filter((uid) => uid.toLowerCase().includes(normalizedKeyword))
+      : members;
+
+    if (!normalizedKeyword || matchedMembers.length > 0) {
+      groups.push({
+        ...group,
+        filteredMembers: matchedMembers,
+      });
+    }
+
+    return groups;
+  }, []);
+
+  const totalMatches = normalizedKeyword
+    ? filteredGroups.reduce((count, group) => count + group.filteredMembers.length, 0)
+    : 0;
 
   const toggleGroup = (groupDn) => {
     setExpandedGroups(prev => ({
@@ -42,21 +64,49 @@ const TreeView = () => {
 
   return (
     <div className="tree-container">
-      {userlist && userlist.map((user, index) => (
+      <div className="tree-search">
+        <input
+          type="text"
+          className="tree-search-input"
+          value={searchKeyword}
+          onChange={(event) => setSearchKeyword(event.target.value)}
+          placeholder="Search user"
+          aria-label="Search user"
+        />
+        {searchKeyword ? (
+          <button
+            type="button"
+            className="tree-search-clear"
+            onClick={() => setSearchKeyword('')}
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+
+      {normalizedKeyword ? (
+        <div className="tree-search-summary">
+          {totalMatches} {totalMatches === 1 ? 'user' : 'users'} matched
+        </div>
+      ) : null}
+
+      {filteredGroups.map((user, index) => {
+        const isExpanded = normalizedKeyword ? true : Boolean(expandedGroups[user.group_dn]);
+        return (
         <div key={index}>
           <div
             className="group-row"
             onClick={(e) => handleGroupClick(e, user.group_dn)}
           >
             <div onClick={(e) => { e.stopPropagation(); toggleGroup(user.group_dn); }}>
-              <ArrowIcon expanded={expandedGroups[user.group_dn]} />
+              <ArrowIcon expanded={isExpanded} />
             </div>
             <span className="group-label">{user.group_dn}</span>
           </div>
 
-          {expandedGroups[user.group_dn] && (
+          {isExpanded && (
             <div className="member-list">
-              {user.member_uids.map((uid, idx) => (
+              {user.filteredMembers.map((uid, idx) => (
                 <Link
                   key={idx}
                   to="/user"
@@ -69,7 +119,11 @@ const TreeView = () => {
             </div>
           )}
         </div>
-      ))}
+      )})}
+
+      {userlist && filteredGroups.length === 0 ? (
+        <div className="tree-empty">No users found.</div>
+      ) : null}
     </div>
   );
 };
