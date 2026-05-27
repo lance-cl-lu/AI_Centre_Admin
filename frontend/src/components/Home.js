@@ -82,7 +82,15 @@ const formatMinutes = (minutes, maximumFractionDigits = 1) => {
   if (!Number.isFinite(minutes)) {
     return '無資料';
   }
-  return `${formatMetricValue(minutes, maximumFractionDigits)} 分鐘`;
+  return formatMetricValue(minutes, maximumFractionDigits) + ' 分鐘';
+};
+
+const formatBillingHours = (minutes) => {
+  if (!Number.isFinite(minutes)) {
+    return '無資料';
+  }
+  const hours = minutes / 60;
+  return formatMetricValue(hours, 2) + ' 小時（' + formatMetricValue(minutes, 1) + ' 分鐘）';
 };
 
 const summariseSeriesDiff = (values) => {
@@ -2141,10 +2149,10 @@ function Home() {
                               <tr>
                                 <th>Namespace</th>
                                 <th>區間費用</th>
-                                <th>CPU core</th>
-                                <th>平均 CPU 分鐘</th>
-                                <th>GPU card</th>
-                                <th>平均 GPU 分鐘</th>
+                                <th>平均 CPU core</th>
+                                <th>CPU 計費小時</th>
+                                <th>平均 GPU card</th>
+                                <th>GPU 計費小時</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2163,7 +2171,7 @@ function Home() {
                                   </td>
                                   <td>
                                     {row.cpuActiveMinutes !== null
-                                      ? formatMinutes(row.cpuActiveMinutes)
+                                      ? formatBillingHours(row.cpuActiveMinutes)
                                       : '無資料'}
                                   </td>
                                   <td>
@@ -2173,7 +2181,7 @@ function Home() {
                                   </td>
                                   <td>
                                     {row.gpuActiveMinutes !== null
-                                      ? formatMinutes(row.gpuActiveMinutes)
+                                      ? formatBillingHours(row.gpuActiveMinutes)
                                       : '無資料'}
                                   </td>
                                 </tr>
