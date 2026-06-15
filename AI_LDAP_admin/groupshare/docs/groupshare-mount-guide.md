@@ -1,9 +1,11 @@
 # GroupShare 使用者掛載路徑指南
 
-當 Notebook 帶有標籤 `groupshare: enabled`，平台會透過 PodDefault 自動掛載：
+平台會透過 `PodDefault/groupshare` 自動掛載：
 
 - 路徑格式：`/mnt/groups/<group_name>`
 - 例：`/mnt/groups/ai-team`
+
+使用者建立 Notebook 時不需要選 Configurations，也不需要手動加 `groupshare` label。
 
 ## Notebook 端檢查
 
@@ -22,4 +24,4 @@ ls /mnt/groups
 - 不可自定義 `/group*` NFS path
 - NFS server 必須與平台一致
 - 只允許 `gs-` 白名單 volume
-- NFS path 必須落在 namespace 對應的 groupshare 白名單（`/group/<group>`）
+- NFS path 必須落在 namespace 對應的 groupshare 白名單

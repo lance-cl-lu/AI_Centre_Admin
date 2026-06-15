@@ -34,6 +34,7 @@ data:
     NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
     NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "groupshare-nfs-defaults")
     PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
+    PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
     POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
 
 
@@ -127,14 +128,14 @@ data:
                 },
                 "spec": {
                     "desc": "GroupShare auto-generated mounts",
-                    "selector": {"matchLabels": {"groupshare": "enabled"}},
+                    "selector": {},
                     "volumeMounts": volume_mounts,
                     "volumes": volumes,
                 },
             }
 
         def _hash_annotations(self, groups_raw: str, managers_raw: str) -> str:
-            raw = f"{groups_raw}|{managers_raw}|{self.nfs_server}|{self.nfs_path}"
+            raw = f"{groups_raw}|{managers_raw}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
             return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
         def sync_profile(self, profile: dict) -> None:
@@ -173,10 +174,13 @@ data:
                     .get("annotations", {})
                     .get("groupshare.kubeflow.org/hash", "")
                 )
-                if existing_hash == current_hash:
+                existing_selector = existing.get("spec", {}).get("selector", {})
+                desired_selector = body.get("spec", {}).get("selector", {})
+                if existing_hash == current_hash and existing_selector == desired_selector:
                     logger.info("[INFO] Synced Profile namespace=%s no changes", namespace)
                     return
-                self.co_api.patch_namespaced_custom_object(
+                body["metadata"]["resourceVersion"] = existing.get("metadata", {}).get("resourceVersion")
+                self.co_api.replace_namespaced_custom_object(
                     group=PODDEFAULT_GROUP,
                     version=PODDEFAULT_VERSION,
                     namespace=namespace,

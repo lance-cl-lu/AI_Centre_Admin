@@ -53,7 +53,7 @@
 - 程式碼、部署模板、測試、文件已同步。
 
 ## 5) 驗證結果
-- `python -m unittest discover -s tests -p 'test_*.py'`：13 tests 全部通過
+- `python -m unittest discover -s tests -p 'test_*.py'`：17 tests 全部通過
 - `python -m py_compile api/views.py groupshare/controller/app.py groupshare/controller/parser.py`：通過
 
 ## 6) 建議上線順序

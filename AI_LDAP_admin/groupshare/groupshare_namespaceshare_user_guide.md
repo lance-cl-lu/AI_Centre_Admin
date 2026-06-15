@@ -1,6 +1,6 @@
 # GroupShare 與 NamespaceShare 使用說明書
 
-版本日期：2026-04-29
+版本日期：2026-06-15
 
 ## 1. 功能總覽
 
@@ -123,10 +123,10 @@ cat /mnt/namespaces/wycctest1/test.txt
 | Data Volumes | 額外新增或掛載 PVC |
 | Affinity | 可選節點類型，例如 A5000 或 MIG |
 | Shared Memory | 是否啟用 `/dev/shm` shared memory |
-| Configurations | 額外 PodDefault 設定 |
+| Configurations | 額外 PodDefault 設定；GroupShare 與 NamespaceShare 不需要手動選 |
 | Environment | 環境變數設定 |
 
-GroupShare 與 NamespaceShare 不需要使用者在建立 Notebook 時手動設定。系統的 Notebook template 會自動加上 `groupshare: enabled`，符合條件的 Notebook 會自動套用 GroupShare 與 NamespaceShare。
+GroupShare 與 NamespaceShare 不需要使用者在建立 Notebook 時手動設定。使用者不需要在 Configurations 選 `groupshare` 或 `namespace-share`，也不需要手動加 `groupshare` label；系統會透過 PodDefault 自動套用 GroupShare 與 NamespaceShare。
 
 ## 5. 進入 Notebook 後如何使用
 
@@ -212,7 +212,7 @@ GroupShare 的群組與 manager 設定來自 Profile annotation，例如 `group`
 
 ### 不要手動新增 NFS volume
 
-系統有安全檢查，會擋下未授權的 NFS server、NFS path、volume name，或沒有 `groupshare: enabled` label 卻嘗試掛載受控 share 的 Notebook。使用者應透過系統自動產生的掛載路徑使用共用資料。
+系統有安全檢查，會擋下未授權的 NFS server、NFS path、volume name，或不符合讀寫權限的 NFS volume。使用者應透過系統自動產生的掛載路徑使用共用資料。
 
 ## 8. 建議使用方式
 
