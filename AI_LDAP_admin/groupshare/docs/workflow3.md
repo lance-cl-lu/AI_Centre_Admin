@@ -131,11 +131,10 @@
 入口：Notebook `CREATE/UPDATE` -> `/validate`。
 
 1. 讀 namespace 的 `PodDefault/groupshare` annotation 當 policy。
-2. 套 Rule A/B/C/D：
+2. 套 Rule A/B/C：
 - Rule A: 禁止直接使用 `/group*` 路徑
 - Rule B: server、volume name、path 必須在白名單
 - Rule C: 非 admin 不可把 volume 或 volumeMount 改成 RW
-- Rule D: 使用 Groupshare volume 必須有 `groupshare=enabled`
 
 3. 任一規則不符就 deny（admission reject）。
 
@@ -160,14 +159,12 @@ metadata:
     groupshare.kubeflow.org/allowed-volumes: "gs-lab-a,gs-lab-b"
     groupshare.kubeflow.org/admin-groups: "gs-lab-a"
 spec:
-  selector:
-    matchLabels:
-      groupshare: enabled
+  selector: {}
 ```
 
 ### 8.3 Notebook 行為（範例）
 
-1. Notebook 有 `metadata.labels.groupshare=enabled`
+1. Notebook 不需要額外選 Configurations 或 label
 2. Notebook 最終會有 `/mnt/groups/lab-a`、`/mnt/groups/lab-b` 掛載
 3. `lab-a` 可 RW，`lab-b` 會是 RO（依 `manager-group` 決定）
 

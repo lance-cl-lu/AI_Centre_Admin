@@ -94,7 +94,7 @@ class TestWebhookRules(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertEqual(rule, "Rule B")
 
-    def test_rule_d_label_required_for_groupshare_volumes(self):
+    def test_unlabeled_groupshare_volume_is_validated(self):
         nb = self._base_notebook()
         nb["metadata"]["labels"] = {}
 
@@ -108,10 +108,10 @@ class TestWebhookRules(unittest.TestCase):
             writable_volume_names=set(),
         )
 
-        self.assertFalse(allowed)
-        self.assertEqual(rule, "Rule D")
+        self.assertTrue(allowed)
+        self.assertEqual(rule, "ALLOW")
 
-    def test_rule_d_unlabeled_notebook_without_nfs_is_allowed(self):
+    def test_unlabeled_notebook_without_nfs_is_allowed(self):
         nb = self._base_notebook()
         nb["metadata"]["labels"] = {}
         nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"] = []
@@ -227,7 +227,7 @@ class TestWebhookRules(unittest.TestCase):
         self.assertTrue(allowed)
         self.assertEqual(rule, "ALLOW")
 
-    def test_rule_d_label_required_for_namespace_share_volume(self):
+    def test_unlabeled_namespace_share_volume_is_validated(self):
         nb = self._base_notebook()
         nb["metadata"]["labels"] = {}
         nb["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0] = {
@@ -254,8 +254,8 @@ class TestWebhookRules(unittest.TestCase):
             writable_volume_names={"ns-b1144209"},
         )
 
-        self.assertFalse(allowed)
-        self.assertEqual(rule, "Rule D")
+        self.assertTrue(allowed)
+        self.assertEqual(rule, "ALLOW")
 
 
 if __name__ == "__main__":

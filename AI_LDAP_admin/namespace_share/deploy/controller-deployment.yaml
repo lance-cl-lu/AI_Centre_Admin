@@ -30,10 +30,6 @@ spec:
               value: namespace-share-nfs-defaults
             - name: NAMESPACE_SHARE_PODDEFAULT_NAME
               value: namespace-share
-            - name: NAMESPACE_SHARE_SELECTOR_LABEL
-              value: groupshare
-            - name: NAMESPACE_SHARE_SELECTOR_VALUE
-              value: enabled
             - name: POLL_SECONDS
               value: "20"
           volumeMounts:

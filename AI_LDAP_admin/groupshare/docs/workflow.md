@@ -1,6 +1,6 @@
 # GroupShare 維運與部署 Workflow
 
-最後更新：2026-03-15（Asia/Taipei）
+最後更新：2026-06-15（Asia/Taipei）
 
 ## 1) 功能總覽（先理解這三層）
 
@@ -12,19 +12,20 @@
 2. GroupShare Controller 自動同步 PodDefault
 - 讀每個 namespace 的 Profile annotation
 - 產生/更新 `PodDefault/groupshare`
+- `PodDefault/groupshare` 使用空 selector `{}`，Notebook 不需要選 Configurations 或加 `groupshare` label
 - 注入 `/mnt/groups/<group>` NFS 掛載
 
 3. Validating Webhook 擋不合法 Notebook
 - 禁止繞過白名單 NFS 掛載
 - 非管理群組禁止改成 RW
-- 要求 `groupshare=enabled` 才能使用 GroupShare volume
+- Notebook 只要宣告 NFS volume，就會檢查白名單與 RW 權限
 
 ## 2) 重要路徑
 
 - `groupshare/controller/app.py`: Controller 主流程
 - `groupshare/controller/parser.py`: annotation 解析（含 `manager-group` fallback）
 - `groupshare/webhook/app.py`: Admission Webhook 入口
-- `groupshare/webhook/rules.py`: Rule A/B/C/D
+- `groupshare/webhook/rules.py`: Rule A/B/C
 - `groupshare/deploy/*.yaml`: k8s 部署模板（目前為 ConfigMap 掛 code）
 
 ## 3) 日常改版流程（Code Change）
@@ -145,7 +146,7 @@ kubectl -n kubeflow logs <webhook-pod-name> --tail=200
 
 1. Controller 日誌有 `Created/Updated PodDefault` 訊息
 2. Profile namespace 中存在 `PodDefault/groupshare`
-3. Notebook 加上 `groupshare=enabled` 能正常掛載 `/mnt/groups/*`
+3. Notebook 不需要額外選 Configurations 或 label，就能正常掛載 `/mnt/groups/*`
 4. 非 admin 群組把 volume 改成 `readOnly: false` 會被 webhook 擋下
 5. webhook 憑證 ready（`groupshare-webhook-tls` secret 存在）
 

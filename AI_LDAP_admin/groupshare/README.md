@@ -12,7 +12,7 @@
 
 2. Controller 讀 Profile，自動產生/更新 PodDefault
 - 每個 Profile namespace 一個 `PodDefault/groupshare`
-- Notebook 只要帶 `groupshare=enabled`，就會被注入掛載
+- `PodDefault/groupshare` 使用空 selector `{}`，Profile namespace 內的 Notebook 會預設被注入掛載
 - 掛載點是 `/mnt/groups/<group>`
 - NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/kflow_dev/shared`）
 
@@ -20,7 +20,7 @@
 - 擋掉使用者自己宣告 `/group*` 路徑
 - 擋掉不在白名單的 NFS volume/path/server
 - 擋掉不屬於 `manager-group` 的使用者把 volume 改成 RW
-- 強制 Notebook 必須有 `groupshare=enabled`
+- Notebook 只要宣告 NFS volume，就會依 PodDefault annotation 白名單檢查
 
 ## 資料夾說明
 
@@ -31,7 +31,7 @@
 
 - `webhook/`
   - `app.py`: Validating Admission Webhook API
-  - `rules.py`: Rule A/B/C/D 驗證核心
+  - `rules.py`: Rule A/B/C 驗證核心
   - `Dockerfile`: webhook 映像建置檔
 
 - `deploy/`
@@ -43,11 +43,12 @@
   - `webhook-service.yaml`: webhook service
   - `validating-webhook-configuration.yaml`: admission 規則與 `failurePolicy: Fail`
   - `webhook-certificate.yaml`: TLS certificate 資源
-  - `notebook-template-groupshare.yaml`: 預設含 `groupshare=enabled` 的 Notebook 模板
+  - `notebook-template-groupshare.yaml`: 舊版標籤式範例模板，現行自動掛載流程不再依賴它
 
 - `tests/`
+  - `controller/test_app.py`: PodDefault selector 與既有 selector 更新測試
   - `controller/test_parser.py`: 解析與命名測試
-  - `webhook/test_rules.py`: Rule A/B/C/D 測試
+  - `webhook/test_rules.py`: Rule A/B/C 測試
 
 - `docs/`
   - `profile-annotation-spec.md`: annotation 格式與轉換規則
@@ -57,7 +58,7 @@
 ## 現在的驗證狀態
 
 已完成：
-- Python 單元測試（13 tests）通過
+- Python 單元測試（17 tests）通過
 - Python 語法編譯檢查通過
 - `kubectl apply --dry-run=client` 全部通過
 - `kubectl apply --dry-run=server` 全部通過

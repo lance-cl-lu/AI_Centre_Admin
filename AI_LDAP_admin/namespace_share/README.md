@@ -12,8 +12,8 @@ NamespaceShare 的目標：
 
 1. Controller 讀 Profile，自動產生/更新 PodDefault
 - 每個 Profile namespace 一個 `PodDefault/namespace-share`
-- selector 沿用 `groupshare=enabled`
-- Notebook 只要帶 `groupshare=enabled`，就會同時吃到 GroupShare 與 NamespaceShare
+- `PodDefault/namespace-share` 使用空 selector `{}`，Profile namespace 內的 Notebook 會預設被注入掛載
+- Notebook 不需要在 create Notebook 時選 Configurations，也不需要額外加 `groupshare` label
 - 掛載點是 `/mnt/namespaces/<namespace>`
 - NFS 實體路徑是 `NFS_PATH/<namespace>`，本次設定為 `/kflow_dev/shared/_namespaces/<namespace>`
 
@@ -31,8 +31,8 @@ NamespaceShare 的目標：
 
 4. 既有 namespace backfill
 - 既有 Profile namespace 不會因為 backend 更新而自動補歷史資料夾
-- 所以本次已針對現有 80 個 Profile namespace 批次 backfill
-- 實際結果：`TOTAL=80 / CREATED=78 / EXISTING=2 / ERRORS=0`
+- 舊叢集導入 NamespaceShare 時，需要依實際 Profile namespace 清單做一次 backfill
+- backfill 數量請以目標叢集當下的 Profile namespace 數為準
 
 ## 路徑與權限規則
 
@@ -105,7 +105,7 @@ NamespaceShare 的目標：
 - `namespace-share-controller` 已部署上線
 - `groupshare-validating-webhook` 已更新
 - backend 已 build / push / rollout 到 `v0.2.43`
-- 現有 80 個 Profile namespace 已 backfill 完成
+- 既有 Profile namespace 需要確認已 backfill 完成
 
 已做過的 live 驗證：
 - `b1144209`

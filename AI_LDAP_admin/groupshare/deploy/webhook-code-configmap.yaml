@@ -199,20 +199,10 @@ data:
         admin_volume_names: Set[str],
         writable_volume_names: Set[str],
     ) -> Tuple[bool, str, str]:
-        metadata = notebook_obj.get("metadata", {})
-        labels = metadata.get("labels", {}) or {}
         pod_spec = extract_pod_spec(notebook_obj)
         volumes = pod_spec.get("volumes", []) or []
-        if labels.get("groupshare") != "enabled":
-            for volume in volumes:
-                nfs = volume.get("nfs")
-                if not nfs:
-                    continue
-                volume_name = volume.get("name", "")
-                path = nfs.get("path", "")
-                if volume_name in allowed_volume_names or path in allowed_nfs_paths or path.startswith("/group"):
-                    return False, "Rule D", "groupshare label is required: groupshare=enabled"
-            return True, "ALLOW", "groupshare disabled: skip rules"
+        if not any(volume.get("nfs") for volume in volumes):
+            return True, "ALLOW", "no NFS volumes to validate"
 
         containers = pod_spec.get("containers", []) or []
         mount_readonly = {}
