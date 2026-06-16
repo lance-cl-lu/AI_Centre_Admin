@@ -88,9 +88,17 @@ def send_email_gmail(subject, message, destination):
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
     context = ssl.create_default_context() 
-    with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
-        server.login(my_mail, my_password)
-        server.sendmail(my_mail, destination, msg.as_string())
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, destination, msg.as_string())
+        print(f'Email sent successfully to {destination}')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+    except Exception as e:
+        print(f'Failed to send email to {destination}: {e}')
 
 def send_add_account_email(k8s_name, k8s_account, k8s_password, destination):
     add_account_email_title = '帳號啟用通知信 ( Account Activation Notification )'
@@ -741,6 +749,29 @@ def get_lab_info(request):
         gpuQuota = 0
         gpuVendor = "NVIDIA"
     
+    # 獲取群組到期資訊
+    expiry_date = None
+    remaining_days = None
+    print(f"===== GET LAB INFO DEBUG =====")
+    print(f"Lab name: {labname}")
+    try:
+        group_quota = GroupDefaultQuota.objects.get(labname=group)
+        print(f"Group quota found: {group_quota}")
+        print(f"Expiry date field: {group_quota.expiry_date}")
+        print(f"Expiry date type: {type(group_quota.expiry_date)}")
+        if group_quota.expiry_date:
+            expiry_date = group_quota.expiry_date.strftime('%Y-%m-%d')
+            remaining_days = group_quota.remaining_days
+            print(f"Expiry date formatted: {expiry_date}, Remaining days: {remaining_days}")
+        else:
+            print("No expiry date set for this group")
+    except Exception as e:
+        print(f"Error getting group quota: {e}")
+        import traceback
+        traceback.print_exc()
+        pass
+    print(f"===== END GET LAB INFO DEBUG =====")
+    
     # get the user permission from database
     data = {
         "labname": labname,
@@ -749,7 +780,9 @@ def get_lab_info(request):
         "memQuota": memQuota,
         "gpuQuota": gpuQuota,
         "gpuVendor": gpuVendor,
-        "memberUid": get_all_user_permission(user_list, labname)
+        "memberUid": get_all_user_permission(user_list, labname),
+        "expiryDate": expiry_date,
+        "remainingDays": remaining_days
     }
     return Response(data, status=200)
 
@@ -760,7 +793,17 @@ def addlab(request):
     cpuQuota = data['cpu_quota']
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
-    gpuVendor = data['gpu_vendor']    
+    gpuVendor = data['gpu_vendor']
+    expiryDate = data.get('expiry_date', None)  # 取得到期日期，如果沒有則為 None
+    
+    # 處理空字串的情況，將空字串轉為 None
+    if expiryDate == '' or expiryDate == 'null' or expiryDate == 'undefined':
+        expiryDate = None
+    elif isinstance(expiryDate, str):
+        try:
+            expiryDate = datetime.date.fromisoformat(expiryDate)
+        except ValueError:
+            return Response(status=400, data="expiry_date is not valid")
     
     # check Group is exist or not
     try:
@@ -783,7 +826,14 @@ def addlab(request):
         return Response(status=500, data="gpuVendor is not valid")
     
     group = Group.objects.create(name=labname)
-    GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+    GroupDefaultQuota.objects.create(
+        labname=group, 
+        cpu_quota=cpuQuota, 
+        mem_quota=memQuota, 
+        gpu_quota=gpuQuota, 
+        gpu_vendor=gpuVendor,
+        expiry_date=expiryDate if expiryDate else None  # 儲存到期日期
+    )
     return Response(status=200, data={"message": "add lab {} success".format(labname)})
 
 @api_view(['POST'])
@@ -794,6 +844,22 @@ def editlab(request):
     memQuota = data['mem_quota']
     gpuQuota = data['gpu_quota']
     gpuVendor = data['gpu_vendor']
+    expiryDate = data.get('expiry_date', None)  # 取得到期日期，如果沒有則為 None
+    
+    # 處理空字串的情況，將空字串轉為 None
+    if expiryDate == '' or expiryDate == 'null' or expiryDate == 'undefined':
+        expiryDate = None
+    elif isinstance(expiryDate, str):
+        try:
+            expiryDate = datetime.date.fromisoformat(expiryDate)
+        except ValueError:
+            return Response(status=400, data="expiry_date is not valid")
+    
+    print(f"===== EDIT LAB DEBUG =====")
+    print(f"Lab name: {labname}")
+    print(f"Expiry date received: {expiryDate}")
+    print(f"Expiry date type: {type(expiryDate)}")
+    
     try:
         cpuQuota = int(cpuQuota)
         memQuota = int(memQuota)
@@ -822,13 +888,24 @@ def editlab(request):
     # if GroupDefaultQuota is exist, update the default quota, else create the default quota
     if GroupDefaultQuota.objects.filter(labname=group).exists():
         groupDefaultQuota = GroupDefaultQuota.objects.get(labname=group)
+        print(f"Before update - expiry_date: {groupDefaultQuota.expiry_date}")
         groupDefaultQuota.cpu_quota = cpuQuota
         groupDefaultQuota.mem_quota = memQuota
         groupDefaultQuota.gpu_quota = gpuQuota
         groupDefaultQuota.gpu_vendor = gpuVendor
+        groupDefaultQuota.expiry_date = expiryDate if expiryDate else None  # 儲存到期日期
+        print(f"After assignment - expiry_date: {groupDefaultQuota.expiry_date}")
         groupDefaultQuota.save()
+        print(f"After save - expiry_date: {groupDefaultQuota.expiry_date}")
+        # 重新查詢確認
+        groupDefaultQuota.refresh_from_db()
+        print(f"After refresh - expiry_date: {groupDefaultQuota.expiry_date}")
     else:
-        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor)
+        GroupDefaultQuota.objects.create(labname=group, cpu_quota=cpuQuota, mem_quota=memQuota, gpu_quota=gpuQuota, gpu_vendor=gpuVendor, expiry_date=expiryDate if expiryDate else None)
+        print(f"Created new GroupDefaultQuota with expiry_date: {expiryDate}")
+    
+    print(f"===== END DEBUG =====")
+
 
     ### get the user info from database
     for user in User.objects.filter(groups=group):
@@ -877,17 +954,22 @@ def editlab(request):
 
         # 新增檢查：只有當 user 與 default quota 不相等時才執行後續動作
         if str(userCpu) == str(defaultCpuQuota) and str(userGpu) == str(defaultGpuQuota) and str(userMemory) == str(defaultMemQuota):
-            replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
-            permission = get_permission(user.username, labname)
-            print("permission = ", permission)
-            manager = 'user'
-            if permission == 'admin':
-                manager = 'manager'
-            elif permission == 'user':
+            try:
+                replace_profile(profileName,cpuQuota,gpuQuota,memQuota)
+                permission = get_permission(user.username, labname)
+                print("permission = ", permission)
                 manager = 'user'
-            print("manager = ", manager)
-            profileName = get_profile_by_email(user.email)
-            replace_profile_user(profileName, manager, str(cpuQuota), str(gpuQuota), str(memQuota))
+                if permission == 'admin':
+                    manager = 'manager'
+                elif permission == 'user':
+                    manager = 'user'
+                print("manager = ", manager)
+                profileName = get_profile_by_email(user.email)
+                replace_profile_user(profileName, manager, str(cpuQuota), str(gpuQuota), str(memQuota))
+            except Exception as e:
+                # Avoid failing the whole edit when k8s profile update conflicts.
+                print(f"Profile update failed for {user.username}: {e}")
+                continue
 
     return Response(status=200, data={"message": "edit lab {} success".format(labname)})
 
@@ -948,6 +1030,7 @@ def adduser(request):
     mem_quota = data['mem_quota']
     gpu_quota = data['gpu_quota']
     gpu_vendor = data['gpu_vendor']
+    expiry_date = data.get('expiry_date', None)
 
     if check_email(email):
         return Response(status=500, data={"message": "Email is exist from kubeflow profile"})
@@ -997,10 +1080,16 @@ def adduser(request):
     conn.unbind()
     manager = 'user'
     if data['is_lab_manager'] is False:
-        UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=2, labname=Group.objects.get(name=labname))
     elif data['is_lab_manager'] is True:
         manager = 'manager'
-        UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+        user_detail = UserDetail.objects.create(uid=user, permission=1, labname=Group.objects.get(name=labname))
+    
+    # 設定到期日期
+    if expiry_date:
+        user_detail.expiry_date = expiry_date
+        user_detail.save()
+    
     user.save()
     # add gpu vendor
     UserGPUQuotaType.objects.create(user=user, gpuType=gpu_vendor)
@@ -1122,6 +1211,24 @@ def get_user_info(request):
     print("cpu = {}, gpu = {}, memory = {}, memoryStr = {} ".format(cpu, gpu, memory, memoryStr))
     notebooks = list_notebooks_api(profileName)
     # print("notebooks 2 = {}", notebooks)
+    
+    # 獲取使用者的到期日資訊
+    expiry_info = {}
+    for detail in detail_obj:
+        if detail.expiry_date:
+            expiry_info[detail.labname.name] = {
+                'expiry_date': detail.expiry_date.strftime('%Y-%m-%d'),
+                'remaining_days': detail.remaining_days,
+                'is_expired': detail.is_expired
+            }
+        else:
+            # 即使沒有設定到期日期，也要返回群組資訊
+            expiry_info[detail.labname.name] = {
+                'expiry_date': None,
+                'remaining_days': None,
+                'is_expired': False
+            }
+    
     data = {
         "username": user_obj.username,
         "first_name": user_obj.first_name,
@@ -1132,6 +1239,7 @@ def get_user_info(request):
         "gpu_quota" : gpu,
         "permission": get_user_all_groups(user_obj.username),
         "notebooks": notebooks,
+        "expiry_info": expiry_info,
     }
     return Response(data, status=200)
 
@@ -1283,23 +1391,36 @@ def change_user_info(request):
 
         for permission_obj in permission:
             # check the permission is same or not
-            if permission_obj['permission'] == get_permission(username, permission_obj['groupname']):
-                pass
-            else:
+            detail_obj = UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=permission_obj['groupname']))
+
+            if permission_obj['permission'] != get_permission(username, permission_obj['groupname']):
                 # change the permission
-                detail_obj = UserDetail.objects.get(uid=User.objects.get(username=username).id, labname=Group.objects.get(name=permission_obj['groupname']))
                 if permission_obj['permission'] == 'admin':
                     detail_obj.permission = 1
                 elif permission_obj['permission'] == 'user':
                     detail_obj.permission = 2
                 print("permission_obj = ", permission_obj['permission'])
                 detail_obj.save()
+
+            # 處理到期日期（如果有提供）
+            if 'expiry_date' in permission_obj:
+                expiry_date_str = permission_obj['expiry_date']
+                if expiry_date_str:
+                    # 轉換日期字串為日期對象
+                    from datetime import datetime
+                    expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                    detail_obj.expiry_date = expiry_date
+                else:
+                    detail_obj.expiry_date = None
+                detail_obj.save()
+                print(f"Updated expiry date for {username} in {permission_obj['groupname']}: {expiry_date_str}")
+
             manager = 'user'
             if permission_obj['permission'] == 'admin':
                 manager = 'manager'
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
-            print("manager = ", manager) 
+            print("manager = ", manager)
             profileName = get_profile_by_email(user_obj.email)
             replace_profile_user(profileName, manager, str(cpu_quota), str(gpu_quota), str(mem_quota))
         return Response(status=200)

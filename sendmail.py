@@ -12,9 +12,17 @@ def send_email_gmail(subject, message, destination):
     my_mail = 'support01@twentyfouri.com'
     my_password = 'czyq oonp vyxd inor'
     context = ssl.create_default_context()
-    with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
-        server.login(my_mail, my_password)
-        server.sendmail(my_mail, destination, msg.as_string())
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', port, context=context) as server:
+            server.login(my_mail, my_password)
+            server.sendmail(my_mail, destination, msg.as_string())
+        print(f'Email sent successfully to {destination}')
+    except smtplib.SMTPAuthenticationError as e:
+        print(f'Authentication failed: {e}')
+    except smtplib.SMTPException as e:
+        print(f'SMTP error occurred: {e}')
+    except Exception as e:
+        print(f'Failed to send email to {destination}: {e}')
 
 email_body = """<pre> 
 Congratulations! We've successfully created account.
@@ -329,7 +337,7 @@ email_body1 = '<!-- ####### HEY, I AM THE SOURCE EDITOR! #########-->'\
 # send_email_gmail('群組加入通知信', email_body3, "d000018238@cgu.edu.tw")
 # send_email_gmail('群組移除通知信', email_body4, "d000018238@cgu.edu.tw")
 # send_email_gmail('帳號刪除通知信', email_body5, "d000018238@cgu.edu.tw")
-send_email_gmail('帳號啟用通知信 ( Account Activation Notification )', email_body2, "wycca1@gmail.com")
-send_email_gmail('群組加入通知信 ( Group Membership Notification )', email_body3, "wycca1@gmail.com")
-send_email_gmail('群組移除通知信 ( Group Removal Notification )', email_body4, "wycca1@gmail.com")
-send_email_gmail('帳號刪除通知信 ( Account Deletion Notification )', email_body5, "wycca1@gmail.com")
+send_email_gmail('帳號啟用通知信 ( Account Activation Notification )', email_body2, "lance.cl.lu@gmail.com")
+send_email_gmail('群組加入通知信 ( Group Membership Notification )', email_body3, "lance.cl.lu@gmail.com")
+send_email_gmail('群組移除通知信 ( Group Removal Notification )', email_body4, "lance.cl.lu@gmail.com")
+send_email_gmail('帳號刪除通知信 ( Account Deletion Notification )', email_body5, "lance.cl.lu@gmail.com")
