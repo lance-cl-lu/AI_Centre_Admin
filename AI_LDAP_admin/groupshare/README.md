@@ -14,7 +14,7 @@
 - 每個 Profile namespace 一個 `PodDefault/groupshare`
 - `PodDefault/groupshare` 使用空 selector `{}`，Profile namespace 內的 Notebook 會預設被注入掛載
 - 掛載點是 `/mnt/groups/<group>`
-- NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/kflow_dev/shared`）
+- NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/Public/shared`）
 
 3. Webhook 擋繞過
 - 擋掉使用者自己宣告 `/group*` 路徑

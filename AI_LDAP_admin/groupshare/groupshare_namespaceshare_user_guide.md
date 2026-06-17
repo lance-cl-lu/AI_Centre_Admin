@@ -1,6 +1,6 @@
 # GroupShare 與 NamespaceShare 使用說明書
 
-版本日期：2026-06-15
+版本日期：2026-06-17
 
 ## 1. 功能總覽
 
@@ -13,7 +13,9 @@ GroupShare 與 NamespaceShare 都是提供 Notebook 使用者共用檔案的功�
 | GroupShare | 同一群組成員共用資料 | `/mnt/groups/<group-name>` | 一般 user 唯讀；manager 可寫入自己管理的群組 |
 | NamespaceShare | 同一 namespace 內共用資料 | `/mnt/namespaces/<namespace>` | 該 namespace 內的 Notebook 可寫入 |
 
-系統目前使用的共用儲存來源為 NFS server `120.126.23.7`。GroupShare 的資料位於 `/kflow_dev/shared` 底下；NamespaceShare 的資料位於 `/kflow_dev/shared/_namespaces` 底下。
+系統目前使用的共用儲存來源為 NFS server `10.100.4.71`。GroupShare 的資料位於 `/Public/shared` 底下；NamespaceShare 的資料位於 `/Public/shared/_namespaces` 底下。
+
+Notebook 內的掛載點是絕對路徑 `/mnt/groups` 與 `/mnt/namespaces`，不是 `~/mnt`。既有 Notebook Pod 不會 retroactively 套用新的 PodDefault；若看不到掛載，請停止並重新啟動 Notebook，讓 Kubernetes 重新建立 Pod。
 
 ## 2. GroupShare
 

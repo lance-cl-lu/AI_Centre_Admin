@@ -23,9 +23,9 @@ spec:
             - pip install --no-cache-dir kubernetes==26.1.0 && python /app/app.py
           env:
             - name: NFS_NAMESPACE
-              value: kf-storage
+              value: k8s-nfs-storage
             - name: NFS_DEPLOYMENT
-              value: nfs-subdir-external-provisioner
+              value: nfs-client-provisioner
             - name: NFS_CONFIGMAP
               value: namespace-share-nfs-defaults
             - name: NAMESPACE_SHARE_PODDEFAULT_NAME

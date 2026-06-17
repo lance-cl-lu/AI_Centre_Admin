@@ -32,8 +32,8 @@ class TestControllerParser(unittest.TestCase):
         self.assertEqual(name, "gs-lab-vision-2023")
 
     def test_build_group_nfs_path_uses_shared_root(self):
-        path = build_group_nfs_path("/kflow_dev/shared/", "MarkTest")
-        self.assertEqual(path, "/kflow_dev/shared/marktest")
+        path = build_group_nfs_path("/Public/shared/", "MarkTest")
+        self.assertEqual(path, "/Public/shared/marktest")
 
     def test_parse_manager_groups_prefers_manager_group(self):
         annotations = {

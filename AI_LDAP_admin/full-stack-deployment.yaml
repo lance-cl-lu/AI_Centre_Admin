@@ -56,8 +56,8 @@ spec:
             claimName: pvc-backend-sqlite
         - name: groupshare-storage
           nfs:
-            server: 120.126.23.7
-            path: /kflow_dev/shared
+            server: 10.100.4.71
+            path: /Public/shared
 
 ---
 kind: PersistentVolumeClaim

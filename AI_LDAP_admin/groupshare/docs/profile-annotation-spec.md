@@ -44,5 +44,5 @@ metadata:
 每個 Profile namespace 會維護一個 `PodDefault/groupshare`：
 
 - `spec.selector={}`，代表套用到該 Profile namespace 內所有 Notebook
-- `volumes[].nfs.path` 由 `NFS_PATH/<sanitized_group>` 產生（例如 `NFS_PATH=/kflow_dev/shared`）
+- `volumes[].nfs.path` 由 `NFS_PATH/<sanitized_group>` 產生（例如 `NFS_PATH=/Public/shared`）
 - `mountPath=/mnt/groups/<sanitized_group>`

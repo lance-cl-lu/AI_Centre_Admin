@@ -1,6 +1,6 @@
 # GroupShare / NamespaceShare 移轉到 120.126.23.6 紀錄
 
-最後更新：2026-06-14（Asia/Taipei）
+最後更新：2026-06-17（Asia/Taipei）
 
 本文記錄如何把原本 `120.126.23.25` 上的 GroupShare 與 NamespaceShare 功能移轉到 `120.126.23.6`，以及本次實際改動、驗證結果與後續維運注意事項。
 
@@ -13,15 +13,16 @@
 - `groupshare-validating-webhook`
 - 既有 Profile 的 GroupShare annotations backfill
 - 既有 group / namespace 的 NFS 目錄 backfill
+- 既有 Notebook Pod rollout，使新 Pod 套用空 selector 的 PodDefault
 
 目前 `.6` GroupShare / NamespaceShare 部署時使用的 NFS 設定：
 
-- GroupShare：`10.100.4.71:/public`
-- NamespaceShare：`10.100.4.71:/public/_namespaces`
+- GroupShare：`10.100.4.71:/Public/shared`
+- NamespaceShare：`10.100.4.71:/Public/shared/_namespaces`
 - Kubernetes NFS provisioner namespace：`k8s-nfs-storage`
 - Kubernetes NFS provisioner deployment：`nfs-client-provisioner`
 
-注意：`.6` 上 `showmount -e 10.100.4.71` 顯示的 export canonical path 是 `/Public`，provisioner 也使用 `/Public`。實測 `/Public` 與 `/public` 目前都可以 mount 到同一批內容，但 `/Public/shared` 與 `/public/shared` 目前不存在，不能直接使用。
+注意：`.6` 上 `showmount -e 10.100.4.71` 顯示的 export canonical path 是 `/Public`，provisioner 也使用 `/Public`。GroupShare / NamespaceShare 目前固定使用 `/Public/shared` 底下的目錄；2026-06-17 已完成目錄 backfill 並驗證 Notebook 可正常 mount。
 
 ## 2) 本次新增或產生的檔案
 
@@ -70,7 +71,7 @@
 
 ```yaml
 NFS_SERVER: "10.100.4.71"
-NFS_PATH: "/public"
+NFS_PATH: "/Public/shared"
 NFS_NAMESPACE: "k8s-nfs-storage"
 NFS_DEPLOYMENT: "nfs-client-provisioner"
 ```
@@ -81,7 +82,7 @@ NFS_DEPLOYMENT: "nfs-client-provisioner"
 
 ```yaml
 NFS_SERVER: "10.100.4.71"
-NFS_PATH: "/public/_namespaces"
+NFS_PATH: "/Public/shared/_namespaces"
 NFS_NAMESPACE: "k8s-nfs-storage"
 NFS_DEPLOYMENT: "nfs-client-provisioner"
 ```
@@ -98,7 +99,7 @@ NFS_DEPLOYMENT: "nfs-client-provisioner"
 但 `.6` 已經有既有 backend NFS mount：
 
 ```text
-10.100.4.71:/public -> /mnt/groupshare
+10.100.4.71:/Public/shared -> /mnt/groupshare
 ```
 
 且 `.6` 叢集內已存在 NFS provisioner：
@@ -110,16 +111,16 @@ NFS_SERVER: 10.100.4.71
 NFS_PATH: /Public
 ```
 
-所以本次移轉選擇配合 `.6` 既有 NFS server 與 backend mount，使用 `10.100.4.71:/public`。
+所以本次移轉選擇配合 `.6` 既有 NFS server 與 backend mount，使用 `10.100.4.71:/Public/shared`。
 
-後續若要統一成 NFS export 的 canonical path，建議改成：
+`.6` 實際部署值是：
 
 ```text
-GroupShare: 10.100.4.71:/Public
-NamespaceShare: 10.100.4.71:/Public/_namespaces
+GroupShare: 10.100.4.71:/Public/shared
+NamespaceShare: 10.100.4.71:/Public/shared/_namespaces
 ```
 
-不要直接改成 `10.100.4.71:/Public/shared`，因為 2026-06-14 實測 `/Public/shared` 不存在，mount 會回報 `No such file or directory`。
+不要把 `.25` 的 `120.126.23.7:/kflow_dev/shared` 原樣套到 `.6`；`.6` 的 NFS server、export path 與 provisioner namespace/deployment 都不同。
 
 ## 4) 套用的 Kubernetes manifest
 
@@ -236,10 +237,10 @@ Webhook smoke test：
 
 NFS smoke test：
 
-- `10.100.4.71:/public/test100` 可以正常掛載為 read-only。
-- `10.100.4.71:/public/_namespaces/lance` 可以正常掛載為 read-write。
-- `10.100.4.71:/Public` 可以正常掛載，且內容與 `/public` 相同。
-- `10.100.4.71:/Public/shared` 與 `10.100.4.71:/public/shared` 目前都無法掛載，server 回覆 `No such file or directory`。
+- `10.100.4.71:/Public/shared/test100` 可以正常掛載為 read-only。
+- `10.100.4.71:/Public/shared/_namespaces/lance` 可以正常掛載為 read-write。
+- `10.100.4.71:/Public/shared` 是 backend 與 GroupShare 使用的 root。
+- `10.100.4.71:/Public` 是 NFS provisioner 使用的 export root。
 - namespace share 實際寫入、讀取、刪除測試成功。
 - group share read-only 模式寫入失敗，符合預期。
 
@@ -310,7 +311,7 @@ NamespaceShare controller 在 `namespace_share/deploy`。
 是，`.6` 目前 GroupShare / NamespaceShare 部署使用的是：
 
 ```text
-10.100.4.71:/public
+10.100.4.71:/Public/shared
 ```
 
 但 NFS server 對外 export 顯示的是：
@@ -319,7 +320,7 @@ NamespaceShare controller 在 `namespace_share/deploy`。
 10.100.4.71:/Public
 ```
 
-也就是說，`/Public` 是目前看到的 canonical export path；`/public` 則是 backend 與本次 share 部署沿用的 path，實測也可 mount 到同一批資料。
+也就是說，`/Public` 是目前看到的 canonical export path；`/Public/shared` 是本次 share 功能使用的子目錄。
 
 backend pod 內掛載位置是：
 
@@ -330,10 +331,10 @@ backend pod 內掛載位置是：
 NamespaceShare 則使用同一個 NFS 底下的子目錄：
 
 ```text
-10.100.4.71:/public/_namespaces
+10.100.4.71:/Public/shared/_namespaces
 ```
 
-目前沒有看到可用的 `10.100.4.71:/Public/shared`。若希望 share 功能放在 `/Public/shared`，需要先在 NFS server 上建立該目錄並確認 export / permission，再同步修改 backend mount、controller ConfigMap、PodDefault 產生邏輯與 webhook 白名單。
+`10.100.4.71:/Public/shared` 已在 `.6` 上使用。若未來改動 shared root，需要同步修改 backend mount、controller ConfigMap、PodDefault 產生邏輯與 webhook 白名單。
 
 ### `TRASH` group
 
@@ -360,6 +361,8 @@ selector: {}
 所以 notebook 不需要在 create Notebook 時選 Configurations，也不需要 notebook pod template 帶舊版 `groupshare` label。
 
 既有 notebook 若在舊 selector 時期建立且沒有掛載 share，套用新版 controller 後通常需要停止再啟動，必要時重建 notebook，讓 Kubeflow 重新產生 pod。
+
+Notebook 內檢查掛載時請使用 `/mnt/groups` 與 `/mnt/namespaces`。不要查 `~/mnt`，因為 `~` 通常是 `/home/jovyan`，不是 PodDefault 的掛載位置。
 
 ### Webhook 啟動方式
 

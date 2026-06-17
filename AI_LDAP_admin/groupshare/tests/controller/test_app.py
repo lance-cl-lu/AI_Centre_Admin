@@ -77,7 +77,7 @@ class TestGroupshareControllerApp(unittest.TestCase):
         app = load_controller_app()
         controller = object.__new__(app.GroupshareController)
         controller.nfs_server = "10.100.4.71"
-        controller.nfs_path = "/public"
+        controller.nfs_path = "/Public/shared"
 
         poddefault = controller._build_spec(groups=["Lab_A"], admin_groups=[])
 
@@ -89,7 +89,7 @@ class TestGroupshareControllerApp(unittest.TestCase):
         app = load_controller_app()
         controller = object.__new__(app.GroupshareController)
         controller.nfs_server = "10.100.4.71"
-        controller.nfs_path = "/public"
+        controller.nfs_path = "/Public/shared"
 
         profile = {
             "metadata": {

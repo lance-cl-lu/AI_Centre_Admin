@@ -113,7 +113,7 @@
 3. 產生 `PodDefault/groupshare`
 - volume 名稱：`gs-<sanitize(group)>`
 - 掛載點：`/mnt/groups/<sanitize(group)>`
-- NFS 實體路徑：`<NFS_PATH>/<sanitize(group)>`（例如 `/kflow_dev/shared/marktest`）
+- NFS 實體路徑：`<NFS_PATH>/<sanitize(group)>`（例如 `/Public/shared/marktest`）
 - 非 admin 群組：`readOnly=true`
 - admin 群組：`readOnly=false`
 

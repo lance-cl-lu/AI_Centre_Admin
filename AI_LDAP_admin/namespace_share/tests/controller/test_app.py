@@ -77,7 +77,7 @@ class TestNamespaceShareControllerApp(unittest.TestCase):
         app = load_controller_app()
         controller = object.__new__(app.NamespaceShareController)
         controller.nfs_server = "10.100.4.71"
-        controller.nfs_path = "/public/_namespaces"
+        controller.nfs_path = "/Public/shared/_namespaces"
 
         poddefault = controller._build_spec("Mark")
 
@@ -89,7 +89,7 @@ class TestNamespaceShareControllerApp(unittest.TestCase):
         app = load_controller_app()
         controller = object.__new__(app.NamespaceShareController)
         controller.nfs_server = "10.100.4.71"
-        controller.nfs_path = "/public/_namespaces"
+        controller.nfs_path = "/Public/shared/_namespaces"
 
         current_hash = controller._hash_namespace("mark")
         fake_api = FakeCustomObjectsApi(

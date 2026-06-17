@@ -22,8 +22,8 @@ class TestNamespaceShareParser(unittest.TestCase):
         self.assertEqual(to_volume_name("B1144209"), "ns-b1144209")
 
     def test_build_namespace_nfs_path_uses_namespace_root(self):
-        path = build_namespace_nfs_path("/kflow_dev/shared/_namespaces/", "B1144209")
-        self.assertEqual(path, "/kflow_dev/shared/_namespaces/b1144209")
+        path = build_namespace_nfs_path("/Public/shared/_namespaces/", "B1144209")
+        self.assertEqual(path, "/Public/shared/_namespaces/b1144209")
 
 
 if __name__ == "__main__":

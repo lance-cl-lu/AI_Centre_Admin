@@ -15,11 +15,11 @@ NamespaceShare 的目標：
 - `PodDefault/namespace-share` 使用空 selector `{}`，Profile namespace 內的 Notebook 會預設被注入掛載
 - Notebook 不需要在 create Notebook 時選 Configurations，也不需要額外加 `groupshare` label
 - 掛載點是 `/mnt/namespaces/<namespace>`
-- NFS 實體路徑是 `NFS_PATH/<namespace>`，本次設定為 `/kflow_dev/shared/_namespaces/<namespace>`
+- NFS 實體路徑是 `NFS_PATH/<namespace>`，本次設定為 `/Public/shared/_namespaces/<namespace>`
 
 2. Backend 自動建立 namespace share 目錄
 - `api/namespace_share_storage.py` 提供 `ensure_namespace_share_directory()`
-- `api/views.py` 在 `create_profile()` 時自動建立 `/kflow_dev/shared/_namespaces/<namespace>`
+- `api/views.py` 在 `create_profile()` 時自動建立 `/Public/shared/_namespaces/<namespace>`
 - 因此新建立的 Profile namespace 會自動有 namespace share 目錄
 
 3. Webhook 做最小相容
@@ -40,7 +40,7 @@ NamespaceShare 的目標：
   - `/mnt/namespaces/<namespace>`
 
 - NamespaceShare NFS path
-  - `/kflow_dev/shared/_namespaces/<namespace>`
+  - `/Public/shared/_namespaces/<namespace>`
 
 - 權限
   - NamespaceShare 是 namespace 自己的共用資料夾，預期為 RW
@@ -199,7 +199,7 @@ PY'
 
 - NamespaceShare 掛載成立的前提是：
   - PodDefault 已存在
-  - `/kflow_dev/shared/_namespaces/<namespace>` 實體目錄已存在
+  - `/Public/shared/_namespaces/<namespace>` 實體目錄已存在
 
 - 新 namespace 會自動建目錄
 - 舊 namespace 需要一次性 backfill
