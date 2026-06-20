@@ -32,7 +32,7 @@ spec:
         - name: DURATION
           value: "60"  # Duration in seconds
         - name: TASK_MODE
-          value: "minute"  # "daily" 或 "hourly" 或 "minute"
+          value: "daily"  # "daily" 或 "hourly" 或 "minute"
         - name: DAILY_TASK_HOUR
           value: "2"      # 每天凌晨 2 點
         - name: DAILY_TASK_MINUTE
