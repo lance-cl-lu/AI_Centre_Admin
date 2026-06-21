@@ -5,6 +5,8 @@ metadata:
   namespace: kubeflow
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: namespace-share-controller
@@ -12,15 +14,21 @@ spec:
     metadata:
       labels:
         app: namespace-share-controller
+      annotations:
+        sidecar.istio.io/inject: "false"
     spec:
       serviceAccountName: namespace-share-controller
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
       containers:
         - name: controller
-          image: python:3.11-slim
+          image: docker.io/cguaicadmin/namespace-share-controller:v20260617-172109d
           imagePullPolicy: IfNotPresent
-          command: ["/bin/sh", "-c"]
-          args:
-            - pip install --no-cache-dir kubernetes==26.1.0 && python /app/app.py
           env:
             - name: NFS_NAMESPACE
               value: kf-storage
@@ -32,11 +40,3 @@ spec:
               value: namespace-share
             - name: POLL_SECONDS
               value: "20"
-          volumeMounts:
-            - name: controller-code
-              mountPath: /app
-              readOnly: true
-      volumes:
-        - name: controller-code
-          configMap:
-            name: namespace-share-controller-code
