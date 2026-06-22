@@ -24,8 +24,7 @@ NFS_NAMESPACE = os.getenv("NFS_NAMESPACE", "kubeflow")
 NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
 NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "namespace-share-nfs-defaults")
 PODDEFAULT_NAME = os.getenv("NAMESPACE_SHARE_PODDEFAULT_NAME", "namespace-share")
-SELECTOR_LABEL = os.getenv("NAMESPACE_SHARE_SELECTOR_LABEL", "groupshare")
-SELECTOR_VALUE = os.getenv("NAMESPACE_SHARE_SELECTOR_VALUE", "enabled")
+PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
 POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
 
 
@@ -86,7 +85,7 @@ class NamespaceShareController:
             },
             "spec": {
                 "desc": "NamespaceShare auto-generated mount",
-                "selector": {"matchLabels": {SELECTOR_LABEL: SELECTOR_VALUE}},
+                "selector": {},
                 "volumeMounts": [
                     {
                         "name": volume_name,
@@ -108,7 +107,7 @@ class NamespaceShareController:
         }
 
     def _hash_namespace(self, namespace: str) -> str:
-        raw = f"{namespace}|{self.nfs_server}|{self.nfs_path}|{SELECTOR_LABEL}|{SELECTOR_VALUE}"
+        raw = f"{namespace}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def sync_profile(self, profile: dict) -> None:
@@ -134,10 +133,13 @@ class NamespaceShareController:
                 .get("annotations", {})
                 .get("namespace-share.kubeflow.org/hash", "")
             )
-            if existing_hash == current_hash:
+            existing_selector = existing.get("spec", {}).get("selector", {})
+            desired_selector = body.get("spec", {}).get("selector", {})
+            if existing_hash == current_hash and existing_selector == desired_selector:
                 logger.info("[INFO] Synced Profile namespace=%s no changes", namespace)
                 return
-            self.co_api.patch_namespaced_custom_object(
+            body["metadata"]["resourceVersion"] = existing.get("metadata", {}).get("resourceVersion")
+            self.co_api.replace_namespaced_custom_object(
                 group=PODDEFAULT_GROUP,
                 version=PODDEFAULT_VERSION,
                 namespace=namespace,

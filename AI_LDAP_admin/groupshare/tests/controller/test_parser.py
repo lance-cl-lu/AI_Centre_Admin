@@ -1,11 +1,19 @@
 import os
-import sys
+import importlib.util
 import unittest
 
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(BASE, "controller"))
+PARSER_PATH = os.path.join(BASE, "controller", "parser.py")
 
-from parser import build_group_nfs_path, intersect_groups, parse_csv_list, parse_manager_groups, to_volume_name
+spec = importlib.util.spec_from_file_location("groupshare_controller_parser", PARSER_PATH)
+parser = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser)
+
+build_group_nfs_path = parser.build_group_nfs_path
+intersect_groups = parser.intersect_groups
+parse_csv_list = parser.parse_csv_list
+parse_manager_groups = parser.parse_manager_groups
+to_volume_name = parser.to_volume_name
 
 
 class TestControllerParser(unittest.TestCase):
@@ -24,8 +32,8 @@ class TestControllerParser(unittest.TestCase):
         self.assertEqual(name, "gs-lab-vision-2023")
 
     def test_build_group_nfs_path_uses_shared_root(self):
-        path = build_group_nfs_path("/kflow_dev/shared/", "MarkTest")
-        self.assertEqual(path, "/kflow_dev/shared/marktest")
+        path = build_group_nfs_path("/Public/shared/", "MarkTest")
+        self.assertEqual(path, "/Public/shared/marktest")
 
     def test_parse_manager_groups_prefers_manager_group(self):
         annotations = {

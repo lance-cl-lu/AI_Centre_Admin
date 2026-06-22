@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: namespace-share-nfs-defaults
-  namespace: kf-storage
+  namespace: k8s-nfs-storage
 data:
-  NFS_SERVER: "120.126.23.7"
-  NFS_PATH: "/kflow_dev/shared/_namespaces"
+  NFS_SERVER: "10.100.4.71"
+  NFS_PATH: "/Public/shared/_namespaces"

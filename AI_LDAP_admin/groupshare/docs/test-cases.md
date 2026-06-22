@@ -19,7 +19,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 - Webhook Rule A：`path: /group/hr_data` 必須拒絕
 - Webhook Rule B：NFS path 不在白名單必須拒絕
 - Webhook Rule C：非管理者將 `readOnly=false` 必須拒絕
-- Webhook Rule D：缺少 `groupshare=enabled` label 必須拒絕
+- Webhook 對沒有 `groupshare` label 的 Notebook 仍會檢查 NFS volume 白名單與 RW 權限
 
 ## 整合測試
 

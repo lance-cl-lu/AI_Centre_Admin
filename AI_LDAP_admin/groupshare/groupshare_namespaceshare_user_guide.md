@@ -1,6 +1,6 @@
 # GroupShare 與 NamespaceShare 使用說明書
 
-版本日期：2026-04-29
+版本日期：2026-06-17
 
 ## 1. 功能總覽
 
@@ -13,7 +13,9 @@ GroupShare 與 NamespaceShare 都是提供 Notebook 使用者共用檔案的功�
 | GroupShare | 同一群組成員共用資料 | `/mnt/groups/<group-name>` | 一般 user 唯讀；manager 可寫入自己管理的群組 |
 | NamespaceShare | 同一 namespace 內共用資料 | `/mnt/namespaces/<namespace>` | 該 namespace 內的 Notebook 可寫入 |
 
-系統目前使用的共用儲存來源為 NFS server `120.126.23.7`。GroupShare 的資料位於 `/kflow_dev/shared` 底下；NamespaceShare 的資料位於 `/kflow_dev/shared/_namespaces` 底下。
+系統目前使用的共用儲存來源為 NFS server `10.100.4.71`。GroupShare 的資料位於 `/Public/shared` 底下；NamespaceShare 的資料位於 `/Public/shared/_namespaces` 底下。
+
+Notebook 內的掛載點是絕對路徑 `/mnt/groups` 與 `/mnt/namespaces`，不是 `~/mnt`。既有 Notebook Pod 不會 retroactively 套用新的 PodDefault；若看不到掛載，請停止並重新啟動 Notebook，讓 Kubernetes 重新建立 Pod。
 
 ## 2. GroupShare
 
@@ -123,10 +125,10 @@ cat /mnt/namespaces/wycctest1/test.txt
 | Data Volumes | 額外新增或掛載 PVC |
 | Affinity | 可選節點類型，例如 A5000 或 MIG |
 | Shared Memory | 是否啟用 `/dev/shm` shared memory |
-| Configurations | 額外 PodDefault 設定 |
+| Configurations | 額外 PodDefault 設定；GroupShare 與 NamespaceShare 不需要手動選 |
 | Environment | 環境變數設定 |
 
-GroupShare 與 NamespaceShare 不需要使用者在建立 Notebook 時手動設定。系統的 Notebook template 會自動加上 `groupshare: enabled`，符合條件的 Notebook 會自動套用 GroupShare 與 NamespaceShare。
+GroupShare 與 NamespaceShare 不需要使用者在建立 Notebook 時手動設定。使用者不需要在 Configurations 選 `groupshare` 或 `namespace-share`，也不需要手動加 `groupshare` label；系統會透過 PodDefault 自動套用 GroupShare 與 NamespaceShare。
 
 ## 5. 進入 Notebook 後如何使用
 
@@ -212,7 +214,7 @@ GroupShare 的群組與 manager 設定來自 Profile annotation，例如 `group`
 
 ### 不要手動新增 NFS volume
 
-系統有安全檢查，會擋下未授權的 NFS server、NFS path、volume name，或沒有 `groupshare: enabled` label 卻嘗試掛載受控 share 的 Notebook。使用者應透過系統自動產生的掛載路徑使用共用資料。
+系統有安全檢查，會擋下未授權的 NFS server、NFS path、volume name，或不符合讀寫權限的 NFS volume。使用者應透過系統自動產生的掛載路徑使用共用資料。
 
 ## 8. 建議使用方式
 
