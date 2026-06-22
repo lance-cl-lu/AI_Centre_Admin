@@ -16,13 +16,17 @@ spec:
         sidecar.istio.io/inject: "false"
     spec:
       serviceAccountName: groupshare-webhook
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
       containers:
         - name: webhook
-          image: python:3.11-slim
+          image: docker.io/cguaicadmin/groupshare-webhook:v20260617-172109d
           imagePullPolicy: IfNotPresent
-          command: ["/bin/sh", "-c"]
-          args:
-            - pip install --no-cache-dir kubernetes==26.1.0 flask==3.0.3 && python /app/app.py
           env:
             - name: GROUPSHARE_PODDEFAULT_NAME
               value: groupshare
@@ -39,13 +43,7 @@ spec:
             - name: tls
               mountPath: /tls
               readOnly: true
-            - name: webhook-code
-              mountPath: /app
-              readOnly: true
       volumes:
         - name: tls
           secret:
             secretName: groupshare-webhook-tls
-        - name: webhook-code
-          configMap:
-            name: groupshare-webhook-code
