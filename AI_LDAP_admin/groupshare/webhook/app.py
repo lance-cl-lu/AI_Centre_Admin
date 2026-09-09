@@ -7,6 +7,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 from rules import evaluate_rules, parse_csv
+from tls_reload import ReloadingTLSContext
 
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
@@ -92,6 +93,22 @@ def healthz():
     return "ok", 200
 
 
+@app.route("/metrics", methods=["GET"])
+def metrics():
+    tls = app.config.get("TLS_CONTEXT")
+    if tls is None:
+        return "TLS context unavailable\n", 503
+    tls.current()
+    return (
+        "# TYPE groupshare_tls_reload_healthy gauge\n"
+        f"groupshare_tls_reload_healthy {int(tls.healthy)}\n"
+        "# TYPE groupshare_tls_loads_total counter\n"
+        f"groupshare_tls_loads_total {tls.reload_count}\n",
+        200,
+        {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
+    )
+
+
 @app.route("/validate", methods=["POST"])
 def validate():
     try:
@@ -151,4 +168,6 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "8443"))
     cert = os.getenv("TLS_CERT_FILE", "/tls/tls.crt")
     key = os.getenv("TLS_KEY_FILE", "/tls/tls.key")
-    app.run(host="0.0.0.0", port=port, ssl_context=(cert, key))
+    tls = ReloadingTLSContext(cert, key)
+    app.config["TLS_CONTEXT"] = tls
+    app.run(host="0.0.0.0", port=port, ssl_context=tls.context)

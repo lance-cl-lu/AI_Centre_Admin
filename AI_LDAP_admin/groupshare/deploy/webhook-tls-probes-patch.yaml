@@ -1,0 +1,60 @@
+# Apply with kubectl patch --type=strategic --patch-file, not kubectl apply.
+spec:
+  template:
+    spec:
+      containers:
+        - name: webhook
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: https
+              scheme: HTTPS
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: https
+              scheme: HTTPS
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import os
+                  from pathlib import Path
+                  import socket
+                  import ssl
+                  import sys
+
+                  # Compare the local server's leaf with the mounted Secret, even if stale.
+                  context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                  context.check_hostname = False
+                  context.verify_mode = ssl.CERT_NONE
+                  with socket.create_connection(("127.0.0.1", int(os.environ.get("PORT", "8443"))), timeout=3) as sock:
+                      with context.wrap_socket(sock, server_hostname="groupshare-webhook.kubeflow.svc") as tls:
+                          current = tls.getpeercert(binary_form=True)
+                  try:
+                      cert = Path(os.environ.get("TLS_CERT_FILE", "/tls/tls.crt"))
+                      key = Path(os.environ.get("TLS_KEY_FILE", "/tls/tls.key"))
+                      if cert.parent == key.parent and (cert.parent / "..data").is_symlink():
+                          directory = (cert.parent / "..data").resolve(strict=True)
+                          cert, key = directory / cert.name, directory / key.name
+                      candidate = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                      candidate.load_cert_chain(cert, key)
+                      leaf = cert.read_text().split("-----END CERTIFICATE-----", 1)[0] + "-----END CERTIFICATE-----\n"
+                      expected = ssl.PEM_cert_to_DER_cert(leaf)
+                  except (OSError, ValueError):
+                      # Keep a working server alive when the replacement pair is invalid.
+                      # The reload metric and TLS monitoring report this condition.
+                      sys.exit(0)
+                  if current != expected:
+                      sys.exit("TLS certificate changed; restart required to load the mounted Secret")
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2
