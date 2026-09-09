@@ -3,7 +3,7 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: groupshare-validating-webhook
   annotations:
-    cert-manager.io/inject-ca-from: kubeflow/groupshare-webhook-cert
+    cert-manager.io/inject-ca-from-secret: kubeflow/groupshare-webhook-trust
 webhooks:
   - name: notebooks.groupshare.kubeflow.org
     admissionReviewVersions: ["v1"]

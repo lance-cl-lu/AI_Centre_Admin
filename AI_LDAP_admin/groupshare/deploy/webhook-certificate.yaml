@@ -1,3 +1,4 @@
+# Legacy rollback certificate. Production uses webhook-serving-certificate.yaml.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

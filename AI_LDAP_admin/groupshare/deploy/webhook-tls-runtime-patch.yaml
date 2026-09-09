@@ -1,8 +1,4 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: groupshare-validating-webhook
-  namespace: kubeflow
+# Apply only after the API server trusts both the old leaf and the new CA.
 spec:
   replicas: 2
   strategy:
@@ -10,24 +6,8 @@ spec:
     rollingUpdate:
       maxUnavailable: 0
       maxSurge: 1
-  selector:
-    matchLabels:
-      app: groupshare-validating-webhook
   template:
-    metadata:
-      labels:
-        app: groupshare-validating-webhook
-      annotations:
-        sidecar.istio.io/inject: "false"
     spec:
-      serviceAccountName: groupshare-webhook
-      tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          operator: Exists
-          effect: NoSchedule
-        - key: node-role.kubernetes.io/master
-          operator: Exists
-          effect: NoSchedule
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -40,7 +20,6 @@ spec:
       containers:
         - name: webhook
           image: docker.io/cguaicadmin/groupshare-webhook:v20260617-172109d
-          imagePullPolicy: IfNotPresent
           command: ["python", "/opt/groupshare-webhook/app.py"]
           args: []
           resources:
@@ -49,22 +28,7 @@ spec:
               memory: 64Mi
             limits:
               memory: 256Mi
-          env:
-            - name: GROUPSHARE_PODDEFAULT_NAME
-              value: groupshare
-            - name: PORT
-              value: "8443"
-            - name: TLS_CERT_FILE
-              value: /tls/tls.crt
-            - name: TLS_KEY_FILE
-              value: /tls/tls.key
-          ports:
-            - name: https
-              containerPort: 8443
           volumeMounts:
-            - name: tls
-              mountPath: /tls
-              readOnly: true
             - name: tls-runtime
               mountPath: /opt/groupshare-webhook
               readOnly: true

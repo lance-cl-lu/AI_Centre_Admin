@@ -3,6 +3,8 @@
 目標：
 讓 Kubeflow Notebook 可以自動看到「自己群組的共享資料夾」，同時避免使用者繞過規則亂掛 NFS。
 
+2026-09-09 線上憑證維護入口：[憑證自動續期、熱載入與年度維護文件](docs/certificate-maintenance.md)。目前使用穩定 CA、400 天服務憑證、提前 60 天自動續期及兩個 webhook 副本。
+
 ## GroupShare 在做什麼
 
 1. Account Manager 會把群組資訊寫進 Profile annotation
@@ -32,6 +34,7 @@
 - `webhook/`
   - `app.py`: Validating Admission Webhook API
   - `rules.py`: Rule A/B/C 驗證核心
+  - `tls_reload.py`: 每次 TLS 握手載入最新完整憑證，更新失敗時保留有效 context
   - `Dockerfile`: webhook 映像建置檔
 
 - `deploy/`
@@ -42,7 +45,12 @@
   - `webhook-deployment.yaml`: webhook 部署
   - `webhook-service.yaml`: webhook service
   - `validating-webhook-configuration.yaml`: admission 規則與 `failurePolicy: Fail`
-  - `webhook-certificate.yaml`: TLS certificate 資源
+  - `webhook-serving-certificate.yaml`、`webhook-ca-issuer.yaml`: 現行 TLS certificate 與 CA Issuer
+  - `webhook-certificate.yaml`: 舊 SelfSigned 憑證，僅保留供回復使用
+  - `webhook-tls-runtime-configmap.json`: 有版本且不可變更的線上 webhook 程式碼
+  - `webhook-tls-runtime-patch.yaml`: 切換既有 Deployment 至熱載入版本
+  - `webhook-tls-probes-patch.yaml`: 健康檢查及熱載入失效時的重啟保護
+  - `webhook-certificate-monitoring.yaml`: HTTPS、重新載入、期限及監測失聯告警
   - `notebook-template-groupshare.yaml`: 舊版標籤式範例模板，現行自動掛載流程不再依賴它
 
 - `tests/`
@@ -54,18 +62,11 @@
   - `profile-annotation-spec.md`: annotation 格式與轉換規則
   - `groupshare-mount-guide.md`: 使用者視角掛載說明
   - `test-cases.md`: 測試案例與整合驗證步驟
+  - `certificate-maintenance.md`: 憑證故障修復、續期驗證與年度維護流程
 
 ## 現在的驗證狀態
 
-已完成：
-- Python 單元測試（17 tests）通過
-- Python 語法編譯檢查通過
-- `kubectl apply --dry-run=client` 全部通過
-- `kubectl apply --dry-run=server` 全部通過
-
-尚未做（正式上線前）：
-- 實際 `kubectl apply` 到目標叢集
-- 確認 cert-manager 可正常注入 webhook `caBundle`
+2026-09-09：31 項測試通過，包含 12 次連續熱載入；已實際部署並以 cmctl 觸發憑證及私鑰續期，兩個副本不重啟即可提供新憑證。完整現場驗收紀錄見憑證維護文件。
 
 ## 快速測試
 
@@ -77,20 +78,24 @@ python -m py_compile controller/app.py controller/parser.py webhook/app.py webho
 
 ## 建議上線順序
 
-1. 套用資源（本版本採 `python:3.11-slim + ConfigMap`，不需先建私有映像）
+1. 先依憑證維護文件完成 CA Secret、信任 bundle 與遷移前置作業。既有 SelfSigned 部署必須先完成新舊信任重疊，不可直接覆蓋 webhook 設定。
+
+2. 已完成信任遷移後，套用資源：
 ```bash
 kubectl apply -f deploy/controller-rbac.yaml
 kubectl apply -f deploy/controller-configmap.yaml
 kubectl apply -f deploy/controller-code-configmap.yaml
 kubectl apply -f deploy/controller-deployment.yaml
 kubectl apply -f deploy/webhook-rbac.yaml
-kubectl apply -f deploy/webhook-code-configmap.yaml
-kubectl apply -f deploy/webhook-certificate.yaml
+kubectl apply -f deploy/webhook-ca-issuer.yaml
+kubectl apply -f deploy/webhook-serving-certificate.yaml
+kubectl apply -f deploy/webhook-tls-runtime-configmap.json
 kubectl apply -f deploy/webhook-deployment.yaml
+kubectl -n kubeflow patch deployment groupshare-validating-webhook --type=strategic --patch-file deploy/webhook-tls-probes-patch.yaml
 kubectl apply -f deploy/webhook-service.yaml
 kubectl apply -f deploy/validating-webhook-configuration.yaml
+kubectl apply -f deploy/webhook-pdb.yaml
+kubectl apply -f deploy/webhook-certificate-monitoring.yaml
 ```
 
-2. 可選：若要正式產品化，再改成自建映像
-- 用 `controller/Dockerfile`、`webhook/Dockerfile` 建置映像
-- 更新 `deploy/*-deployment.yaml` 的 image
+線上沿用既有依賴映像，以不可變更的 ConfigMap 發布程式碼。修改程式碼時需產生新 ConfigMap 名稱並更新 Deployment；不要原地修改已發布的不可變更 ConfigMap。

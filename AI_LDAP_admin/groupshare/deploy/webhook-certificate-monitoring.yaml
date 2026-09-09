@@ -1,0 +1,112 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager-certificates
+  namespace: cert-manager
+  labels:
+    release: kube-prom-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cert-manager
+      app.kubernetes.io/component: controller
+  endpoints:
+    - port: tcp-prometheus-servicemonitor
+      interval: 30s
+      honorLabels: true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: groupshare-webhook-tls
+  namespace: kubeflow
+  labels:
+    release: kube-prom-stack
+spec:
+  selector:
+    matchLabels:
+      app: groupshare-validating-webhook
+  podMetricsEndpoints:
+    - port: https
+      path: /metrics
+      scheme: https
+      interval: 30s
+      scrapeTimeout: 10s
+      tlsConfig:
+        serverName: groupshare-webhook.kubeflow.svc
+        ca:
+          secret:
+            name: groupshare-webhook-trust
+            key: ca.crt
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: groupshare-webhook-certificates
+  namespace: kubeflow
+  labels:
+    release: kube-prom-stack
+spec:
+  groups:
+    - name: groupshare-webhook-certificates
+      rules:
+        # Bound to the versioned CA Secret groupshare-webhook-ca-2026.
+        - alert: GroupShareRootCARotationDue
+          expr: vector(1946615636) - time() < 540 * 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: Plan a staged rotation of the GroupShare root CA
+            description: The 2026 root expires on 2031-09-08. Complete trust overlap and leaf migration before fewer than 400 days remain; update this rule with the new CA expiry.
+        - alert: GroupShareTLSReloadFailed
+          expr: groupshare_tls_reload_healthy == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: GroupShare could not load its current TLS Secret
+            description: The last valid certificate is retained. Inspect the projected certificate/key pair and webhook logs.
+        - alert: GroupShareTLSHandshakeFailed
+          expr: up{namespace="kubeflow",pod=~"groupshare-validating-webhook-.+"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: GroupShare HTTPS monitoring failed
+            description: Check certificate trust, expiry, service availability and network connectivity.
+        - alert: GroupShareTLSMonitoringMissing
+          expr: absent(groupshare_tls_reload_healthy)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: GroupShare TLS monitoring has no data
+        - alert: GroupShareCertificateExpiring
+          expr: certmanager_certificate_expiration_timestamp_seconds{namespace="kubeflow",name="groupshare-webhook-serving"} - time() < 45 * 86400
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: GroupShare certificate renewal has not completed within its renewal window
+        - alert: GroupShareCertificateRenewalOverdue
+          expr: time() - certmanager_certificate_renewal_timestamp_seconds{namespace="kubeflow",name="groupshare-webhook-serving"} > 3600
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: GroupShare certificate renewal is more than one hour overdue
+        - alert: GroupShareCertificateNotReady
+          expr: certmanager_certificate_ready_status{namespace="kubeflow",name="groupshare-webhook-serving",condition="True"} != 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: GroupShare serving Certificate is not Ready
+        - alert: GroupShareCertificateMetricsMissing
+          expr: absent(certmanager_certificate_expiration_timestamp_seconds{namespace="kubeflow",name="groupshare-webhook-serving"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: GroupShare certificate inventory has no data

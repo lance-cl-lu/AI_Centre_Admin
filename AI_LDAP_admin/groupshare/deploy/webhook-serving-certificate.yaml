@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: groupshare-webhook-serving
+  namespace: kubeflow
+spec:
+  secretName: groupshare-webhook-serving-tls
+  duration: 9600h
+  renewBefore: 1440h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  dnsNames:
+    - groupshare-webhook.kubeflow.svc
+    - groupshare-webhook.kubeflow.svc.cluster.local
+  issuerRef:
+    name: groupshare-webhook-ca
+    kind: Issuer
