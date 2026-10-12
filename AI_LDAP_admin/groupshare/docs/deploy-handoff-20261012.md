@@ -62,14 +62,16 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 
 ## .6（gpunode040）目前狀態
 
-已完成（2026-10-12 由 Mark 執行）：
+2026-10-12 21:07–21:15 已完成部署（Mark 執行），依下面步驟 1、2、3 的順序：
 
-- `kubectl apply -k cgu/groupshare`、`kubectl apply -k cgu/namespace_share`。webhook 憑證未重簽、caBundle 未中斷，server dry-run 建立 Notebook 正常。
-- controller 已標記 `d000018238` 的 6 個舊 Notebook 需重啟（缺 `aid002-a3463`、多 `a2615`）。
+- 後端映像 `docker.io/cguaicadmin/ldap_backend:v2610121415` 已推上 Docker Hub，`.6` 後端已換版。第一次對帳：17 個 Profile 更新、建立 5 個目錄（4 個中文群組新目錄與 `test103`）、0 錯誤；第二次 dry-run `changes=0`。
+- `cgu/groupshare`、`cgu/namespace_share` 已套用；webhook 憑證未重簽、caBundle 未中斷；138 個 PodDefault 依新命名規則重寫，引用的 151 個 NFS 路徑全部存在。
+- 驗證：server dry-run 建立 Pod 會注入正確的群組與 namespace 掛載；合法 Notebook 允許、非 manager 寫入群組資料夾被 Rule C 拒絕；沒有任何使用者 Notebook 被重啟。
+- 11 個執行中的 Notebook 被標記需重啟（`check.sh` 第 6 段）。其中 `d1300701/notebook-0`、`m1461023/thesis-0`、`m1561023/loi-0` 仍掛著中文群組的舊目錄 `ai1029-a347n`、`aid002-a3463`；部署時舊目錄是空的。等這些 Notebook 重啟後，確認 4 個舊目錄（`ai1029-a347n`、`aid002-a3463`、`hojjat-ai3026-a2629-2026-01-27-2027-01-02`、`lab`）仍為空再刪除，有檔案就搬到對應的新目錄。
 
-.6 線上的 controller 是命名規則修正**之前**的版本；branch 最新版要照下面步驟 2、3 的順序更新。.6 有 4 個含中文的群組會換目錄：`ai1029-a347n`、`aid002-a3463`、`hojjat-ai3026-a2629-2026-01-27-2027-01-02`、`lab`（`王佑中lab`）。2026-10-12 檢查時這 4 個舊目錄都是空的。
+**`.6` 的 cgu-manifests（`/home/lance/work/cgu-manifests`）尚未合併 branch。合併前不要在 `.6` 跑 `apply.sh`**：舊版會把後端換回 `v0.3.01`，並把 GroupShare 改回舊設定。合併後照步驟 3 的 `kubectl diff` 確認應無差異。
 
-尚未完成：後端映像推送與換版（這台 root 登入的 Docker Hub 帳號 `wycca1` 沒有 `cguaicadmin` 的推送權限）。
+10.100.1.4 從 gpunode040 連不到，尚未部署，照步驟 4。
 
 ## 要執行的指令
 
