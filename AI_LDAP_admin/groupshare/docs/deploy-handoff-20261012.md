@@ -30,9 +30,10 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 - 新增 `cgu/groupshare/scripts/`：
   - `bootstrap.sh nfs`：NFS 上沒有 `QNAP_MOUNT` 或 `QNAP_MOUNT/_namespaces` 時建立。
   - `bootstrap.sh secrets`：沒有 webhook CA / trust Secret 時建立；若有舊的 `groupshare-webhook-tls`，trust 會同時信任舊憑證，換版期間不中斷。
+  - `bootstrap.sh vwc`：從舊版升級時，先只更新 VWC 的 last-applied 並移除舊的 `inject-ca-from`，讓接下來的 apply 不會清空 caBundle（舊版 last-applied 含 `caBundle: ""`，第一次 apply 會刪掉已注入的 CA，所有 Notebook 建立／修改被擋）。已升級過的叢集不做任何事。
   - `bootstrap.sh webhook`：等憑證、webhook 與 caBundle 就緒；有 Prometheus Operator 時套用監測。
   - `check.sh`：部署後唯讀檢查。
-- `apply.sh`：kustomize 前執行 `bootstrap.sh nfs`、`bootstrap.sh secrets`，恢復 ingress 後執行 `bootstrap.sh webhook`，最後執行 `check.sh`。三個步驟都可重複執行，已存在的物件不會被覆蓋。
+- `apply.sh`：kustomize 前執行 `bootstrap.sh nfs`、`secrets`、`vwc`，任一失敗就在刪除 ingress、套用資源之前停止（exit 1）；恢復 ingress 後執行 `bootstrap.sh webhook`，最後執行 `check.sh`，webhook 未就緒時整個 `apply.sh` 回傳 1。各步驟都可重複執行，已存在的物件不會被覆蓋。
 - `example/kustomization.yaml`：後端映像改為 `docker.io/cguaicadmin/ldap_backend:v2610121415`（**先推映像再 apply**，見下方）。
 
 ### Controller（AI_Centre_Admin `groupshare/controller`、`namespace_share/controller`）
@@ -44,15 +45,16 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 
 ### 後端（AI_Centre_Admin `AI_LDAP_admin/api`）
 
-- `groupshare_reconcile.py`（新）：後端每 600 秒依 Django DB（管理平台看到的群組成員與管理權限）對帳所有 Profile 的 `group` / `manager` / `manager-group` annotation，並建立缺少的群組與 namespace 目錄。DB 找不到使用者的 Profile 不動。`GROUPSHARE_RECONCILE_INTERVAL_SECONDS=0` 可停用。
+- `groupshare_reconcile.py`（新）：後端每 600 秒依 Django DB（管理平台看到的群組成員與管理權限）對帳所有 Profile 的 `group` / `manager` / `manager-group` annotation，並建立缺少的群組與 namespace 目錄。順序是先建目錄、再寫 Profile：目錄建不起來的新群組不會寫進 Profile（下一輪重試），避免 Notebook 掛載不存在的目錄。寫入前會重新讀一次 DB，並以列出 Profile 時的 resourceVersion 寫入；期間 DB 或 Profile 若已被管理員更新就跳過，不會把剛改好的群組蓋回舊值。DB 找不到使用者的 Profile 不動。`GROUPSHARE_RECONCILE_INTERVAL_SECONDS=0` 可停用。
 - `python manage.py reconcile_groupshare [--dry-run]`（新）：手動執行。
 - `views.py`：群組刪除（含到期清理）、使用者停用、批次匯入既有使用者這三處原本沒有同步 Profile，已補上。
 - `TRASH` 與 `root` 一樣不產生共享資料夾（`groupshare_storage.GROUPSHARE_EXCLUDED_GROUPS`）。
+- 刪除保護（取自測試版 `v2607080741`）：`deleteUserModelPermanent` 只永久刪除「只在 TRASH」的使用者，到期自動刪除（`user_delete_check`）與批次刪除都經過它；批次刪除改成與單筆刪除相同，只在 TRASH 的永久刪除、其他移到 TRASH。`v2607080741` 的批次刪除在第一個永久刪除後就 `return`，其餘使用者沒處理，這裡已修正。`repair_share_directories` 的功能已由對帳涵蓋，沒有移植。
 - `views.py` 第 1099 行：repo 版本把 `else:` 註解掉，會讓群組成員清單只列出 LDAP 找不到的人；已改回與線上一致。
 - `api/migrations/0006_groupdefaultquota_gpu_vendor.py`：線上容器啟動時自動產生、但 repo 沒有的 migration，已補上。
 - `Dockerfile.groupshare-overlay`：以線上 `v0.3.01` 為基底只覆蓋上述 Python 檔，前端與套件完全不變。
 
-測試：GroupShare 46 項、NamespaceShare 6 項、後端 14 項全部通過。
+測試：GroupShare 46 項、NamespaceShare 6 項、後端 20 項全部通過。
 
 ## .6（gpunode040）目前狀態
 
@@ -154,8 +156,7 @@ git fetch origin && git merge origin/groupshare-deploy-fix-20261012
 source env.ini
 QNAP_IP="$QNAP_IP" QNAP_MOUNT="$QNAP_MOUNT" bash cgu/groupshare/scripts/bootstrap.sh nfs
 bash cgu/groupshare/scripts/bootstrap.sh secrets
-# 舊部署的 VWC last-applied 含 caBundle: ""，先只更新 last-applied，避免 apply 清空信任
-kubectl kustomize cgu/groupshare | python3 -c 'import sys,yaml; [print("---\n"+yaml.safe_dump(d)) for d in yaml.safe_load_all(sys.stdin) if d and d["kind"]=="ValidatingWebhookConfiguration"]' | kubectl apply set-last-applied -f -
+bash cgu/groupshare/scripts/bootstrap.sh vwc     # 舊部署第一次升級：保留已注入的 caBundle
 kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share    # 確認 NFS 值是 .4 的
 kubectl apply -k cgu/groupshare && kubectl apply -k cgu/namespace_share
 bash cgu/groupshare/scripts/bootstrap.sh webhook
@@ -170,7 +171,7 @@ bash cgu/groupshare/scripts/check.sh env.ini
 kubectl -n kubeflow-user-example-com delete notebook default-template-groupshare
 ```
 
-另外 `env.ini.4` 的 `QNAP_IP` 是 `10.100.100.31`，但 NFS provisioner 用 `10.100.1.31`；目前兩者都能掛載，請確認是否同一台 NAS 並統一。
+GroupShare / NamespaceShare 在 10.100.1.4 使用 `10.100.100.31`（`env.ini.4` 已是這個值，維持不變）；NFS provisioner 的 `10.100.1.31` 不受影響。
 
 `check.sh` 重點：第 1 段 NFS ConfigMap 是 `10.100.100.31` / `/AIC_K8s/shared`；第 3 段 `caBundle` 長度大於 0、`inject-ca-from` 為空；第 5 段沒有 `!!`。
 

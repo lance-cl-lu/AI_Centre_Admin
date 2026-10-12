@@ -8,6 +8,7 @@ calls, migrations), so Profiles and NFS directories always converge.
 The groupshare controller turns Profile annotations into PodDefaults; this
 module only writes Profile annotations and creates missing directories.
 """
+import copy
 import os
 import threading
 import time
@@ -38,13 +39,22 @@ def _current_manager_groups(annotations):
     return ""
 
 
+def _wanted(desired):
+    groups_raw, managers_raw, manager_role = desired
+    return {"group": groups_raw, "manager-group": managers_raw, "manager": manager_role}
+
+
+def _split(raw):
+    return {item for item in (raw or "").split(",") if item}
+
+
 def plan_profile_changes(profiles, resolve_desired):
     """Compare Profiles with the desired state.
 
     resolve_desired(profile_name, owner_email, current_manager) returns
     (groups_raw, manager_groups_raw, manager_role), or None when no DB user
-    owns the Profile. Returns (changes, orphans); each change is a dict with
-    the Profile name, its current values and the desired values.
+    owns the Profile. Returns (changes, orphans); each change holds the Profile
+    snapshot it was planned from, its current values and the desired values.
     """
     changes = []
     orphans = []
@@ -52,25 +62,43 @@ def plan_profile_changes(profiles, resolve_desired):
         metadata = profile.get("metadata", {}) or {}
         name = metadata.get("name", "")
         annotations = metadata.get("annotations", {}) or {}
-        owner_email = ((profile.get("spec", {}) or {}).get("owner", {}) or {}).get("name", "") or ""
+        owner_email = (((profile.get("spec", {}) or {}).get("owner", {}) or {}).get("name", "") or "").strip().lower()
         if not name:
             continue
 
-        desired = resolve_desired(name, owner_email.strip().lower(), (annotations.get("manager", "") or "").strip())
+        current_manager = (annotations.get("manager", "") or "").strip()
+        desired = resolve_desired(name, owner_email, current_manager)
         if desired is None:
             orphans.append(name)
             continue
 
-        groups_raw, managers_raw, manager_role = desired
         current = {
             "group": (annotations.get("group", "") or "").strip(),
             "manager-group": _current_manager_groups(annotations),
-            "manager": (annotations.get("manager", "") or "").strip(),
+            "manager": current_manager,
         }
-        wanted = {"group": groups_raw, "manager-group": managers_raw, "manager": manager_role}
+        wanted = _wanted(desired)
         if current != wanted:
-            changes.append({"profile": name, "current": current, "desired": wanted})
+            changes.append({
+                "profile": name,
+                "owner_email": owner_email,
+                "current": current,
+                "desired": wanted,
+                "snapshot": profile,
+            })
     return changes, orphans
+
+
+def groups_without_directory(change, unavailable_groups):
+    """Groups a change would newly publish whose shared directory is not available.
+
+    unavailable_groups is a set of group names, or None when the storage root cannot be checked at
+    all. Publishing such a group would hand Notebooks a mount of a missing directory (FailedMount).
+    """
+    added = _split(change["desired"]["group"]) - _split(change["current"]["group"])
+    if unavailable_groups is None:
+        return sorted(added)
+    return sorted(added & unavailable_groups)
 
 
 def plan_missing_directories(group_names, namespace_names, storage_root, isdir=os.path.isdir):
@@ -113,19 +141,39 @@ def _resolve_desired_from_db(profile_name, owner_email, current_manager):
     return groups_raw, managers_raw, manager_role
 
 
-def _apply_profile_change(api, change):
-    views = _views()
+def apply_profile_change(api, change, resolve_desired, group, version, plural):
+    """Write a planned change unless the DB or the Profile moved on since it was planned.
 
-    profile = api.get_cluster_custom_object(views.group, views.version, views.plural, change["profile"])
-    annotations = profile.get("metadata", {}).get("annotations", {}) or {}
+    Returns "updated", "replanned" (the DB now wants something else) or "conflict" (someone
+    updated the Profile after the snapshot). Both skips are picked up by the next pass.
+    """
+    from kubernetes.client.rest import ApiException
+
+    fresh = resolve_desired(change["profile"], change["owner_email"], change["current"]["manager"])
+    if fresh is None or _wanted(fresh) != change["desired"]:
+        return "replanned"
+
+    profile = copy.deepcopy(change["snapshot"])
+    annotations = profile.setdefault("metadata", {}).get("annotations") or {}
     annotations.update(change["desired"])
     profile["metadata"]["annotations"] = annotations
-    # The fetched resourceVersion makes a concurrent edit fail instead of being overwritten.
-    api.replace_cluster_custom_object(views.group, views.version, views.plural, change["profile"], profile)
+    try:
+        # The snapshot's resourceVersion makes the API server reject the write if the Profile
+        # changed after it was listed, instead of overwriting a newer group update.
+        api.replace_cluster_custom_object(group, version, plural, change["profile"], profile)
+    except ApiException as exc:
+        if exc.status == 409:
+            return "conflict"
+        raise
+    return "updated"
 
 
 def reconcile_groupshare(dry_run=False):
-    """Run one reconciliation pass and return a summary dict."""
+    """Run one reconciliation pass and return a summary dict.
+
+    Directories come first: a group is published to a Profile only once its shared directory
+    exists, so the controller never mounts a directory that is not there.
+    """
     from django.contrib.auth.models import Group
     views = _views()
     from .groupshare_storage import ensure_groupshare_group_directory
@@ -135,28 +183,19 @@ def reconcile_groupshare(dry_run=False):
     profiles = api.list_cluster_custom_object(views.group, views.version, views.plural).get("items", [])
     changes, orphans = plan_profile_changes(profiles, _resolve_desired_from_db)
 
-    summary = {"profiles": len(profiles), "changes": changes, "orphans": orphans, "directories": [], "errors": []}
-
-    for change in changes:
-        print(
-            f"[groupshare-reconcile] {'would update' if dry_run else 'update'} profile={change['profile']} "
-            f"current={change['current']} desired={change['desired']}"
-        )
-        if dry_run:
-            continue
-        try:
-            _apply_profile_change(api, change)
-        except Exception as exc:
-            summary["errors"].append(f"profile {change['profile']}: {exc}")
+    summary = {"profiles": len(profiles), "changes": changes, "orphans": orphans, "directories": [],
+               "skipped": [], "errors": []}
 
     group_names = {g.name for g in Group.objects.all() if g.name and g.name not in GROUPSHARE_EXCLUDED_GROUPS}
     for change in changes:
-        group_names.update(item for item in change["desired"]["group"].split(",") if item)
+        group_names.update(_split(change["desired"]["group"]))
     namespace_names = [p.get("metadata", {}).get("name", "") for p in profiles]
 
     storage_root = DEFAULT_GROUPSHARE_STORAGE_ROOT
+    unavailable_groups = set()
     if not os.path.isdir(storage_root):
-        summary["errors"].append(f"storage root '{storage_root}' is not mounted; directories not checked")
+        unavailable_groups = None
+        summary["errors"].append(f"storage root '{storage_root}' is not mounted; new groups are not published")
     else:
         for kind, name in plan_missing_directories(group_names, namespace_names, storage_root):
             summary["directories"].append(f"{kind}:{name}")
@@ -170,6 +209,31 @@ def reconcile_groupshare(dry_run=False):
                     ensure_namespace_share_directory(name)
             except Exception as exc:
                 summary["errors"].append(f"{kind} directory {name}: {exc}")
+                if kind == "group":
+                    unavailable_groups.add(name)
+
+    for change in changes:
+        blocked = groups_without_directory(change, unavailable_groups)
+        if blocked:
+            summary["skipped"].append(change["profile"])
+            print(f"[groupshare-reconcile] keep profile={change['profile']} unchanged: no directory for {blocked}")
+            continue
+        print(
+            f"[groupshare-reconcile] {'would update' if dry_run else 'update'} profile={change['profile']} "
+            f"current={change['current']} desired={change['desired']}"
+        )
+        if dry_run:
+            continue
+        try:
+            result = apply_profile_change(
+                api, change, _resolve_desired_from_db, views.group, views.version, views.plural
+            )
+        except Exception as exc:
+            summary["errors"].append(f"profile {change['profile']}: {exc}")
+            continue
+        if result != "updated":
+            summary["skipped"].append(change["profile"])
+            print(f"[groupshare-reconcile] skip profile={change['profile']}: {result}, retried next pass")
 
     if orphans:
         print(f"[groupshare-reconcile] profiles without a DB user (left unchanged): {','.join(sorted(orphans))}")
@@ -177,7 +241,8 @@ def reconcile_groupshare(dry_run=False):
         print(f"[groupshare-reconcile] error: {error}")
     print(
         f"[groupshare-reconcile] done dry_run={dry_run} profiles={len(profiles)} changes={len(changes)} "
-        f"directories={len(summary['directories'])} orphans={len(orphans)} errors={len(summary['errors'])}"
+        f"skipped={len(summary['skipped'])} directories={len(summary['directories'])} orphans={len(orphans)} "
+        f"errors={len(summary['errors'])}"
     )
     return summary
 

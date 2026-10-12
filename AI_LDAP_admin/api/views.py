@@ -1779,7 +1779,17 @@ def get_user_info(request):
     }
     return Response(data, status=200)
 
+def is_only_in_trash(username):
+    group_list = get_user_all_groups(username)
+    return len(group_list) == 1 and group_list[0]['groupname'] == 'TRASH'
+
+
 def deleteUserModelPermanent(username):
+    # 只永久刪除只在 TRASH 的使用者（同 v2607080741）；仍屬於其他 lab 的人保留帳號、namespace 與 Notebook 資料。
+    # 到期自動刪除（user_delete_check）與批次刪除都經過這裡。
+    if not is_only_in_trash(username):
+        print(f"[delete] skip permanent delete of {username}: still in other groups")
+        return False
     user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
     conn = connectLDAP()
@@ -1799,6 +1809,7 @@ def deleteUserModelPermanent(username):
     User.objects.get(username=username).delete()
     delete_profile(profileName, k8s_email, k8s_name)
     conn.unbind()
+    return True
 
 def deleteUserModel(username):
     user_obj = User.objects.get(username=username)
@@ -1879,9 +1890,8 @@ def user_delete_check(request):
                 # 額外檢查：若 delete_date 已超過今天，印出警告
                 try:
                     delete_dt = datetime.datetime.fromisoformat(delete_date_str)
-                    if datetime.datetime.now() > delete_dt:
+                    if datetime.datetime.now() > delete_dt and deleteUserModelPermanent(u.username):
                         user_need_to_delete += 1
-                        deleteUserModelPermanent(u.username)
                         print(f"[delete_date] profile {profileName} exceeded delete_date: {delete_date_str}")
                 except ValueError:
                     print(f"[delete_date] invalid delete_date format for profile {profileName}: {delete_date_str}")
@@ -2805,7 +2815,13 @@ def multiple_user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
     for user in users:
-        deleteUserModelPermanent(User.objects.get(username=user).username)
+        username = User.objects.get(username=user).username
+        # 與單筆刪除相同：只在 TRASH 的使用者永久刪除，其餘移至 TRASH
+        if is_only_in_trash(username):
+            print(f"User {username} is only in TRASH group, deleting permanently")
+            deleteUserModelPermanent(username)
+        else:
+            deleteUserModel(username)
     return Response(status=200)
 
 @api_view(['POST'])
