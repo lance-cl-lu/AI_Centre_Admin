@@ -2291,8 +2291,9 @@ def excel(request):
                 continue
             if row[0] is None:
                 continue
-            row[0].value = row[0].value.lower()
-            row[3].value = row[3].value.lower()
+            # Excel 儲存格常帶前後空白，會建出 " b1128014" 這種帳號，與 LDAP、Profile 對不上
+            row[0].value = row[0].value.strip().lower()
+            row[3].value = row[3].value.strip().lower()
             if Group.objects.filter(name=row[1].value).exists() is False:
                 conflict = find_groupshare_folder_conflict(row[1].value)
                 if conflict:
@@ -2682,9 +2683,9 @@ def import_lab_user(request):
                 row[8].value = group_default_mem_quota
                 
             user = {
-                "username": row[0].value.lower(),
+                "username": row[0].value.strip().lower(),  # 去掉儲存格前後空白
                 "password": row[1].value,
-                "email": row[2].value.lower(),
+                "email": row[2].value.strip().lower(),
                 "firstname": row[3].value,
                 "lastname": row[4].value,
                 "permission": row[5].value,

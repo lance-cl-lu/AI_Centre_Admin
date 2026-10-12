@@ -53,6 +53,7 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
   - 重送或名單重複：剛移入 TRASH 的人（同一請求內，或 10 分鐘內，`TRASH_PERMANENT_DELETE_GRACE_SECONDS` 可調）不會被單筆／批次刪除永久刪除；過了這段時間再刪才會永久刪除。到期自動刪除不受影響。
   - 並行還原：先在 Profile 加 `ldap-admin/pending-delete` 標記，再在同一個資料庫交易內重新確認「只在 TRASH」並刪除帳號；若另一個請求剛把人加回群組就中止並拿掉標記。
   - Profile 刪除失敗：帳號刪除後若 Profile 刪除失敗，標記會留著，後端每輪對帳自動重試。只刪「有標記且 DB 已無此帳號」的 Profile，沒有標記的（例如 `kubeflow-user-example-com`）不會被動到。
+- Excel 匯入（`excel()`、`import_lab_user()`）會先去掉 username 與 email 前後空白；之前曾因此建出 ` b1128014` 這類帳號，與 LDAP、Profile 對不上。已存在的這類帳號不會被改動。
 - `views.py` 第 1099 行：repo 版本把 `else:` 註解掉，會讓群組成員清單只列出 LDAP 找不到的人；已改回與線上一致。
 - `api/migrations/0006_groupdefaultquota_gpu_vendor.py`：線上容器啟動時自動產生、但 repo 沒有的 migration，已補上。
 - `Dockerfile.groupshare-overlay`：以線上 `v0.3.01` 為基底只覆蓋上述 Python 檔，前端與套件完全不變。
