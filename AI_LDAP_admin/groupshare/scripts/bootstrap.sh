@@ -4,6 +4,7 @@
 #
 #   QNAP_IP=... QNAP_MOUNT=... bash bootstrap.sh nfs    # before `kubectl apply -k`
 #   bash bootstrap.sh secrets                           # before `kubectl apply -k` (no-op without the kubeflow namespace)
+#   bash bootstrap.sh vwc                               # before `kubectl apply -k` (no-op unless upgrading an old deployment)
 #   bash bootstrap.sh webhook                           # after `kubectl apply -k`
 #
 # nfs:     create QNAP_MOUNT and QNAP_MOUNT/_namespaces on the NFS server when missing (the backend
@@ -11,6 +12,10 @@
 # secrets: create the webhook CA Secret and the public trust Secret when absent. When an older
 #          deployment's self-signed Secret exists, its CA is kept in the trust bundle so webhook Pods
 #          still serving the old certificate stay trusted during the rollout.
+# vwc:     upgrading from a deployment whose ValidatingWebhookConfiguration was applied with
+#          `caBundle: ""` and `inject-ca-from`: record the new manifest as last-applied first, so
+#          the following apply does not blank the injected caBundle (which would reject every
+#          Notebook create/update until re-injection), and drop the old injection annotation.
 # webhook: run `secrets`, wait for the serving certificate, the webhook and the injected caBundle,
 #          and apply monitoring when Prometheus Operator CRDs exist.
 set -u
@@ -86,6 +91,20 @@ bootstrap_secrets() {
   rm -rf "$work"
 }
 
+bootstrap_vwc() {
+  local vwc=groupshare-validating-webhook last
+  kubectl get validatingwebhookconfiguration "$vwc" >/dev/null 2>&1 || return 0
+  last="$(kubectl get validatingwebhookconfiguration "$vwc" \
+    -o jsonpath='{.metadata.annotations.kubectl\.kubernetes\.io/last-applied-configuration}')"
+  case "$last" in
+    *caBundle*|*'inject-ca-from"'*) ;;
+    *) return 0 ;;
+  esac
+  log "upgrading $vwc: keep the injected caBundle across the first apply"
+  kubectl apply set-last-applied -f "$HERE/../deploy/validating-webhook-configuration.yaml" || return 1
+  kubectl annotate validatingwebhookconfiguration "$vwc" cert-manager.io/inject-ca-from- >/dev/null 2>&1 || true
+}
+
 bootstrap_webhook() {
   local rc=0 bundle
   bootstrap_secrets || return 1
@@ -120,6 +139,7 @@ bootstrap_webhook() {
 case "${1:-}" in
   nfs) bootstrap_nfs ;;
   secrets) bootstrap_secrets ;;
+  vwc) bootstrap_vwc ;;
   webhook) bootstrap_webhook ;;
-  *) echo "usage: $0 nfs|secrets|webhook" >&2; exit 2 ;;
+  *) echo "usage: $0 nfs|secrets|vwc|webhook" >&2; exit 2 ;;
 esac

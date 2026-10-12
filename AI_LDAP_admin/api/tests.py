@@ -10,7 +10,14 @@ from .groupshare_storage import (
     sanitize_groupshare_group_token,
 )
 from .namespace_share_storage import ensure_namespace_share_directory, sanitize_namespace_share_token
-from .groupshare_reconcile import plan_missing_directories, plan_profile_changes
+from kubernetes.client.rest import ApiException
+
+from .groupshare_reconcile import (
+    apply_profile_change,
+    groups_without_directory,
+    plan_missing_directories,
+    plan_profile_changes,
+)
 
 
 # Shared with groupshare/tests/webhook/test_rules.py and api/tests.py: the backend, the controller
@@ -121,3 +128,54 @@ class GroupShareReconcilePlanTests(unittest.TestCase):
             ["Lab_A", "test103"], ["m1", "m2"], "/root", isdir=lambda path: path in existing
         )
         self.assertEqual(missing, [("group", "test103"), ("namespace", "m2")])
+
+
+
+class FakeProfileApi:
+    def __init__(self, conflict=False):
+        self.conflict = conflict
+        self.written = None
+
+    def replace_cluster_custom_object(self, group, version, plural, name, body):
+        if self.conflict:
+            raise ApiException(status=409)
+        self.written = body
+
+
+def planned_change(snapshot_groups="old", desired_groups="new", resource_version="5"):
+    profile = make_profile("m1", "m1@x", {"group": snapshot_groups, "manager": "user"})
+    profile["metadata"]["resourceVersion"] = resource_version
+    changes, _ = plan_profile_changes([profile], lambda *_: (desired_groups, "", "user"))
+    return changes[0]
+
+
+class GroupShareReconcileSafetyTests(unittest.TestCase):
+    def test_new_group_without_directory_is_not_published(self):
+        change = planned_change("a", "a,new")
+        self.assertEqual(groups_without_directory(change, {"new"}), ["new"])
+        self.assertEqual(groups_without_directory(change, set()), [])
+
+    def test_removing_groups_never_waits_for_directories(self):
+        change = planned_change("a,gone", "a")
+        self.assertEqual(groups_without_directory(change, None), [])
+
+    def test_unmounted_storage_blocks_only_added_groups(self):
+        self.assertEqual(groups_without_directory(planned_change("a", "a,b"), None), ["b"])
+
+    def test_write_uses_snapshot_version(self):
+        api = FakeProfileApi()
+        result = apply_profile_change(api, planned_change(), lambda *_: ("new", "", "user"), "g", "v", "p")
+        self.assertEqual(result, "updated")
+        self.assertEqual(api.written["metadata"]["resourceVersion"], "5")
+        self.assertEqual(api.written["metadata"]["annotations"]["group"], "new")
+
+    def test_db_changed_after_planning_is_replanned_not_written(self):
+        api = FakeProfileApi()
+        result = apply_profile_change(api, planned_change(), lambda *_: ("newer", "", "user"), "g", "v", "p")
+        self.assertEqual(result, "replanned")
+        self.assertIsNone(api.written)
+
+    def test_profile_changed_after_planning_is_not_overwritten(self):
+        api = FakeProfileApi(conflict=True)
+        result = apply_profile_change(api, planned_change(), lambda *_: ("new", "", "user"), "g", "v", "p")
+        self.assertEqual(result, "conflict")
