@@ -1,7 +1,11 @@
+import json
 import os
 import stat
 import tempfile
 import unittest
+from unittest import mock
+
+from django.test import RequestFactory, TestCase as DjangoTestCase
 
 from .groupshare_storage import (
     GROUPSHARE_EXCLUDED_GROUPS,
@@ -179,3 +183,132 @@ class GroupShareReconcileSafetyTests(unittest.TestCase):
         api = FakeProfileApi(conflict=True)
         result = apply_profile_change(api, planned_change(), lambda *_: ("new", "", "user"), "g", "v", "p")
         self.assertEqual(result, "conflict")
+
+
+class FakeK8sProfiles:
+    """In-memory Profiles for the deletion flow; delete can be made to fail."""
+
+    def __init__(self, names):
+        self.profiles = {n: {"metadata": {"name": n, "annotations": {}}, "spec": {"owner": {"name": f"{n}@x"}}} for n in names}
+        self.fail_deletes = 0
+        self.deleted = []
+
+    def patch_cluster_custom_object(self, group, version, plural, name, body):
+        if name not in self.profiles:
+            raise ApiException(status=404)
+        annotations = self.profiles[name]["metadata"]["annotations"]
+        for key, value in body["metadata"]["annotations"].items():
+            if value is None:
+                annotations.pop(key, None)
+            else:
+                annotations[key] = value
+
+    def delete_cluster_custom_object(self, group, version, plural, name):
+        if self.fail_deletes:
+            self.fail_deletes -= 1
+            raise ApiException(status=500)
+        if name not in self.profiles:
+            raise ApiException(status=404)
+        del self.profiles[name]
+        self.deleted.append(name)
+
+    def list_cluster_custom_object(self, group, version, plural):
+        return {"items": list(self.profiles.values())}
+
+
+class TrashDeletionTests(DjangoTestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group, User
+        from . import urls  # noqa: F401  (views/serializers/urls import cycle)
+        from . import views
+        from .models import UserDetail
+
+        self.views = views
+        self.trash = Group.objects.create(name="TRASH")
+        self.lab = Group.objects.create(name="LabA")
+        self.trashed = User.objects.create_user("trashed", "trashed@x", "pw")
+        self.trashed.groups.add(self.trash)
+        UserDetail.objects.create(uid=self.trashed, permission=2, labname=self.trash)
+        self.member = User.objects.create_user("member", "member@x", "pw")
+        self.member.groups.add(self.lab)
+        UserDetail.objects.create(uid=self.member, permission=2, labname=self.lab)
+
+        self.k8s = FakeK8sProfiles(["trashed", "member"])
+        views._trashed_at.clear()
+        for name, value in {
+            "_make_k8s_custom_objects_api_views": lambda *a, **k: (self.k8s, "test"),
+            "get_profile_by_email": lambda email: email.split("@")[0] if email else None,
+            "get_profile_content": lambda name: self.k8s.profiles.get(name),
+            "connectLDAP": lambda: mock.MagicMock(entries=[]),
+            "send_delete_account_email": lambda *a: None,
+            "replace_profile_user_delete_date": lambda *a: True,
+            "sync_profile_groupshare_annotations": lambda *a: True,
+        }.items():
+            patcher = mock.patch.object(views, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def post(self, view, payload):
+        request = RequestFactory().post("/", data=json.dumps(payload), content_type="application/json")
+        return view(request)
+
+    def exists(self, username):
+        from django.contrib.auth.models import User
+        return User.objects.filter(username=username).exists()
+
+    def test_resent_and_duplicated_batch_delete_only_moves_to_trash(self):
+        self.post(self.views.multiple_user_delete, {"users": ["member", "member"]})
+        self.post(self.views.multiple_user_delete, {"users": ["member"]})  # resubmitted request
+
+        self.assertTrue(self.exists("member"))
+        self.assertTrue(self.views.is_only_in_trash("member"))
+        self.assertEqual(self.k8s.deleted, [])
+
+    def test_trash_only_user_is_deleted_permanently(self):
+        self.post(self.views.multiple_user_delete, {"users": ["trashed"]})
+
+        self.assertFalse(self.exists("trashed"))
+        self.assertEqual(self.k8s.deleted, ["trashed"])
+
+    def test_user_restored_during_permanent_delete_is_kept(self):
+        def restore_while_marking(profile_name, username):
+            if username:
+                self.trashed.groups.add(self.lab)  # another request adds the user back to a lab
+            return original(profile_name, username)
+
+        original = self.views._set_pending_delete
+        with mock.patch.object(self.views, "_set_pending_delete", side_effect=restore_while_marking):
+            self.assertFalse(self.views.deleteUserModelPermanent("trashed"))
+
+        self.assertTrue(self.exists("trashed"))
+        self.assertEqual(self.k8s.deleted, [])
+        self.assertNotIn(self.views.PENDING_DELETE_ANNOTATION, self.k8s.profiles["trashed"]["metadata"]["annotations"])
+
+    def test_failed_profile_delete_is_retried_and_unmarked_orphans_are_kept(self):
+        self.k8s.profiles["kubeflow-user-example-com"] = {
+            "metadata": {"name": "kubeflow-user-example-com", "annotations": {}}, "spec": {"owner": {"name": "x@x"}}}
+        self.k8s.fail_deletes = 1
+
+        self.assertTrue(self.views.deleteUserModelPermanent("trashed"))
+        self.assertFalse(self.exists("trashed"))
+        self.assertIn("trashed", self.k8s.profiles)  # deletion failed, marker left behind
+
+        self.assertEqual(self.views.retry_pending_profile_deletions(), ["trashed"])
+        self.assertNotIn("trashed", self.k8s.profiles)
+        self.assertIn("kubeflow-user-example-com", self.k8s.profiles)
+
+    def test_database_error_during_delete_unmarks_profile(self):
+        from django.db import OperationalError
+
+        with mock.patch.object(type(self.trashed), "delete", side_effect=OperationalError("database is locked")):
+            with self.assertRaises(OperationalError):
+                self.views.deleteUserModelPermanent("trashed")
+
+        self.assertTrue(self.exists("trashed"))
+        self.assertNotIn(self.views.PENDING_DELETE_ANNOTATION, self.k8s.profiles["trashed"]["metadata"]["annotations"])
+
+    def test_trash_user_still_in_a_lab_is_never_deleted_permanently(self):
+        self.trashed.groups.add(self.lab)
+
+        self.assertFalse(self.views.deleteUserModelPermanent("trashed"))
+        self.assertTrue(self.exists("trashed"))

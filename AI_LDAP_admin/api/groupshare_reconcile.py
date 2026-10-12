@@ -6,7 +6,8 @@ whatever they miss (code paths without a sync call, failed Kubernetes API
 calls, migrations), so Profiles and NFS directories always converge.
 
 The groupshare controller turns Profile annotations into PodDefaults; this
-module only writes Profile annotations and creates missing directories.
+module writes Profile annotations, creates missing directories, and retries
+deleting Profiles that a permanent user deletion marked but could not delete.
 """
 import copy
 import os
@@ -234,6 +235,12 @@ def reconcile_groupshare(dry_run=False):
         if result != "updated":
             summary["skipped"].append(change["profile"])
             print(f"[groupshare-reconcile] skip profile={change['profile']}: {result}, retried next pass")
+
+    # Profiles of permanently deleted users whose Profile deletion failed earlier.
+    try:
+        summary["pending_deletes"] = views.retry_pending_profile_deletions(dry_run=dry_run)
+    except Exception as exc:
+        summary["errors"].append(f"pending profile deletions: {exc}")
 
     if orphans:
         print(f"[groupshare-reconcile] profiles without a DB user (left unchanged): {','.join(sorted(orphans))}")
