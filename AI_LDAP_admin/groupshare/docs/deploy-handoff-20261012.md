@@ -71,15 +71,11 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 
 `/home/lance/work/cgu-manifests` 已於同日 fast-forward 到本 branch（以 lance 身分操作，本機 6 個環境檔保留 `.6` 的值）；`kubectl diff -k cgu/groupshare`、`cgu/namespace_share` 與線上一致，`example` 的後端 tag 也與線上相同。
 
-**`.6` 目前仍不要執行整個 `apply.sh`**。2026-10-12 對整個 `example` 做 `kubectl diff` 的結果，以下問題都與本次修改無關，屬於 `.6` 線上與 repo 原本的差異：
+**`apply.sh` 已改成可在運作中的叢集重跑**（cgu-manifests `preserve_live_state.py`）。原本在 `.6` 重跑會出事的原因都與 GroupShare 無關，是 `.6` 線上與 repo 的差異：10.100.1.4 的 `authservice-pvc` ReadWriteMany patch 套不上（PVC 建立後不可改），`apply.sh` 無限重試、網頁入口接不回來；`kubeflow-announcements` 公告與 `qnap-config` 被覆蓋；kserve／katib／admission-webhook 等 caBundle 被清空；會重裝已移除的 `pullimage`。
 
-- `example/kustomization.yaml` 為 10.100.1.4 加的 `authservice-pvc` patch（ReadWriteMany）在 `.6` 無法套用（PVC 建立後不可改 accessModes）。`apply.sh` 的 `while ! kustomize build | kubectl apply` 會無限重試，之後的 `istio-ingressgateway` externalIPs patch 永遠不會執行，`.6` 網頁會連不上。
-- `qnap-config` 的 `ip` 會被改回 `120.126.23.7`（`.25` 的值）；原本靠 `apply.sh` 尾段改回，但會因上一點卡住而不會執行。
-- `kubeflow-announcements` ConfigMap 會被 repo 版本覆蓋，線上公告會遺失。
-- 10 個 kserve／katib／admission-webhook 等 webhook 與 CRD 的 caBundle 會被清空，cert-manager 重新注入前相關請求會失敗。
-- 會新增 `.6` 沒有的 `pullimage` namespace 與 Deployment（`cgu/daemonset_watcher`）。
+改法：已存在的 PVC 與 `kubeflow-announcements`、`qnap-config` 只在第一次建立；webhook／CRD 的 caBundle、聚合 ClusterRole 規則、knative webhook 規則與 istio-validator failurePolicy 沿用線上值；`env.ini` 可設 `APPLY_SKIP_NAMESPACES`（`env.ini.6` 設為 `pullimage`）；網頁入口只在類型不符時才刪除；apply 最多重試 15 次，之後的網頁入口、NVIDIA、QNAP 步驟一定會執行，失敗時 `apply.sh` 回傳 1。新叢集上過濾後的 585 個資源與原本完全相同。
 
-要讓 `.6` 能重新使用 `apply.sh`，需先處理 PVC patch 只套用到 `.4`、公告 ConfigMap 不覆蓋線上資料等環境差異。
+2026-10-12 在 `.6` 以 `env.ini.6` 驗證（未實際執行 `apply.sh`）：整個 `example` 的 `kubectl diff` 無差異、server dry-run 無錯誤且不會新建任何資源；監測設定、網頁入口、nvdp helm 值、`addqnap.py` 對 138 個 namespace 的 Secret／LimitRange 也都無差異。舊版 `apply.sh` 備份在 `/home/lance/work/cgu-manifests/apply.sh.orig-20261012`（lance 原本使用的版本）與 `apply.sh.bak-20261012`（本次修改前）。
 
 10.100.1.4 從 gpunode040 連不到，尚未部署，照步驟 4。
 
