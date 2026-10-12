@@ -69,7 +69,17 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 - 驗證：server dry-run 建立 Pod 會注入正確的群組與 namespace 掛載；合法 Notebook 允許、非 manager 寫入群組資料夾被 Rule C 拒絕；沒有任何使用者 Notebook 被重啟。
 - 11 個執行中的 Notebook 被標記需重啟（`check.sh` 第 6 段）。其中 `d1300701/notebook-0`、`m1461023/thesis-0`、`m1561023/loi-0` 仍掛著中文群組的舊目錄 `ai1029-a347n`、`aid002-a3463`；部署時舊目錄是空的。等這些 Notebook 重啟後，確認 4 個舊目錄（`ai1029-a347n`、`aid002-a3463`、`hojjat-ai3026-a2629-2026-01-27-2027-01-02`、`lab`）仍為空再刪除，有檔案就搬到對應的新目錄。
 
-**`.6` 的 cgu-manifests（`/home/lance/work/cgu-manifests`）尚未合併 branch。合併前不要在 `.6` 跑 `apply.sh`**：舊版會把後端換回 `v0.3.01`，並把 GroupShare 改回舊設定。合併後照步驟 3 的 `kubectl diff` 確認應無差異。
+`/home/lance/work/cgu-manifests` 已於同日 fast-forward 到本 branch（以 lance 身分操作，本機 6 個環境檔保留 `.6` 的值）；`kubectl diff -k cgu/groupshare`、`cgu/namespace_share` 與線上一致，`example` 的後端 tag 也與線上相同。
+
+**`.6` 目前仍不要執行整個 `apply.sh`**。2026-10-12 對整個 `example` 做 `kubectl diff` 的結果，以下問題都與本次修改無關，屬於 `.6` 線上與 repo 原本的差異：
+
+- `example/kustomization.yaml` 為 10.100.1.4 加的 `authservice-pvc` patch（ReadWriteMany）在 `.6` 無法套用（PVC 建立後不可改 accessModes）。`apply.sh` 的 `while ! kustomize build | kubectl apply` 會無限重試，之後的 `istio-ingressgateway` externalIPs patch 永遠不會執行，`.6` 網頁會連不上。
+- `qnap-config` 的 `ip` 會被改回 `120.126.23.7`（`.25` 的值）；原本靠 `apply.sh` 尾段改回，但會因上一點卡住而不會執行。
+- `kubeflow-announcements` ConfigMap 會被 repo 版本覆蓋，線上公告會遺失。
+- 10 個 kserve／katib／admission-webhook 等 webhook 與 CRD 的 caBundle 會被清空，cert-manager 重新注入前相關請求會失敗。
+- 會新增 `.6` 沒有的 `pullimage` namespace 與 Deployment（`cgu/daemonset_watcher`）。
+
+要讓 `.6` 能重新使用 `apply.sh`，需先處理 PVC patch 只套用到 `.4`、公告 ConfigMap 不覆蓋線上資料等環境差異。
 
 10.100.1.4 從 gpunode040 連不到，尚未部署，照步驟 4。
 
