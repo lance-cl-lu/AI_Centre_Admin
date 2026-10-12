@@ -1,8 +1,9 @@
+import datetime
 import hashlib
 import logging
 import os
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -33,6 +34,8 @@ NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "groupshare-nfs-defaults")
 PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
 PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
 POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
+NOTEBOOK_POD_LABEL = "notebook-name"
+RESTART_REQUIRED_ANNOTATION = "groupshare.kubeflow.org/restart-required"
 
 
 class GroupshareController:
@@ -41,15 +44,12 @@ class GroupshareController:
         self.co_api = client.CustomObjectsApi()
         self.apps_api = client.AppsV1Api()
         self.core_api = client.CoreV1Api()
-        self.nfs_server, self.nfs_path = self._load_nfs_settings()
+        self.nfs_server, self.nfs_path = "", ""
+        self.desired_mounts: Dict[str, Dict[str, Tuple[str, bool]]] = {}
 
     def _load_nfs_settings(self) -> Tuple[str, str]:
-        dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
-        env_map = {}
-        for container in dep.spec.template.spec.containers:
-            for env_var in container.env or []:
-                env_map[env_var.name] = env_var.value
-
+        # The ConfigMap written by apply.sh is authoritative. The provisioner Deployment is only a
+        # fallback source, so a cluster whose provisioner has another name or namespace still works.
         cm_data = {}
         try:
             cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
@@ -58,14 +58,32 @@ class GroupshareController:
             if exc.status != 404:
                 raise
 
-        nfs_path = (cm_data.get("NFS_PATH") or env_map.get("NFS_PATH") or "").strip()
-        nfs_server = (cm_data.get("NFS_SERVER") or env_map.get("NFS_SERVER") or "").strip()
-        if not nfs_path:
-            raise RuntimeError("NFS_PATH missing from groupshare ConfigMap and provisioner deployment env")
-        if not nfs_server:
-            raise RuntimeError("NFS_SERVER missing from groupshare ConfigMap and provisioner deployment env")
+        nfs_path = (cm_data.get("NFS_PATH") or "").strip()
+        nfs_server = (cm_data.get("NFS_SERVER") or "").strip()
+        if not nfs_path or not nfs_server:
+            env_map = {}
+            try:
+                dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
+                for container in dep.spec.template.spec.containers:
+                    for env_var in container.env or []:
+                        env_map[env_var.name] = env_var.value
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+            nfs_path = nfs_path or (env_map.get("NFS_PATH") or "").strip()
+            nfs_server = nfs_server or (env_map.get("NFS_SERVER") or "").strip()
 
-        logger.info("[INFO] Loaded NFS settings: server=%s path=%s", nfs_server, nfs_path)
+        if not nfs_path:
+            raise RuntimeError(
+                f"NFS_PATH missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
+            )
+        if not nfs_server:
+            raise RuntimeError(
+                f"NFS_SERVER missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
+            )
+
+        if (nfs_server, nfs_path) != (self.nfs_server, self.nfs_path):
+            logger.info("[INFO] Loaded NFS settings: server=%s path=%s", nfs_server, nfs_path)
         return nfs_server, nfs_path
 
     def _build_spec(self, groups: List[str], admin_groups: List[str]) -> dict:
@@ -155,6 +173,9 @@ class GroupshareController:
 
         current_hash = self._hash_annotations(groups_raw, managers_raw)
         body = self._build_spec(groups, admin_groups)
+        self.desired_mounts[namespace] = {
+            volume["name"]: (volume["nfs"]["path"], volume["nfs"]["readOnly"]) for volume in body["spec"]["volumes"]
+        }
         body["metadata"]["namespace"] = namespace
         body["metadata"]["annotations"]["groupshare.kubeflow.org/hash"] = current_hash
 
@@ -200,9 +221,103 @@ class GroupshareController:
 
         logger.info("[INFO] %s PodDefault namespace=%s name=%s", action, namespace, PODDEFAULT_NAME)
 
+    def _actual_mounts(self, pod) -> Dict[str, Tuple[str, bool]]:
+        mounts = {}
+        for volume in pod.spec.volumes or []:
+            nfs = getattr(volume, "nfs", None)
+            if not volume.name.startswith("gs-") or nfs is None or nfs.server != self.nfs_server:
+                continue
+            mounts[volume.name] = (nfs.path, bool(nfs.read_only))
+        return mounts
+
+    @staticmethod
+    def describe_mount_drift(
+        desired: Dict[str, Tuple[str, bool]], actual: Dict[str, Tuple[str, bool]]
+    ) -> Optional[str]:
+        """Describe how a Pod's group mounts differ from its PodDefault, or None when they match."""
+        added = sorted(set(desired) - set(actual))
+        removed = sorted(set(actual) - set(desired))
+        changed = sorted(name for name in set(desired) & set(actual) if desired[name] != actual[name])
+        parts = []
+        if added:
+            parts.append("added=" + ",".join(added))
+        if removed:
+            parts.append("removed=" + ",".join(removed))
+        if changed:
+            parts.append("changed=" + ",".join(changed))
+        return ";".join(parts) or None
+
+    def _emit_restart_event(self, pod, notebook_name: str, drift: str) -> None:
+        namespace = pod.metadata.namespace
+        involved = {"apiVersion": "v1", "kind": "Pod", "name": pod.metadata.name, "namespace": namespace,
+                    "uid": pod.metadata.uid}
+        try:
+            notebook = self.co_api.get_namespaced_custom_object(
+                group="kubeflow.org", version="v1", namespace=namespace, plural="notebooks", name=notebook_name
+            )
+            involved = {"apiVersion": "kubeflow.org/v1", "kind": "Notebook", "name": notebook_name,
+                        "namespace": namespace, "uid": notebook["metadata"]["uid"]}
+        except ApiException as exc:
+            logger.warning("[WARN] Notebook %s/%s not readable for event: %s", namespace, notebook_name, exc.status)
+
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.core_api.create_namespaced_event(
+            namespace=namespace,
+            body={
+                "apiVersion": "v1",
+                "kind": "Event",
+                "metadata": {"generateName": f"{pod.metadata.name}.groupshare-", "namespace": namespace},
+                "involvedObject": involved,
+                "type": "Warning",
+                "reason": "GroupShareRestartRequired",
+                "message": (
+                    f"Group share mounts changed ({drift}). Stop and start this notebook to apply them; "
+                    "files in /home/jovyan are kept."
+                ),
+                "source": {"component": "groupshare-controller"},
+                "reportingComponent": "groupshare-controller",
+                "firstTimestamp": now,
+                "lastTimestamp": now,
+                "count": 1,
+            },
+        )
+
+    def check_notebook_pods(self) -> None:
+        """Flag running notebook Pods whose group mounts are older than their PodDefault.
+
+        Kubernetes cannot change the volumes of a running Pod, so the controller only annotates the Pod
+        and emits an Event; the new mounts apply the next time the notebook restarts.
+        """
+        pods = self.core_api.list_pod_for_all_namespaces(label_selector=NOTEBOOK_POD_LABEL)
+        for pod in pods.items:
+            namespace = pod.metadata.namespace
+            desired = self.desired_mounts.get(namespace)
+            if desired is None or pod.status.phase not in ("Pending", "Running"):
+                continue
+
+            drift = self.describe_mount_drift(desired, self._actual_mounts(pod))
+            annotations = pod.metadata.annotations or {}
+            if annotations.get(RESTART_REQUIRED_ANNOTATION) == drift:
+                continue
+
+            try:
+                self.core_api.patch_namespaced_pod(
+                    name=pod.metadata.name,
+                    namespace=namespace,
+                    body={"metadata": {"annotations": {RESTART_REQUIRED_ANNOTATION: drift}}},
+                )
+                if drift is None:
+                    logger.info("[INFO] Pod %s/%s group mounts up to date", namespace, pod.metadata.name)
+                    continue
+                logger.info("[INFO] Pod %s/%s needs restart for group mounts: %s", namespace, pod.metadata.name, drift)
+                self._emit_restart_event(pod, (pod.metadata.labels or {}).get(NOTEBOOK_POD_LABEL, ""), drift)
+            except ApiException as exc:
+                logger.warning("[WARN] Pod %s/%s mount check failed: %s", namespace, pod.metadata.name, exc.status)
+
     def run(self) -> None:
         while True:
             try:
+                self.nfs_server, self.nfs_path = self._load_nfs_settings()
                 profiles = self.co_api.list_cluster_custom_object(
                     group=PROFILE_GROUP,
                     version=PROFILE_VERSION,
@@ -210,6 +325,7 @@ class GroupshareController:
                 )
                 for profile in profiles.get("items", []):
                     self.sync_profile(profile)
+                self.check_notebook_pods()
             except Exception as exc:
                 logger.exception("controller loop failed: %s", exc)
             time.sleep(POLL_SECONDS)

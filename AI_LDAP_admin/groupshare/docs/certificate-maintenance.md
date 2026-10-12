@@ -151,33 +151,18 @@ kubectl -n kubeflow get certificate groupshare-webhook-serving -w
 
 ### 現行程式碼發布
 
-[webhook-tls-runtime-configmap.json](../deploy/webhook-tls-runtime-configmap.json) 是由 `webhook/app.py`、`rules.py`、`tls_reload.py` 產生的 immutable ConfigMap。所有 Notebook 政策仍由原有 rules.py 判斷。
-
-新版本需產生新名稱，例如修改下列 VERSION；同步更新 deployment 與 runtime patch 的 ConfigMap 名稱，再測試及部署。不可修改已發布的 immutable ConfigMap。
+webhook 程式碼（`webhook/app.py`、`rules.py`、`tls_reload.py`）由 [kustomization.yaml](../kustomization.yaml) 的 `configMapGenerator` 產生不可變更 ConfigMap `groupshare-webhook-runtime-<hash>`；內容一改名稱就跟著變，Deployment 以 RollingUpdate（`maxUnavailable: 0`、PDB `minAvailable: 1`）換版。probes 已直接寫在 [webhook-deployment.yaml](../deploy/webhook-deployment.yaml)。
 
 ```bash
-VERSION=replace-with-new-release
-kubectl -n kubeflow create configmap "groupshare-webhook-tls-runtime-$VERSION" \
-  --from-file=app.py=webhook/app.py --from-file=rules.py=webhook/rules.py \
-  --from-file=tls_reload.py=webhook/tls_reload.py --dry-run=client -o json \
-  | jq '.immutable=true'
 python3 -m unittest discover -s tests -p 'test_*.py'
-```
-
-已完成信任遷移的環境可套用：
-
-```bash
-kubectl apply -f deploy/webhook-ca-issuer.yaml -f deploy/webhook-serving-certificate.yaml
-kubectl apply -f deploy/webhook-tls-runtime-configmap.json
-kubectl -n kubeflow patch deployment groupshare-validating-webhook \
-  --type=strategic --patch-file deploy/webhook-tls-runtime-patch.yaml
-kubectl -n kubeflow patch deployment groupshare-validating-webhook \
-  --type=strategic --patch-file deploy/webhook-tls-probes-patch.yaml
-kubectl apply -f deploy/webhook-pdb.yaml -f deploy/webhook-certificate-monitoring.yaml
+kubectl diff -k .            # 在 cgu-manifests 中為 kubectl diff -k cgu/groupshare
+kubectl apply -k .
 kubectl -n kubeflow rollout status deployment/groupshare-validating-webhook --timeout=240s
 ```
 
-完整 Deployment 來源 [webhook-deployment.yaml](../deploy/webhook-deployment.yaml) 已同步現行 image、command、Secret、ConfigMap、replicas 及 affinity，供新部署使用；probes 由上述獨立 patch 加入。
+VWC manifest 不設定 `caBundle`，由 cainjector 依 `inject-ca-from-secret` 從 `groupshare-webhook-trust` 注入；若 manifest 寫入 `caBundle: ""`，每次 apply 都會清空信任並擋下所有 Notebook 建立與修改。
+
+新叢集沒有 CA 與 trust Secret 時，由 `scripts/bootstrap.sh webhook` 建立（只在不存在時建立，不會覆蓋既有 CA），並在有 Prometheus Operator CRD 時套用 [webhook-certificate-monitoring.yaml](../deploy/webhook-certificate-monitoring.yaml)。
 
 ### 應用程式回復
 

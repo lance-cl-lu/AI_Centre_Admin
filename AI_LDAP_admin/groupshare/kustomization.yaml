@@ -1,0 +1,37 @@
+# Single entry point for GroupShare. Deploy with `kubectl apply -k` (cgu-manifests includes this
+# directory from example/kustomization.yaml). Environment values live only in
+# deploy/controller-configmap.yaml and deploy/controller-deployment.yaml, which apply.sh rewrites
+# from env.ini. Webhook CA/trust Secrets and NFS directories are created by scripts/bootstrap.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deploy/controller-rbac.yaml
+- deploy/controller-configmap.yaml
+- deploy/controller-deployment.yaml
+- deploy/webhook-rbac.yaml
+- deploy/webhook-service.yaml
+- deploy/webhook-ca-issuer.yaml
+- deploy/webhook-serving-certificate.yaml
+- deploy/webhook-deployment.yaml
+- deploy/webhook-pdb.yaml
+- deploy/validating-webhook-configuration.yaml
+
+patches:
+- path: deploy/controller-runtime-patch.yaml
+
+# Code ships as content-hashed ConfigMaps: any code change gets a new name and rolls the
+# Deployments; published ConfigMaps are never edited in place.
+generatorOptions:
+  immutable: true
+configMapGenerator:
+- name: groupshare-controller-runtime
+  namespace: kubeflow
+  files:
+  - app.py=controller/app.py
+  - parser.py=controller/parser.py
+- name: groupshare-webhook-runtime
+  namespace: kubeflow
+  files:
+  - app.py=webhook/app.py
+  - rules.py=webhook/rules.py
+  - tls_reload.py=webhook/tls_reload.py

@@ -16,7 +16,8 @@ webhooks:
         name: groupshare-webhook
         path: /validate
         port: 443
-      caBundle: ""
+      # caBundle is injected by cert-manager cainjector from the trust Secret; never set it here,
+      # or every apply would blank it and block all Notebook create/update until re-injection.
     namespaceSelector: {}
     rules:
       - apiGroups: ["kubeflow.org"]
