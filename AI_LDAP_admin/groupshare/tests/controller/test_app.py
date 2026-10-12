@@ -120,6 +120,31 @@ class TestGroupshareControllerApp(unittest.TestCase):
         self.assertEqual(fake_api.replaced_body["spec"]["selector"], {})
         self.assertEqual(fake_api.replaced_body["metadata"]["resourceVersion"], "123")
 
+    def test_poddefault_written_under_the_old_naming_rule_is_rewritten(self):
+        import hashlib
+
+        app = load_controller_app()
+        controller = object.__new__(app.GroupshareController)
+        controller.nfs_server = "10.100.4.71"
+        controller.nfs_path = "/Public/shared"
+        controller.desired_mounts = {}
+        old_raw = f"王佑中lab||10.100.4.71|/Public/shared|{app.PODDEFAULT_SELECTOR_VERSION}"
+        fake_api = FakeCustomObjectsApi(
+            {
+                "metadata": {
+                    "annotations": {"groupshare.kubeflow.org/hash": hashlib.sha256(old_raw.encode()).hexdigest()},
+                    "resourceVersion": "7",
+                },
+                "spec": {"selector": {}},
+            }
+        )
+        controller.co_api = fake_api
+
+        controller.sync_profile({"metadata": {"name": "m1", "annotations": {"group": "王佑中lab"}}})
+
+        self.assertIsNotNone(fake_api.replaced_body)
+        self.assertEqual(fake_api.replaced_body["spec"]["volumes"][0]["nfs"]["path"], "/Public/shared/lab-6179d8fd")
+
 
 class FakeCoreApi:
     def __init__(self, configmap_data=None, pods=None):

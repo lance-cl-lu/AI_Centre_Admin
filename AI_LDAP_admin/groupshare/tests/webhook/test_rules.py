@@ -5,7 +5,30 @@ import unittest
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.join(BASE, "webhook"))
 
-from rules import evaluate_rules
+from rules import evaluate_rules, group_token, user_admin_volume_names
+
+# Shared with groupshare/tests/webhook/test_rules.py and api/tests.py: the backend, the controller
+# and the webhook must map every group name to the same token.
+GROUP_TOKEN_VECTORS = {
+    "AIC_DEV": "aic-dev",
+    "Hojjat_lab": "hojjat-lab",
+    "馬誠佑_lab": "lab-7a249574",
+    "楊智淵_lab": "lab-4bd4114e",
+    "王佑中教授實驗室": "g-c4be5913",
+    "王佑中_AID002-A3463_深度學習結構": "aid002-a3463-7ef7d056",
+}
+
+
+class TestWebhookGroupToken(unittest.TestCase):
+    def test_group_token_vectors(self):
+        for name, token in GROUP_TOKEN_VECTORS.items():
+            self.assertEqual(group_token(name), token, name)
+
+    def test_admin_volumes_for_chinese_named_groups_are_distinct(self):
+        self.assertEqual(
+            user_admin_volume_names(["馬誠佑_lab", "楊智淵_lab"]),
+            {"gs-lab-7a249574", "gs-lab-4bd4114e"},
+        )
 
 
 class TestWebhookRules(unittest.TestCase):

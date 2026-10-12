@@ -16,7 +16,8 @@ copy() {
   cp "$SRC/$1" "$DST/cgu/$2"
 }
 
-for f in kustomization.yaml README.md docs/certificate-maintenance.md controller/app.py controller/parser.py \
+for f in kustomization.yaml README.md docs/certificate-maintenance.md docs/deploy-handoff-20261012.md docs/profile-annotation-spec.md \
+         controller/app.py controller/parser.py \
          webhook/app.py webhook/rules.py webhook/tls_reload.py \
          scripts/bootstrap.sh scripts/check.sh \
          deploy/controller-rbac.yaml deploy/controller-runtime-patch.yaml \

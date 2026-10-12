@@ -15,6 +15,8 @@ GroupShare 與 NamespaceShare 都是提供 Notebook 使用者共用檔案的功�
 
 系統目前使用的共用儲存來源為 NFS server `10.100.4.71`。GroupShare 的資料位於 `/Public/shared` 底下；NamespaceShare 的資料位於 `/Public/shared/_namespaces` 底下。
 
+`<group-name>` 是群組名稱轉成的資料夾名稱：英文名稱轉小寫、符號換成 `-`（例如 `AIC_DEV` → `aic-dev`）；名稱含中文時會在後面加上一段固定的代碼，讓不同群組不會共用資料夾（例如 `馬誠佑_lab` → `lab-7a249574`）。用 `ls /mnt/groups` 可以看到自己所有群組的資料夾。
+
 Notebook 內的掛載點是絕對路徑 `/mnt/groups` 與 `/mnt/namespaces`，不是 `~/mnt`。既有 Notebook Pod 不會 retroactively 套用新的 PodDefault；若看不到掛載，請停止並重新啟動 Notebook，讓 Kubernetes 重新建立 Pod。
 
 ## 2. GroupShare
