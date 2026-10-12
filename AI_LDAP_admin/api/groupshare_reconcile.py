@@ -16,7 +16,7 @@ import traceback
 from .groupshare_storage import (
     DEFAULT_GROUPSHARE_STORAGE_ROOT,
     GROUPSHARE_EXCLUDED_GROUPS,
-    sanitize_groupshare_group_token,
+    groupshare_group_token,
 )
 from .namespace_share_storage import sanitize_namespace_share_token
 
@@ -77,7 +77,7 @@ def plan_missing_directories(group_names, namespace_names, storage_root, isdir=o
     """Return the group and namespace share directories that do not exist yet."""
     missing = []
     for group_name in sorted(set(group_names)):
-        token = sanitize_groupshare_group_token(group_name)
+        token = groupshare_group_token(group_name)
         if token and not isdir(os.path.join(storage_root, token)):
             missing.append(("group", group_name))
     namespace_root = os.path.join(storage_root, "_namespaces")

@@ -10,10 +10,10 @@ from kubernetes.client.rest import ApiException
 
 from parser import (
     build_group_nfs_path,
+    group_token,
     parse_csv_list,
     parse_manager_groups,
     intersect_groups,
-    sanitize_group_token,
     to_volume_name,
 )
 
@@ -33,6 +33,9 @@ NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
 NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "groupshare-nfs-defaults")
 PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
 PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
+# Part of the PodDefault hash: bump whenever group_token() changes, or PodDefaults whose
+# annotations did not change keep the old paths forever.
+GROUP_TOKEN_VERSION = "group-token-v2"
 POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
 NOTEBOOK_POD_LABEL = "notebook-name"
 RESTART_REQUIRED_ANNOTATION = "groupshare.kubeflow.org/restart-required"
@@ -96,7 +99,7 @@ class GroupshareController:
         allowed_nfs_paths = []
 
         for group in groups:
-            mount_token = sanitize_group_token(group)
+            mount_token = group_token(group)
             if not mount_token:
                 continue
 
@@ -150,7 +153,10 @@ class GroupshareController:
         }
 
     def _hash_annotations(self, groups_raw: str, managers_raw: str) -> str:
-        raw = f"{groups_raw}|{managers_raw}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
+        raw = (
+            f"{groups_raw}|{managers_raw}|{self.nfs_server}|{self.nfs_path}|"
+            f"{PODDEFAULT_SELECTOR_VERSION}|{GROUP_TOKEN_VERSION}"
+        )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def sync_profile(self, profile: dict) -> None:

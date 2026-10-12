@@ -15,8 +15,9 @@
 2. Controller 讀 Profile，自動產生/更新 PodDefault
 - 每個 Profile namespace 一個 `PodDefault/groupshare`
 - `PodDefault/groupshare` 使用空 selector `{}`，Profile namespace 內的 Notebook 會預設被注入掛載
-- 掛載點是 `/mnt/groups/<group>`
-- NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/Public/shared`）
+- 掛載點是 `/mnt/groups/<token>`
+- NFS 實體路徑是 `NFS_PATH/<token>`（例如 `NFS_PATH=/Public/shared`）
+- `<token>` 的規則見 [docs/profile-annotation-spec.md](docs/profile-annotation-spec.md)：英文名稱轉小寫、符號換成 `-`；含中文的名稱加上 8 碼 hash，避免不同群組共用資料夾
 
 3. Webhook 擋繞過
 - 擋掉使用者自己宣告 `/group*` 路徑

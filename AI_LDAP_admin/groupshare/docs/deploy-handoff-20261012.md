@@ -39,6 +39,7 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 
 - NFS 設定以 `apply.sh` 寫入的 ConfigMap 為準；provisioner Deployment 只是備用來源。原本找不到 `QNAP_NFS_DEPLOYMENT` 時 controller 會直接 crash。
 - 設定每輪重新讀取，不再只在啟動時讀。
+- 群組目錄／volume 名稱規則修正（後端、controller、webhook 三處一致）：原規則只保留 `a-z0-9-`，中文會被丟掉，`馬誠佑_lab`、`楊智淵_lab` 等都變成 `lab`（不同實驗室共用同一個資料夾），`王佑中教授實驗室` 變成空字串（沒有資料夾）。新規則：純英文名稱不變；含中文等非 ASCII 字元的名稱在後面加上完整名稱的 8 碼 hash，例如 `lab-7a249574`、`g-c4be5913`。管理平台新增群組或 Excel 匯入時，若名稱會對應到既有群組的資料夾（例如 `Lab_A` 與 `lab-a`）會拒絕建立。PodDefault 的 hash 包含規則版本，新 controller 上線後會把所有 PodDefault 重寫一次（英文群組內容不變）。
 - 新增：比對每個 Notebook Pod 實際的群組掛載與目前 PodDefault，不一致時在 Pod 加 `groupshare.kubeflow.org/restart-required` annotation，並對 Notebook 發 `GroupShareRestartRequired` Event。**不會重啟任何 Pod**；使用者停止再啟動 Notebook 就套用，`/home/jovyan` 不受影響。Kubernetes 無法修改執行中 Pod 的 volume，所以只能提示。
 
 ### 後端（AI_Centre_Admin `AI_LDAP_admin/api`）
@@ -51,7 +52,7 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 - `api/migrations/0006_groupdefaultquota_gpu_vendor.py`：線上容器啟動時自動產生、但 repo 沒有的 migration，已補上。
 - `Dockerfile.groupshare-overlay`：以線上 `v0.3.01` 為基底只覆蓋上述 Python 檔，前端與套件完全不變。
 
-測試：GroupShare 39 項、NamespaceShare 6 項、後端 12 項全部通過。
+測試：GroupShare 46 項、NamespaceShare 6 項、後端 14 項全部通過。
 
 ## .6（gpunode040）目前狀態
 
@@ -59,6 +60,8 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 
 - `kubectl apply -k cgu/groupshare`、`kubectl apply -k cgu/namespace_share`。webhook 憑證未重簽、caBundle 未中斷，server dry-run 建立 Notebook 正常。
 - controller 已標記 `d000018238` 的 6 個舊 Notebook 需重啟（缺 `aid002-a3463`、多 `a2615`）。
+
+.6 線上的 controller 是命名規則修正**之前**的版本；branch 最新版要照下面步驟 2、3 的順序更新。.6 有 4 個含中文的群組會換目錄：`ai1029-a347n`、`aid002-a3463`、`hojjat-ai3026-a2629-2026-01-27-2027-01-02`、`lab`（`王佑中lab`）。2026-10-12 檢查時這 4 個舊目錄都是空的。
 
 尚未完成：後端映像推送與換版（這台 root 登入的 Docker Hub 帳號 `wycca1` 沒有 `cguaicadmin` 的推送權限）。
 
@@ -85,6 +88,8 @@ docker push docker.io/cguaicadmin/ldap_backend:v2610121415
 
 ### 2. .6 後端換版（管理平台約停 1 分鐘，Notebook 不受影響）
 
+**.6 要先換後端、再更新 controller（步驟 3）**：後端第一次對帳會先用新規則建好群組目錄；若先換 controller，PodDefault 會立刻指向還不存在的新目錄，這 4 個群組的成員新開 Notebook 會卡在掛載，直到後端換版。
+
 後端 SQLite 放在 NFS 上，RollingUpdate 會讓新舊 Pod 同時寫同一個資料庫，所以先縮到 0 再換：
 
 ```bash
@@ -103,20 +108,28 @@ kubectl -n ldap exec deploy/backend-deployment -- python manage.py reconcile_gro
 kubectl -n ldap logs deploy/backend-deployment | grep groupshare-reconcile
 ```
 
+確認新目錄已建立（例如 `lab-6179d8fd`、`aid002-a3463-7ef7d056`）：
+
+```bash
+kubectl -n ldap exec deploy/backend-deployment -- ls /mnt/groupshare
+```
+
 預期第一輪修正 17 個 Profile（移除 DB 已不存在的群組 `徐永真_AID003_3464`、`A2615 深度學習應用`、`楊智淵_AIM128-A2612 進階電腦視覺`，補上 `Generative_AI` 等）並建立 `test103` 目錄；`d000018231`、`kjlin`、`kubeflow-user-example-com` 在 DB 沒有使用者，維持不動。之後應為 `changes=0`。
 
 回復：`kubectl -n ldap set image deploy/backend-deployment backend=docker.io/cguaicadmin/ldap_backend:v0.3.01`（同樣先縮到 0）。
 
-### 3. .6 的 cgu-manifests 合併 branch
-
-GroupShare 已套用，合併只是讓 repo 與線上一致：
+### 3. .6 的 cgu-manifests 合併 branch 並更新 controller / webhook（步驟 2 完成後）
 
 ```bash
 cd /home/lance/work/cgu-manifests
 git fetch origin
 git merge origin/groupshare-deploy-fix-20261012
-kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share    # 應無差異
+kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share    # 只應有 runtime ConfigMap 名稱變更
+kubectl apply -k cgu/groupshare && kubectl apply -k cgu/namespace_share
+bash cgu/groupshare/scripts/check.sh env.ini
 ```
+
+controller 換版後，掛著舊目錄的 Notebook 會被標記需重啟（`check.sh` 第 6 段）。等這些 Notebook 都重啟過，確認 4 個舊目錄仍是空的再刪除；若使用者在重啟前寫了檔案，搬到對應的新目錄。
 
 **不要只為了 GroupShare 在 .6 跑整個 `apply.sh`**：它會刪除重建 `istio-ingressgateway`，全體使用者會短暫斷線。
 
@@ -130,6 +143,8 @@ git fetch origin && git merge origin/groupshare-deploy-fix-20261012
 cp env.ini.4 env.ini
 ./apply.sh
 ```
+
+**10.100.1.4 要先更新 controller、再換後端**（與 .6 相反）：.4 的 Profile 目前都沒有群組 annotation；若先換後端，對帳會寫入群組，而舊版 controller 仍用舊規則，`馬誠佑_lab`、`楊智淵_lab`、`張賢宗_lab`、`林英嘉_lab` 會掛到同一個 `lab` 資料夾。`./apply.sh` 會同時更新兩者，順序沒有問題。
 
 若 10.100.1.4 已經部署過、只想更新 GroupShare（不重跑整個 `apply.sh`）：
 
@@ -147,7 +162,15 @@ bash cgu/groupshare/scripts/bootstrap.sh webhook
 bash cgu/groupshare/scripts/check.sh env.ini
 ```
 
-然後依步驟 2 換後端映像（10.100.1.4 的 deployment 名稱相同）。
+然後依步驟 2 換後端映像（10.100.1.4 的 deployment 名稱相同）。第一次對帳會同步全部 Profile 的群組並建立群組目錄。
+
+舊版部署留下的範例 Notebook 可以刪除（新版已移除）：
+
+```bash
+kubectl -n kubeflow-user-example-com delete notebook default-template-groupshare
+```
+
+另外 `env.ini.4` 的 `QNAP_IP` 是 `10.100.100.31`，但 NFS provisioner 用 `10.100.1.31`；目前兩者都能掛載，請確認是否同一台 NAS 並統一。
 
 `check.sh` 重點：第 1 段 NFS ConfigMap 是 `10.100.100.31` / `/AIC_K8s/shared`；第 3 段 `caBundle` 長度大於 0、`inject-ca-from` 為空；第 5 段沒有 `!!`。
 

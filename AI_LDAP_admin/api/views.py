@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
-from .groupshare_storage import GROUPSHARE_EXCLUDED_GROUPS, ensure_groupshare_group_directory
+from .groupshare_storage import GROUPSHARE_EXCLUDED_GROUPS, ensure_groupshare_group_directory, groupshare_group_token
 from .namespace_share_storage import ensure_namespace_share_directory
 from . import urls
 
@@ -1254,6 +1254,15 @@ def get_lab_info(request):
     }
     return Response(data, status=200)
 
+def find_groupshare_folder_conflict(labname):
+    """Return an existing lab whose shared folder name equals the one labname would get, else None."""
+    token = groupshare_group_token(labname)
+    for existing in Group.objects.exclude(name=labname).values_list("name", flat=True):
+        if existing not in GROUPSHARE_EXCLUDED_GROUPS and groupshare_group_token(existing) == token:
+            return existing
+    return None
+
+
 def create_group(labname):
     try:
         Group.objects.get(name=labname)
@@ -1287,6 +1296,11 @@ def addlab(request):
         return Response(status=500, data="lab is exist")
     except:
         pass
+
+    # 不同名稱但會對應到同一個共享資料夾（例如 Lab_A 與 lab-a），不允許建立
+    conflict = find_groupshare_folder_conflict(labname)
+    if conflict:
+        return Response(status=500, data="lab {} would share the folder of existing lab {}".format(labname, conflict))
 
     
     # check the cpuQuota, memQuota, gpuQuota is valid or not
@@ -2163,6 +2177,10 @@ def excel(request):
             row[0].value = row[0].value.lower()
             row[3].value = row[3].value.lower()
             if Group.objects.filter(name=row[1].value).exists() is False:
+                conflict = find_groupshare_folder_conflict(row[1].value)
+                if conflict:
+                    failed_user.append({row[0].value: "group {} would share the folder of existing group {}".format(row[1].value, conflict)})
+                    continue
                 try:
                     group = Group.objects.create(name=row[1].value)
                     ensure_groupshare_group_directory(row[1].value)

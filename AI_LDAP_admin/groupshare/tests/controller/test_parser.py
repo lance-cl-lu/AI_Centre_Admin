@@ -14,9 +14,36 @@ intersect_groups = parser.intersect_groups
 parse_csv_list = parser.parse_csv_list
 parse_manager_groups = parser.parse_manager_groups
 to_volume_name = parser.to_volume_name
+group_token = parser.group_token
+
+# Shared with groupshare/tests/webhook/test_rules.py and api/tests.py: the backend, the controller
+# and the webhook must map every group name to the same token.
+GROUP_TOKEN_VECTORS = {
+    "AIC_DEV": "aic-dev",
+    "Hojjat_lab": "hojjat-lab",
+    "馬誠佑_lab": "lab-7a249574",
+    "楊智淵_lab": "lab-4bd4114e",
+    "王佑中教授實驗室": "g-c4be5913",
+    "王佑中_AID002-A3463_深度學習結構": "aid002-a3463-7ef7d056",
+}
 
 
 class TestControllerParser(unittest.TestCase):
+    def test_group_token_vectors(self):
+        for name, token in GROUP_TOKEN_VECTORS.items():
+            self.assertEqual(group_token(name), token, name)
+
+    def test_non_ascii_names_no_longer_share_a_folder(self):
+        names = ["馬誠佑_lab", "楊智淵_lab", "張賢宗_lab", "林英嘉_lab", "王佑中lab"]
+        self.assertEqual(len({group_token(n) for n in names}), len(names))
+
+    def test_long_names_fit_volume_name_limit(self):
+        self.assertLessEqual(len("gs-" + group_token("x" * 80)), 63)
+        self.assertNotEqual(group_token("x" * 80), group_token("x" * 81))
+
+    def test_volume_and_path_use_the_group_token(self):
+        self.assertEqual(to_volume_name("王佑中教授實驗室"), "gs-g-c4be5913")
+        self.assertEqual(build_group_nfs_path("/AIC_K8s/shared", "馬誠佑_lab"), "/AIC_K8s/shared/lab-7a249574")
     def test_parse_groups_and_managers(self):
         groups = parse_csv_list("A, B,, C ")
         managers = parse_csv_list("B, X")

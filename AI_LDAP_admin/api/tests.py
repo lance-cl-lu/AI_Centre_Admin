@@ -6,13 +6,37 @@ import unittest
 from .groupshare_storage import (
     GROUPSHARE_EXCLUDED_GROUPS,
     ensure_groupshare_group_directory,
+    groupshare_group_token,
     sanitize_groupshare_group_token,
 )
 from .namespace_share_storage import ensure_namespace_share_directory, sanitize_namespace_share_token
 from .groupshare_reconcile import plan_missing_directories, plan_profile_changes
 
 
+# Shared with groupshare/tests/webhook/test_rules.py and api/tests.py: the backend, the controller
+# and the webhook must map every group name to the same token.
+GROUP_TOKEN_VECTORS = {
+    "AIC_DEV": "aic-dev",
+    "Hojjat_lab": "hojjat-lab",
+    "馬誠佑_lab": "lab-7a249574",
+    "楊智淵_lab": "lab-4bd4114e",
+    "王佑中教授實驗室": "g-c4be5913",
+    "王佑中_AID002-A3463_深度學習結構": "aid002-a3463-7ef7d056",
+}
+
+
 class GroupShareStorageTests(unittest.TestCase):
+    def test_group_token_vectors(self):
+        for name, token in GROUP_TOKEN_VECTORS.items():
+            self.assertEqual(groupshare_group_token(name), token, name)
+
+    def test_chinese_named_group_gets_its_own_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = ensure_groupshare_group_directory("馬誠佑_lab", root_path=temp_dir)
+            second = ensure_groupshare_group_directory("楊智淵_lab", root_path=temp_dir)
+            self.assertNotEqual(first, second)
+            self.assertEqual(os.path.basename(first), "lab-7a249574")
+
     def test_admin_marker_and_trash_get_no_shared_folder(self):
         self.assertEqual(GROUPSHARE_EXCLUDED_GROUPS, {"root", "TRASH"})
 

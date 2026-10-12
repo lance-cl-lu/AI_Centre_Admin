@@ -111,9 +111,9 @@
 - `admin_groups = intersect(groups, managers)`，只允許「在 group 清單內」的管理群組生效
 
 3. 產生 `PodDefault/groupshare`
-- volume 名稱：`gs-<sanitize(group)>`
-- 掛載點：`/mnt/groups/<sanitize(group)>`
-- NFS 實體路徑：`<NFS_PATH>/<sanitize(group)>`（例如 `/Public/shared/marktest`）
+- volume 名稱：`gs-<group_token(group)>`
+- 掛載點：`/mnt/groups/<group_token(group)>`
+- NFS 實體路徑：`<NFS_PATH>/<group_token(group)>`（例如 `/Public/shared/marktest`）
 - 非 admin 群組：`readOnly=true`
 - admin 群組：`readOnly=false`
 
