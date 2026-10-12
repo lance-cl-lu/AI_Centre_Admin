@@ -29,7 +29,7 @@ class TLSProbeTests(unittest.TestCase):
                 ],
                 check=True, capture_output=True, timeout=15,
             )
-        patch_path = Path(__file__).resolve().parents[2] / "deploy/webhook-tls-probes-patch.yaml"
+        patch_path = Path(__file__).resolve().parents[2] / "deploy/webhook-deployment.yaml"
         patch = yaml.safe_load(patch_path.read_text())
         probe = patch["spec"]["template"]["spec"]["containers"][0]["livenessProbe"]
         cls.command = [sys.executable, *probe["exec"]["command"][1:]]

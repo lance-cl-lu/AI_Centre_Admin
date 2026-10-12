@@ -34,15 +34,11 @@ class NamespaceShareController:
         self.co_api = client.CustomObjectsApi()
         self.apps_api = client.AppsV1Api()
         self.core_api = client.CoreV1Api()
-        self.nfs_server, self.nfs_path = self._load_nfs_settings()
+        self.nfs_server, self.nfs_path = "", ""
 
     def _load_nfs_settings(self) -> Tuple[str, str]:
-        dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
-        env_map = {}
-        for container in dep.spec.template.spec.containers:
-            for env_var in container.env or []:
-                env_map[env_var.name] = env_var.value
-
+        # The ConfigMap written by apply.sh is authoritative. The provisioner Deployment is only a
+        # fallback source, so a cluster whose provisioner has another name or namespace still works.
         cm_data = {}
         try:
             cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
@@ -51,14 +47,32 @@ class NamespaceShareController:
             if exc.status != 404:
                 raise
 
-        nfs_path = (cm_data.get("NFS_PATH") or env_map.get("NFS_PATH") or "").strip()
-        nfs_server = (cm_data.get("NFS_SERVER") or env_map.get("NFS_SERVER") or "").strip()
-        if not nfs_path:
-            raise RuntimeError("NFS_PATH missing from namespace-share ConfigMap and provisioner deployment env")
-        if not nfs_server:
-            raise RuntimeError("NFS_SERVER missing from namespace-share ConfigMap and provisioner deployment env")
+        nfs_path = (cm_data.get("NFS_PATH") or "").strip()
+        nfs_server = (cm_data.get("NFS_SERVER") or "").strip()
+        if not nfs_path or not nfs_server:
+            env_map = {}
+            try:
+                dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
+                for container in dep.spec.template.spec.containers:
+                    for env_var in container.env or []:
+                        env_map[env_var.name] = env_var.value
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+            nfs_path = nfs_path or (env_map.get("NFS_PATH") or "").strip()
+            nfs_server = nfs_server or (env_map.get("NFS_SERVER") or "").strip()
 
-        logger.info("[INFO] Loaded namespace-share NFS settings: server=%s path=%s", nfs_server, nfs_path)
+        if not nfs_path:
+            raise RuntimeError(
+                f"NFS_PATH missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
+            )
+        if not nfs_server:
+            raise RuntimeError(
+                f"NFS_SERVER missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
+            )
+
+        if (nfs_server, nfs_path) != (self.nfs_server, self.nfs_path):
+            logger.info("[INFO] Loaded namespace-share NFS settings: server=%s path=%s", nfs_server, nfs_path)
         return nfs_server, nfs_path
 
     def _build_spec(self, namespace: str) -> dict:
@@ -165,6 +179,7 @@ class NamespaceShareController:
     def run(self) -> None:
         while True:
             try:
+                self.nfs_server, self.nfs_path = self._load_nfs_settings()
                 profiles = self.co_api.list_cluster_custom_object(
                     group=PROFILE_GROUP,
                     version=PROFILE_VERSION,

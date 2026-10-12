@@ -1,0 +1,19 @@
+# Single entry point for NamespaceShare; see ../groupshare/kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deploy/controller-rbac.yaml
+- deploy/controller-configmap.yaml
+- deploy/controller-deployment.yaml
+
+patches:
+- path: deploy/controller-runtime-patch.yaml
+
+generatorOptions:
+  immutable: true
+configMapGenerator:
+- name: namespace-share-controller-runtime
+  namespace: kubeflow
+  files:
+  - app.py=controller/app.py
+  - parser.py=controller/parser.py

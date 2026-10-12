@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
-from .groupshare_storage import ensure_groupshare_group_directory
+from .groupshare_storage import GROUPSHARE_EXCLUDED_GROUPS, ensure_groupshare_group_directory
 from .namespace_share_storage import ensure_namespace_share_directory
 from . import urls
 
@@ -693,7 +693,7 @@ def build_groupshare_annotations(profile_name=None, owner_email=None):
     if user_obj is None:
         return "", ""
 
-    groups = sorted({g.name for g in user_obj.groups.all() if g.name and g.name != 'root'})
+    groups = sorted({g.name for g in user_obj.groups.all() if g.name and g.name not in GROUPSHARE_EXCLUDED_GROUPS})
     manager_candidates = {
         detail.labname.name
         for detail in UserDetail.objects.filter(uid=user_obj, permission=1).select_related('labname')
@@ -1096,8 +1096,7 @@ def get_group_corresponding_user(request):
                         found = conn.search('cn={},ou=users,dc=example,dc=org'.format(user.username), '(objectclass=posixAccount)', attributes=['*'])
                         if not found or len(conn.entries) == 0:
                             print(f"LDAP search: user '{user.username}' not found.")
-                        # else:
-                        #    print(f"LDAP search: user '{user.username}' found.")
+                        else:
                             user_list.append(user.username)
                     except Exception as e:
                         print(f"LDAP search error: {e}")
@@ -1659,6 +1658,7 @@ def delete_group_core(labname):
                 deleteUserModel(user)
             else:
                 print("group is not empty -", len(group_list))
+                sync_profile_groupshare_annotations(user)
             print(user.username)
         # delete the group from database
         Group.objects.get(name=labname).delete()
@@ -1816,7 +1816,8 @@ def deleteUserModel(username):
 
     k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
     replace_profile_user_delete_date(username, k8s_date)
-    
+    sync_profile_groupshare_annotations(user_obj)
+
     
 @api_view(['POST'])
 def user_delete_check(request):
@@ -2588,6 +2589,7 @@ def import_lab_user(request):
                             UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
                         elif user['permission'] == 'user':
                             UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=group))
+                        sync_profile_groupshare_annotations(user_obj)
                     else:
                         print("user already in group:", user['username'], group)
                 else:

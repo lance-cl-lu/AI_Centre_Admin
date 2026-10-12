@@ -4,6 +4,8 @@ import re
 
 DEFAULT_GROUPSHARE_STORAGE_ROOT = os.environ.get("GROUPSHARE_STORAGE_ROOT", "/mnt/groupshare")
 DEFAULT_GROUPSHARE_DIR_MODE = 0o777
+# Not labs: root is the admin marker and TRASH holds disabled users, so neither gets a shared folder.
+GROUPSHARE_EXCLUDED_GROUPS = {"root", "TRASH"}
 
 
 def sanitize_groupshare_group_token(group_name: str) -> str:

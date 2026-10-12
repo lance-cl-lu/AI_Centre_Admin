@@ -1,0 +1,21 @@
+# Runs the controller code from the kustomize-generated ConfigMap, so code changes roll out
+# with `kubectl apply -k` and need no image rebuild. The image only provides dependencies.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: groupshare-controller
+  namespace: kubeflow
+spec:
+  template:
+    spec:
+      containers:
+        - name: controller
+          command: ["python", "/opt/groupshare-controller/app.py"]
+          volumeMounts:
+            - name: controller-runtime
+              mountPath: /opt/groupshare-controller
+              readOnly: true
+      volumes:
+        - name: controller-runtime
+          configMap:
+            name: groupshare-controller-runtime

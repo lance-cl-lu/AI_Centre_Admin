@@ -37,21 +37,23 @@
   - `tls_reload.py`: 每次 TLS 握手載入最新完整憑證，更新失敗時保留有效 context
   - `Dockerfile`: webhook 映像建置檔
 
+- `kustomization.yaml`: 唯一部署入口（`kubectl apply -k`）。程式碼以 `configMapGenerator` 產生帶內容雜湊的不可變更 ConfigMap，程式一改就自動換名並滾動更新，不需重建映像。
 - `deploy/`
-  - `controller-rbac.yaml`: controller 權限
-  - `controller-configmap.yaml`: GroupShare 專用 NFS 設定（例如 `NFS_SERVER`、`NFS_PATH`）
-  - `controller-deployment.yaml`: controller 部署
-  - `webhook-rbac.yaml`: webhook 權限
-  - `webhook-deployment.yaml`: webhook 部署
-  - `webhook-service.yaml`: webhook service
-  - `validating-webhook-configuration.yaml`: admission 規則與 `failurePolicy: Fail`
+  - `controller-rbac.yaml`: controller 權限（含標記待重啟 Notebook Pod 所需的 pods/events/notebooks 權限）
+  - `controller-configmap.yaml`: GroupShare 專用 NFS 設定（`NFS_SERVER`、`NFS_PATH`）；controller 以此為準，provisioner Deployment 只是備用來源
+  - `controller-deployment.yaml`: controller 部署（環境值由 cgu-manifests 的 apply.sh 依 env.ini 改寫）
+  - `controller-runtime-patch.yaml`: 讓 controller 從產生的 ConfigMap 執行程式碼
+  - `webhook-rbac.yaml`、`webhook-service.yaml`、`webhook-deployment.yaml`、`webhook-pdb.yaml`: webhook（2 副本、TLS 熱載入、健康檢查）
+  - `validating-webhook-configuration.yaml`: admission 規則與 `failurePolicy: Fail`；`caBundle` 由 cainjector 從 trust Secret 注入，manifest 內不可設定
   - `webhook-serving-certificate.yaml`、`webhook-ca-issuer.yaml`: 現行 TLS certificate 與 CA Issuer
-  - `webhook-certificate.yaml`: 舊 SelfSigned 憑證，僅保留供回復使用
-  - `webhook-tls-runtime-configmap.json`: 有版本且不可變更的線上 webhook 程式碼
-  - `webhook-tls-runtime-patch.yaml`: 切換既有 Deployment 至熱載入版本
-  - `webhook-tls-probes-patch.yaml`: 健康檢查及熱載入失效時的重啟保護
-  - `webhook-certificate-monitoring.yaml`: HTTPS、重新載入、期限及監測失聯告警
-  - `notebook-template-groupshare.yaml`: 舊版標籤式範例模板，現行自動掛載流程不再依賴它
+  - `webhook-certificate-monitoring.yaml`: 監測與告警；由 `scripts/bootstrap.sh webhook` 在有 Prometheus Operator CRD 時套用
+  - `webhook-certificate.yaml`: 舊 SelfSigned 憑證，僅保留供回復使用，不在 kustomization 內
+  - `notebook-template-groupshare.yaml`: 舊版標籤式範例模板，不在 kustomization 內
+
+- `scripts/`
+  - `bootstrap.sh nfs|webhook`: kustomize 無法表達的前置作業（NFS 根目錄、webhook CA 與 trust Secret）；可重複執行，不覆蓋既有物件
+  - `check.sh`: 部署後唯讀檢查，含「需重啟才會套用新掛載」的 Notebook Pod 清單
+  - `export-to-cgu-manifests.sh`: 把本目錄同步到 cgu-manifests（本 repository 為唯一來源）
 
 - `tests/`
   - `controller/test_app.py`: PodDefault selector 與既有 selector 更新測試
@@ -76,26 +78,24 @@ python -m unittest discover -s tests -p 'test_*.py'
 python -m py_compile controller/app.py controller/parser.py webhook/app.py webhook/rules.py
 ```
 
-## 建議上線順序
+## 部署
 
-1. 先依憑證維護文件完成 CA Secret、信任 bundle 與遷移前置作業。既有 SelfSigned 部署必須先完成新舊信任重疊，不可直接覆蓋 webhook 設定。
+正式環境由 cgu-manifests 的 `apply.sh` 部署，它會依序執行 `scripts/bootstrap.sh nfs`、整體 kustomize、`scripts/bootstrap.sh webhook` 與 `scripts/check.sh`。只更新 GroupShare 時：
 
-2. 已完成信任遷移後，套用資源：
 ```bash
-kubectl apply -f deploy/controller-rbac.yaml
-kubectl apply -f deploy/controller-configmap.yaml
-kubectl apply -f deploy/controller-code-configmap.yaml
-kubectl apply -f deploy/controller-deployment.yaml
-kubectl apply -f deploy/webhook-rbac.yaml
-kubectl apply -f deploy/webhook-ca-issuer.yaml
-kubectl apply -f deploy/webhook-serving-certificate.yaml
-kubectl apply -f deploy/webhook-tls-runtime-configmap.json
-kubectl apply -f deploy/webhook-deployment.yaml
-kubectl -n kubeflow patch deployment groupshare-validating-webhook --type=strategic --patch-file deploy/webhook-tls-probes-patch.yaml
-kubectl apply -f deploy/webhook-service.yaml
-kubectl apply -f deploy/validating-webhook-configuration.yaml
-kubectl apply -f deploy/webhook-pdb.yaml
-kubectl apply -f deploy/webhook-certificate-monitoring.yaml
+bash groupshare/scripts/export-to-cgu-manifests.sh /path/to/cgu-manifests   # 先同步程式與 manifest
+cd /path/to/cgu-manifests                                                     # env 值已由 apply.sh 依 env.ini 寫入
+kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share           # 確認差異
+kubectl apply -k cgu/groupshare && kubectl apply -k cgu/namespace_share
+bash cgu/groupshare/scripts/check.sh env.ini
 ```
 
-線上沿用既有依賴映像，以不可變更的 ConfigMap 發布程式碼。修改程式碼時需產生新 ConfigMap 名稱並更新 Deployment；不要原地修改已發布的不可變更 ConfigMap。
+不要只為 GroupShare 執行整個 `apply.sh`：它會刪除並重建 `istio-ingressgateway`，造成全體使用者短暫斷線。
+
+## 群組變更與既有 Notebook
+
+Kubernetes 無法修改執行中 Pod 的 volume，PodDefault 只在建立 Pod 時注入。controller 每輪比對 Notebook Pod 實際的群組掛載與目前 PodDefault，不一致時在 Pod 加上 `groupshare.kubeflow.org/restart-required` annotation，並對 Notebook 發出 `GroupShareRestartRequired` Event（Kubeflow 的 Notebook 詳細頁可見）。它不會重啟任何 Pod；使用者下次停止再啟動 Notebook 即套用新掛載，`/home/jovyan` 的檔案不受影響。
+
+群組資料由後端定期對帳（`api/groupshare_reconcile.py`，預設每 600 秒，`GROUPSHARE_RECONCILE_INTERVAL_SECONDS=0` 可停用），補正 Profile annotations 並建立缺少的群組與 namespace 目錄。手動執行：`python manage.py reconcile_groupshare --dry-run`。
+
+線上沿用既有依賴映像，以 kustomize 產生的不可變更 ConfigMap 發布程式碼；不要原地修改已發布的 ConfigMap。

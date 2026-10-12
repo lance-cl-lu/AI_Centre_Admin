@@ -71,7 +71,7 @@ NamespaceShare 的目標：
 - `deploy/`
   - `controller-rbac.yaml`: controller 權限
   - `controller-configmap.yaml`: NamespaceShare 專用 NFS 設定
-  - `controller-code-configmap.yaml`: 內嵌 controller 程式碼
+  - `controller-runtime-patch.yaml`: 讓 controller 從 kustomize 產生的 ConfigMap 執行程式碼
   - `controller-deployment.yaml`: controller 部署
 
 - `tests/`
@@ -91,7 +91,7 @@ NamespaceShare 的目標：
   - `groupshare/webhook/app.py`
   - `groupshare/webhook/rules.py`
   - `groupshare/tests/webhook/test_rules.py`
-  - `groupshare/deploy/webhook-code-configmap.yaml`
+  - `groupshare/kustomization.yaml`（webhook 程式碼 ConfigMap 由此產生）
 
 - backend deployment
   - `full-stack-deployment.yaml`
@@ -153,46 +153,11 @@ rm -f /mnt/namespaces/<namespace>/ns-write-test.txt
 
 ## 建議上線順序
 
-1. 套用 NamespaceShare controller 資源
+NamespaceShare 與 GroupShare 一起由 cgu-manifests 的 `apply.sh` 部署；只更新共享元件的步驟見 [../groupshare/README.md](../groupshare/README.md) 的「部署」，後端換版見 [../groupshare/docs/deploy-handoff-20261012.md](../groupshare/docs/deploy-handoff-20261012.md)。
 
 ```bash
-kubectl apply -f namespace_share/deploy/controller-rbac.yaml
-kubectl apply -f namespace_share/deploy/controller-configmap.yaml
-kubectl apply -f namespace_share/deploy/controller-code-configmap.yaml
-kubectl apply -f namespace_share/deploy/controller-deployment.yaml
-```
-
-2. 更新 GroupShare webhook code configmap 並 restart
-
-```bash
-kubectl apply -f groupshare/deploy/webhook-code-configmap.yaml
-kubectl -n kubeflow rollout restart deployment/groupshare-validating-webhook
-```
-
-3. 更新 backend image
-
-```bash
-docker build -t docker.io/cguaicadmin/ldap_backend:v0.2.43 .
-docker push docker.io/cguaicadmin/ldap_backend:v0.2.43
-kubectl apply -f full-stack-deployment.yaml
-kubectl -n ldap rollout status deployment/backend-deployment --timeout=300s
-```
-
-4. 若是舊叢集，補做一次 backfill
-
-```bash
-kubectl -n ldap exec <backend-pod> -- sh -lc 'cd /code && python - <<\"PY\"
-from kubernetes import client, config
-from api.namespace_share_storage import ensure_namespace_share_directory
-
-config.load_incluster_config()
-co = client.CustomObjectsApi()
-profiles = co.list_cluster_custom_object(group=\"kubeflow.org\", version=\"v1\", plural=\"profiles\")
-for item in profiles.get(\"items\", []):
-    namespace = ((item.get(\"metadata\") or {}).get(\"name\") or \"\").strip().lower()
-    if namespace:
-        ensure_namespace_share_directory(namespace)
-PY'
+kubectl diff -k namespace_share
+kubectl apply -k namespace_share
 ```
 
 ## 重要注意事項

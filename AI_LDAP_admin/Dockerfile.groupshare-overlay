@@ -1,0 +1,10 @@
+# Production backend v0.3.01 plus the GroupShare backend changes only.
+# The frontend, static files and dependencies stay byte-identical to v0.3.01.
+#
+#   cd AI_LDAP_admin
+#   TAG=v$(date +%y%m%d%H%M)
+#   docker build -f Dockerfile.groupshare-overlay -t docker.io/cguaicadmin/ldap_backend:$TAG .
+FROM docker.io/cguaicadmin/ldap_backend:v0.3.01
+COPY api/views.py api/apps.py api/groupshare_reconcile.py api/groupshare_storage.py api/tests.py /code/api/
+COPY api/management/ /code/api/management/
+COPY api/migrations/0006_groupdefaultquota_gpu_vendor.py /code/api/migrations/
