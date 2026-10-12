@@ -1930,6 +1930,9 @@ def deleteUserModel(username):
     trash_group, _ = Group.objects.get_or_create(name="TRASH")
     UserDetail.objects.create(uid=user_obj, permission=2, labname=trash_group)
     user_obj.groups.add(trash_group)
+    # 記錄移入 TRASH 的時間要在任何可能失敗的步驟（LDAP、Kubernetes）之前，
+    # 否則失敗後重送的刪除請求會把這個人當成「早就在 TRASH」而永久刪除
+    _trashed_at[user_obj.username] = time.time()
 
     conn = connectLDAP()
     ## delete the user memberUID from the group
@@ -1942,7 +1945,6 @@ def deleteUserModel(username):
             pass
     conn.unbind()
 
-    _trashed_at[user_obj.username] = time.time()
     k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=TRASH_RETENTION_DAYS))
     replace_profile_user_delete_date(username, k8s_date)
     sync_profile_groupshare_annotations(user_obj)

@@ -264,6 +264,15 @@ class TrashDeletionTests(DjangoTestCase):
         self.assertTrue(self.views.is_only_in_trash("member"))
         self.assertEqual(self.k8s.deleted, [])
 
+    def test_resend_after_ldap_failure_does_not_delete_permanently(self):
+        with mock.patch.object(self.views, "connectLDAP", side_effect=ConnectionError("ldap down")):
+            with self.assertRaises(ConnectionError):
+                self.post(self.views.multiple_user_delete, {"users": ["member"]})
+        self.post(self.views.multiple_user_delete, {"users": ["member"]})  # admin resubmits
+
+        self.assertTrue(self.exists("member"))
+        self.assertEqual(self.k8s.deleted, [])
+
     def test_trash_only_user_is_deleted_permanently(self):
         self.post(self.views.multiple_user_delete, {"users": ["trashed"]})
 
