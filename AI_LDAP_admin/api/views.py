@@ -3,6 +3,7 @@ from ldap3 import *
 import json, random 
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
+import time
 from django.db import transaction
 from django.core.files.storage import default_storage
 import os
@@ -1779,19 +1780,121 @@ def get_user_info(request):
     }
     return Response(data, status=200)
 
+# 永久刪除的保護（取自測試版 v2607080741，並補上重送、並行還原與 Profile 刪除失敗的處理）
+PENDING_DELETE_ANNOTATION = "ldap-admin/pending-delete"
+TRASH_PERMANENT_DELETE_GRACE_SECONDS = int(os.environ.get("TRASH_PERMANENT_DELETE_GRACE_SECONDS", "600"))
+TRASH_RETENTION_DAYS = 30
+_trashed_at = {}  # username -> time the user was moved to TRASH by this process
+
+
 def is_only_in_trash(username):
-    group_list = get_user_all_groups(username)
-    return len(group_list) == 1 and group_list[0]['groupname'] == 'TRASH'
+    names = set(Group.objects.filter(user__username=username).values_list("name", flat=True))
+    return names == {"TRASH"}
+
+
+def trashed_recently(user_obj):
+    """True when the user entered TRASH within the grace period.
+
+    Protects against a repeated or resubmitted delete request turning "move to TRASH" into a
+    permanent delete. Uses this process's record, else the Profile delete_date set on trashing.
+    """
+    moved_at = _trashed_at.get(user_obj.username)
+    if moved_at is None:
+        profile = get_profile_content(get_profile_by_email(user_obj.email) or user_obj.username.lower())
+        delete_date = ((profile or {}).get("metadata", {}).get("annotations", {}) or {}).get("delete_date")
+        try:
+            moved = datetime.datetime.fromisoformat(delete_date) - datetime.timedelta(days=TRASH_RETENTION_DAYS)
+            moved_at = moved.timestamp()
+        except (TypeError, ValueError):
+            return False
+    return time.time() - moved_at < TRASH_PERMANENT_DELETE_GRACE_SECONDS
+
+
+def _set_pending_delete(profile_name, username):
+    """Mark (username) or unmark (None) a Profile for deletion; True when done or the Profile is gone."""
+    api, _ = _make_k8s_custom_objects_api_views()
+    try:
+        api.patch_cluster_custom_object(
+            group=group, version=version, plural=plural, name=profile_name,
+            body={"metadata": {"annotations": {PENDING_DELETE_ANNOTATION: username}}},
+        )
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            return True
+        print(f"[delete] cannot mark profile {profile_name}: {e}")
+        return False
+
+
+def _delete_profile_if_present(profile_name, email, fullname):
+    try:
+        delete_profile(profile_name, email, fullname)
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            return True
+        print(f"[delete] profile {profile_name} not deleted yet, will retry: {e}")
+        return False
+
+
+def retry_pending_profile_deletions(dry_run=False):
+    """Delete Profiles marked for deletion whose user is already gone from the DB.
+
+    A Profile without the marker is never touched, so Profiles that simply have no DB user
+    (kubeflow-user-example-com, for example) are safe.
+    """
+    api, _ = _make_k8s_custom_objects_api_views()
+    done = []
+    for profile in api.list_cluster_custom_object(group, version, plural).get("items", []):
+        metadata = profile.get("metadata", {})
+        username = (metadata.get("annotations", {}) or {}).get(PENDING_DELETE_ANNOTATION)
+        if not username or User.objects.filter(username=username).exists():
+            continue
+        name = metadata.get("name")
+        owner = ((profile.get("spec", {}) or {}).get("owner", {}) or {}).get("name", "")
+        print(f"[delete] {'would retry' if dry_run else 'retry'} deleting profile {name} of removed user {username}")
+        if dry_run or _delete_profile_if_present(name, owner, username):
+            done.append(name)
+    return done
 
 
 def deleteUserModelPermanent(username):
-    # 只永久刪除只在 TRASH 的使用者（同 v2607080741）；仍屬於其他 lab 的人保留帳號、namespace 與 Notebook 資料。
-    # 到期自動刪除（user_delete_check）與批次刪除都經過這裡。
-    if not is_only_in_trash(username):
-        print(f"[delete] skip permanent delete of {username}: still in other groups")
+    # 只永久刪除只在 TRASH 的使用者；仍屬於其他 lab 的人保留帳號、namespace 與 Notebook 資料。
+    # 到期自動刪除（user_delete_check）、單筆與批次刪除都經過這裡。
+    user_obj = User.objects.filter(username=username).first()
+    if user_obj is None or not is_only_in_trash(username):
+        print(f"[delete] skip permanent delete of {username}: not only in TRASH")
         return False
-    user_obj = User.objects.get(username=username)
     profileName = get_profile_by_email(user_obj.email)
+
+    # 1. 先標記 Profile：之後若刪除 Profile 失敗，對帳會依此標記重試。
+    if profileName and not _set_pending_delete(profileName, username):
+        return False
+
+    # 2. 在同一個交易內重新確認並刪除帳號。若另一個請求剛把人加回群組，這裡會看到並中止；
+    #    SQLite 一次只允許一個寫入交易，兩者不會同時成功。
+    try:
+        with transaction.atomic():
+            user_obj = User.objects.select_for_update().filter(username=username).first()
+            if user_obj is None or set(user_obj.groups.values_list("name", flat=True)) != {"TRASH"}:
+                print(f"[delete] abort permanent delete of {username}: membership changed")
+                user_obj = None
+            else:
+                k8s_name = user_obj.first_name + ' ' + user_obj.last_name
+                k8s_email = user_obj.email
+                user_obj.delete()
+    except Exception:
+        # 例如 SQLite「database is locked」：帳號沒刪，標記也要拿掉，避免之後被誤當成待刪除
+        if profileName:
+            _set_pending_delete(profileName, None)
+        raise
+    if user_obj is None:
+        if profileName:
+            _set_pending_delete(profileName, None)
+        return False
+    _trashed_at.pop(username, None)
+
+    # 3. LDAP（與原本相同，失敗不影響後續）
     conn = connectLDAP()
     try:
         conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
@@ -1804,11 +1907,11 @@ def deleteUserModelPermanent(username):
             conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
         except:
             pass
-    k8s_name = user_obj.first_name + ' ' + user_obj.last_name
-    k8s_email = user_obj.email    
-    User.objects.get(username=username).delete()
-    delete_profile(profileName, k8s_email, k8s_name)
     conn.unbind()
+
+    # 4. Profile（namespace 與 Notebook 資料）；失敗時保留標記，由 retry_pending_profile_deletions 重試
+    if profileName:
+        _delete_profile_if_present(profileName, k8s_email, k8s_name)
     return True
 
 def deleteUserModel(username):
@@ -1839,7 +1942,8 @@ def deleteUserModel(username):
             pass
     conn.unbind()
 
-    k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
+    _trashed_at[user_obj.username] = time.time()
+    k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=TRASH_RETENTION_DAYS))
     replace_profile_user_delete_date(username, k8s_date)
     sync_profile_groupshare_annotations(user_obj)
 
@@ -1967,6 +2071,9 @@ def user_delete(request):
     
     # 檢查用戶是否只在 TRASH 群組中
     if len(group_list) == 1 and group_list[0]['groupname'] == 'TRASH':
+        if trashed_recently(User.objects.get(username=username)):
+            # 重送的刪除請求不應把「移到 TRASH」變成永久刪除
+            return Response(status=200, data={"message": f"User {username} was just moved to TRASH; delete again later to remove permanently"})
         print(f"User {username} is only in TRASH group, deleting permanently")
         deleteUserModelPermanent(username)
         return Response(status=200, data={"message": f"User {username} permanently deleted"})
@@ -2814,10 +2921,16 @@ def synchronize_db_ldap():
 def multiple_user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
-    for user in users:
-        username = User.objects.get(username=user).username
-        # 與單筆刪除相同：只在 TRASH 的使用者永久刪除，其餘移至 TRASH
+    for username in dict.fromkeys(users):  # 名單內重複的使用者只處理一次
+        user_obj = User.objects.filter(username=username).first()
+        if user_obj is None:
+            continue  # 已被刪除（例如重送的請求）
+        # 與單筆刪除相同：只在 TRASH 的使用者永久刪除，其餘移至 TRASH。
+        # 剛移入 TRASH 的人（含本次請求、或重送前一次請求）不會被永久刪除。
         if is_only_in_trash(username):
+            if trashed_recently(user_obj):
+                print(f"User {username} was just moved to TRASH, not deleting permanently")
+                continue
             print(f"User {username} is only in TRASH group, deleting permanently")
             deleteUserModelPermanent(username)
         else:

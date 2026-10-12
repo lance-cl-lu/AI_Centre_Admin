@@ -49,12 +49,15 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
 - `python manage.py reconcile_groupshare [--dry-run]`（新）：手動執行。
 - `views.py`：群組刪除（含到期清理）、使用者停用、批次匯入既有使用者這三處原本沒有同步 Profile，已補上。
 - `TRASH` 與 `root` 一樣不產生共享資料夾（`groupshare_storage.GROUPSHARE_EXCLUDED_GROUPS`）。
-- 刪除保護（取自測試版 `v2607080741`）：`deleteUserModelPermanent` 只永久刪除「只在 TRASH」的使用者，到期自動刪除（`user_delete_check`）與批次刪除都經過它；批次刪除改成與單筆刪除相同，只在 TRASH 的永久刪除、其他移到 TRASH。`v2607080741` 的批次刪除在第一個永久刪除後就 `return`，其餘使用者沒處理，這裡已修正。`repair_share_directories` 的功能已由對帳涵蓋，沒有移植。
+- 刪除保護（取自測試版 `v2607080741`）：`deleteUserModelPermanent` 只永久刪除「只在 TRASH」的使用者，到期自動刪除（`user_delete_check`）與批次刪除都經過它；批次刪除改成與單筆刪除相同，只在 TRASH 的永久刪除、其他移到 TRASH。`v2607080741` 的批次刪除在第一個永久刪除後就 `return`，其餘使用者沒處理，這裡已修正。`repair_share_directories` 的功能已由對帳涵蓋，沒有移植。另外補上三個防止誤刪的保護：
+  - 重送或名單重複：剛移入 TRASH 的人（同一請求內，或 10 分鐘內，`TRASH_PERMANENT_DELETE_GRACE_SECONDS` 可調）不會被單筆／批次刪除永久刪除；過了這段時間再刪才會永久刪除。到期自動刪除不受影響。
+  - 並行還原：先在 Profile 加 `ldap-admin/pending-delete` 標記，再在同一個資料庫交易內重新確認「只在 TRASH」並刪除帳號；若另一個請求剛把人加回群組就中止並拿掉標記。
+  - Profile 刪除失敗：帳號刪除後若 Profile 刪除失敗，標記會留著，後端每輪對帳自動重試。只刪「有標記且 DB 已無此帳號」的 Profile，沒有標記的（例如 `kubeflow-user-example-com`）不會被動到。
 - `views.py` 第 1099 行：repo 版本把 `else:` 註解掉，會讓群組成員清單只列出 LDAP 找不到的人；已改回與線上一致。
 - `api/migrations/0006_groupdefaultquota_gpu_vendor.py`：線上容器啟動時自動產生、但 repo 沒有的 migration，已補上。
 - `Dockerfile.groupshare-overlay`：以線上 `v0.3.01` 為基底只覆蓋上述 Python 檔，前端與套件完全不變。
 
-測試：GroupShare 46 項、NamespaceShare 6 項、後端 20 項全部通過。
+測試：GroupShare 46 項、NamespaceShare 6 項、後端 26 項全部通過。
 
 ## .6（gpunode040）目前狀態
 
