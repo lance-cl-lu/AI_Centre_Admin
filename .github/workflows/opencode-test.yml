@@ -2,7 +2,7 @@ name: OpenCode Branch Test
 
 on:
   pull_request:
-    branches: [main]
+    branches: [test/opencode-target]
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:

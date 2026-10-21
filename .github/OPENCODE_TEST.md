@@ -1,9 +1,18 @@
 # OpenCode Branch Test
 
 This is a configuration smoke test on `test/opencode`. It uses the supported
-`pull_request` event so the workflow can run before being merged into `main`.
-The PR's base branch is `main`; its head must be `test/opencode` in this same
-repository. Fork PRs, other head branches, and GitHub Actions bot runs are skipped.
+`pull_request` event with a separate target branch, `test/opencode-target`.
+The PR's head must be `test/opencode` in this same repository. Fork PRs, other
+base/head branches, and GitHub Actions bot runs are skipped.
+
+| Role | Branch |
+| --- | --- |
+| PR head (source) | `test/opencode` |
+| PR base (target) | `test/opencode-target` |
+
+The target branch starts from `origin/main` as a baseline and contains no test
+changes. The workflow files live on the source branch. Testing does not require
+updating `main`, changing the default branch, or merging the test PR.
 
 ## Files to Publish
 
@@ -11,15 +20,19 @@ repository. Fork PRs, other head branches, and GitHub Actions bot runs are skipp
 - `.github/OPENCODE_TEST.md`
 
 Publish only these files on `test/opencode` after approval. Open a PR from that
-branch to `main` and leave it unmerged while testing. The `branches: [main]`
-filter selects the PR's base branch, while the job's `if` selects its head branch.
+branch to `test/opencode-target` and leave it unmerged while testing. The
+`branches: [test/opencode-target]` filter selects the PR's base branch, while
+the job's `if` selects its head branch.
 
 ## Setup and Trigger
 
 1. Add the Actions repository secret `OPENAI_API_KEY` with an OpenAI API key that
    has access to the configured model. No key value belongs in the files or PR.
-2. Push the approved test branch and open its PR to `main`. A draft PR is fine.
-3. Open the **OpenCode Branch Test** run in the PR checks or the Actions tab.
+2. After approval, publish `test/opencode-target` first, followed by
+   `test/opencode`. Creating these local branches alone does not start a run.
+3. Open a PR with base `test/opencode-target` and compare `test/opencode`.
+   A draft PR is fine. Do not select `main` as the base.
+4. Open the **OpenCode Branch Test** run in the PR checks or the Actions tab.
 
 Opening, updating, reopening, or marking the test PR ready for review starts a
 run. A push before a PR exists does not trigger this workflow. After the PR
@@ -61,9 +74,10 @@ personal access token, or Actions permission to create PRs is needed for it.
 
 ## Stop or Roll Back
 
-Close the test PR and cancel any active run. Delete the test branch when it is
-no longer needed. No application deployment or change to `main` is part of this
-test. Future uploads or changes require approval.
+Close the test PR and cancel any active run. Delete both `test/opencode` and
+`test/opencode-target` when they are no longer needed. No application deployment
+or change to `main` is part of this test. Future uploads or changes require
+approval.
 
 ## References
 
