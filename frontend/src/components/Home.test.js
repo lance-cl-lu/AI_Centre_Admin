@@ -65,6 +65,13 @@ test('a five-decimal rate already stored does not block saving the other rate', 
   expect(patchBodies[0]).toEqual({ cpuCostPerMinute: '0.04', gpuCostPerMinute: '0.70833' });
 });
 
+test('the page shows no leftover comment marker', async () => {
+  await renderHomeInEditMode();
+
+  expect(document.body.textContent).not.toContain('*/}');
+  expect(screen.getByText('通知總覽')).toBeInTheDocument();
+});
+
 test('a negative rate is still rejected', async () => {
   await renderHomeInEditMode();
 

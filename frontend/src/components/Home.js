@@ -2003,7 +2003,7 @@ function Home() {
                 </Card.Body>
               </Card>
             </Col>
-          </Row> */}
+          </Row>
 
         <Card className="mt-4">
           <Card.Header>Node Resource Monitor 費率設定</Card.Header>
