@@ -655,6 +655,68 @@ def get_profile_by_email(email):
         if p['spec']['owner']['name'].lower() == email.lower():
             return p['metadata']['name']
     return None
+
+
+def update_profile_owner_email(profile_name, old_email, new_email):
+    profile_api, _ = _make_k8s_custom_objects_api_views()
+    profile = profile_api.get_cluster_custom_object(group, version, plural, profile_name)
+    owner = profile.get('spec', {}).get('owner', {})
+    profile_owner_email = (owner.get('name') or '').strip().lower()
+    if not profile_owner_email:
+        raise ValueError(f"Profile {profile_name} has no owner email")
+
+    previous_emails = {(old_email or '').strip().lower(), profile_owner_email}
+    new_email_normalized = new_email.lower()
+
+    if profile_owner_email != new_email_normalized:
+        updated_profile = profile_api.patch_cluster_custom_object(
+            group=group,
+            version=version,
+            plural=plural,
+            name=profile_name,
+            body={"spec": {"owner": {"name": new_email_normalized}}},
+        )
+        updated_owner_email = (
+            updated_profile.get('spec', {}).get('owner', {}).get('name', '').lower()
+        )
+        if updated_owner_email != new_email_normalized:
+            raise RuntimeError(f"Profile {profile_name} owner email was not updated")
+
+    rbac_api = client.RbacAuthorizationV1Api(api_client=profile_api.api_client)
+    role_binding = rbac_api.read_namespaced_role_binding(
+        name='namespaceAdmin',
+        namespace=profile_name,
+    )
+    subjects = role_binding.subjects or []
+    old_subjects = [
+        subject for subject in subjects
+        if subject.kind == 'User' and subject.name.lower() in previous_emails
+    ]
+    has_new_subject = any(
+        subject.kind == 'User' and subject.name.lower() == new_email_normalized
+        for subject in subjects
+    )
+    if not old_subjects and not has_new_subject:
+        user_subjects = [subject for subject in subjects if subject.kind == 'User']
+        if len(user_subjects) == 1:
+            old_subjects = user_subjects
+    if not old_subjects and not has_new_subject:
+        raise ValueError(f"RoleBinding namespaceAdmin in {profile_name} has no subject for {old_email}")
+    for subject in old_subjects:
+        subject.name = new_email_normalized
+
+    annotations = role_binding.metadata.annotations or {}
+    annotations_changed = annotations.get('user') != new_email_normalized
+    if annotations_changed:
+        annotations['user'] = new_email_normalized
+        role_binding.metadata.annotations = annotations
+
+    if old_subjects or annotations_changed:
+        rbac_api.replace_namespaced_role_binding(
+            name='namespaceAdmin',
+            namespace=profile_name,
+            body=role_binding,
+        )
     
 def check_email(email):
     profiles = get_all_profiles()['items']
@@ -2195,6 +2257,17 @@ def change_user_info(request):
     gpu_quota = data['gpu_quota']
 
     try:
+        user = User.objects.get(username=username)
+        old_email = user.email
+        profileName = get_profile_by_email(old_email)
+        if not profileName and get_profile_content(username.lower()):
+            profileName = username.lower()
+        if (old_email or '').lower() != email.lower() and not profileName:
+            raise ValueError(f"No Profile found for {old_email}")
+
+        if profileName:
+            update_profile_owner_email(profileName, old_email, email)
+
         conn = connectLDAP()
         conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
         for entry in conn.entries:
@@ -2203,7 +2276,6 @@ def change_user_info(request):
             conn.modify(entry.entry_dn, {'mail': [(MODIFY_REPLACE, [email])]})
         conn.unbind()
             
-        user = User.objects.get(username=username)
         user.first_name = firstname
         user.last_name = lastname
         user.email = email
@@ -2211,7 +2283,6 @@ def change_user_info(request):
 
         user_obj = User.objects.get(username=data['username'])
         detail_obj = UserDetail.objects.filter(uid=user_obj.id)
-        profileName = get_profile_by_email(user_obj.email)
 
         replace_profile(profileName,cpu_quota,gpu_quota,mem_quota)
         # manager = 'user'
@@ -2252,10 +2323,10 @@ def change_user_info(request):
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
             print("manager = ", manager)
-            profileName = get_profile_by_email(user_obj.email)
             replace_profile_user(profileName, manager, str(cpu_quota), str(gpu_quota), str(mem_quota))
         return Response(status=200)
-    except:
+    except Exception:
+        logger.exception("Failed to update user information for %s", username)
         return Response(status=500)
 
 

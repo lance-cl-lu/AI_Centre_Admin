@@ -4,6 +4,9 @@ import stat
 import tempfile
 import unittest
 from unittest import mock
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
+import importlib
 
 from django.test import RequestFactory, TestCase as DjangoTestCase
 
@@ -365,3 +368,88 @@ class TrashDeletionTests(DjangoTestCase):
 
         self.assertFalse(self.views.deleteUserModelPermanent("trashed"))
         self.assertTrue(self.exists("trashed"))
+
+
+class ProfileOwnerEmailTests(unittest.TestCase):
+    def setUp(self):
+        self.views = importlib.import_module("api.views")
+
+    @patch("api.views.client.RbacAuthorizationV1Api")
+    @patch("api.views._make_k8s_custom_objects_api_views")
+    def test_update_profile_owner_email_updates_profile_and_namespace_rolebinding(
+        self,
+        make_profile_api,
+        rbac_api_class,
+    ):
+        profile = {
+            "metadata": {"name": "alice"},
+            "spec": {"owner": {"kind": "User", "name": "old@example.edu"}},
+        }
+        profile_api = SimpleNamespace(api_client=object())
+        profile_api.get_cluster_custom_object = Mock(return_value=profile)
+
+        def patch_profile(**kwargs):
+            profile["spec"]["owner"].update(kwargs["body"]["spec"]["owner"])
+            return profile
+
+        profile_api.patch_cluster_custom_object = Mock(side_effect=patch_profile)
+        make_profile_api.return_value = (profile_api, "kubeconfig")
+
+        subject = SimpleNamespace(kind="User", name="old@example.edu")
+        role_binding = SimpleNamespace(
+            subjects=[subject],
+            metadata=SimpleNamespace(annotations={"user": "old@example.edu"}),
+        )
+        rbac_api = rbac_api_class.return_value
+        rbac_api.read_namespaced_role_binding.return_value = role_binding
+
+        # The Django user may already have the new email after a previous partial attempt.
+        self.views.update_profile_owner_email("alice", "new@example.edu", "new@example.edu")
+
+        self.assertEqual(profile["spec"]["owner"]["name"], "new@example.edu")
+        self.assertEqual(subject.name, "new@example.edu")
+        rbac_api.replace_namespaced_role_binding.assert_called_once_with(
+            name="namespaceAdmin",
+            namespace="alice",
+            body=role_binding,
+        )
+        self.assertEqual(role_binding.metadata.annotations["user"], "new@example.edu")
+        profile_api.patch_cluster_custom_object.assert_called_once_with(
+            group=self.views.group,
+            version=self.views.version,
+            plural=self.views.plural,
+            name="alice",
+            body={"spec": {"owner": {"name": "new@example.edu"}}},
+        )
+
+    @patch("api.views.client.RbacAuthorizationV1Api")
+    @patch("api.views._make_k8s_custom_objects_api_views")
+    def test_update_rolebinding_annotation_when_subject_is_already_updated(
+        self,
+        make_profile_api,
+        rbac_api_class,
+    ):
+        profile = {
+            "metadata": {"name": "alice"},
+            "spec": {"owner": {"kind": "User", "name": "new@example.edu"}},
+        }
+        profile_api = SimpleNamespace(api_client=object())
+        profile_api.get_cluster_custom_object = Mock(return_value=profile)
+        make_profile_api.return_value = (profile_api, "kubeconfig")
+
+        subject = SimpleNamespace(kind="User", name="new@example.edu")
+        role_binding = SimpleNamespace(
+            subjects=[subject],
+            metadata=SimpleNamespace(annotations={"user": "old@example.edu"}),
+        )
+        rbac_api = rbac_api_class.return_value
+        rbac_api.read_namespaced_role_binding.return_value = role_binding
+
+        self.views.update_profile_owner_email("alice", "old@example.edu", "new@example.edu")
+
+        self.assertEqual(role_binding.metadata.annotations["user"], "new@example.edu")
+        rbac_api.replace_namespaced_role_binding.assert_called_once_with(
+            name="namespaceAdmin",
+            namespace="alice",
+            body=role_binding,
+        )
