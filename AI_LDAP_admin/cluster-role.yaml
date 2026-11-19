@@ -20,6 +20,26 @@ rules:
   - delete
   - patch
   - update
+# Changing a user's email moves the namespace's namespaceAdmin RoleBinding to the new
+# address (api/views.py update_profile_owner_email). Updating a binding is checked for
+# privilege escalation, so the backend also needs bind on the role it references.
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  resourceNames:
+  - namespaceAdmin
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  resourceNames:
+  - kubeflow-admin
+  verbs:
+  - bind
 - apiGroups:
   - kubeflow.org  
   resources:
