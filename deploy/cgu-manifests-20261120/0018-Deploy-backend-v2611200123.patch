@@ -1,0 +1,27 @@
+From 8759115386be0816ad5b29e5425eb94ea164fa83 Mon Sep 17 00:00:00 2001
+From: MarkJiang-maji <chiang142536@gmail.com>
+Date: Fri, 20 Nov 2026 01:25:54 +0800
+Subject: [PATCH 18/19] Deploy backend v2611200123
+
+Rebuilt from AI_Centre_Admin 00db3d7: an email change now also moves the namespace's owner annotation, without which the profile controller stops reconciling the Profile. v2611200046 lacks this and must not be deployed.
+---
+ example/kustomization.yaml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/example/kustomization.yaml b/example/kustomization.yaml
+index 6033b440..60ac3331 100644
+--- a/example/kustomization.yaml
++++ b/example/kustomization.yaml
+@@ -116,7 +116,7 @@ patches:
+ images:
+ - name: gcr.io/kubebuilder/kube-rbac-proxy
+   newName: quay.io/brancz/kube-rbac-proxy
+-# Backend built from AI_Centre_Admin branch integration-20261120 (full Dockerfile, frontend
++# Backend built from AI_Centre_Admin branch integration-20261120 (00db3d7, full Dockerfile, frontend
+ # included): GroupShare reconcile, email change keeps Profile/RoleBinding in step, 5-decimal rates.
+ - name: docker.io/cguaicadmin/ldap_backend
+-  newTag: v2611200046
++  newTag: v2611200123
+-- 
+2.43.0
+

@@ -1,0 +1,2913 @@
+From a284a1923fc410a6b01b17d96443ba38fbe5fcde Mon Sep 17 00:00:00 2001
+From: MarkJiang-maji <chiang142536@gmail.com>
+Date: Mon, 12 Oct 2026 14:37:21 +0800
+Subject: [PATCH 01/19] Make GroupShare deploy correctly on every environment
+
+- Sync cgu/groupshare and cgu/namespace_share with the configuration
+  running on .6 since the September certificate fix: CA Issuer and
+  serving certificate, 2 webhook replicas with PDB, TLS hot reload,
+  probes.
+- Drop caBundle: "" from the ValidatingWebhookConfiguration; every
+  apply blanked the API server's trust and blocked all Notebook
+  create/update until cainjector re-injected it.
+- Ship controller and webhook code as kustomize-generated immutable
+  ConfigMaps, so code changes roll out without rebuilding images.
+- Controllers read NFS settings from the ConfigMap written by apply.sh
+  and no longer crash when the provisioner Deployment has another name
+  or namespace; they flag notebook Pods whose group mounts are stale
+  (annotation + Event, no restart).
+- Remove the example Notebook that made apply.sh retry forever while
+  the webhook was not ready, and superseded code ConfigMaps.
+- apply.sh runs cgu/groupshare/scripts/bootstrap.sh (NFS directories,
+  webhook CA and trust Secrets, with trust overlap for older
+  deployments) and check.sh. All steps are idempotent.
+- Pin the backend to ldap_backend:v2610121415 (GroupShare
+  reconciliation); push that image before applying.
+
+See cgu/groupshare/docs/deploy-handoff-20261012.md.
+---
+ apply.sh                                      |   8 +
+ cgu/groupshare/README.md                      |  73 ++--
+ cgu/groupshare/controller/app.py              | 336 ++++++++++++++++++
+ cgu/groupshare/controller/parser.py           |  67 ++++
+ .../deploy/controller-code-configmap.yaml     | 296 ---------------
+ cgu/groupshare/deploy/controller-rbac.yaml    |  10 +
+ .../deploy/controller-runtime-patch.yaml      |  21 ++
+ .../deploy/notebook-template-groupshare.yaml  |  19 -
+ .../validating-webhook-configuration.yaml     |   5 +-
+ cgu/groupshare/deploy/webhook-ca-issuer.yaml  |   8 +
+ .../webhook-certificate-monitoring.yaml       | 112 ++++++
+ .../deploy/webhook-certificate.yaml           |  13 -
+ .../deploy/webhook-code-configmap.yaml        | 250 -------------
+ cgu/groupshare/deploy/webhook-deployment.yaml |  86 ++++-
+ cgu/groupshare/deploy/webhook-pdb.yaml        |  10 +
+ .../deploy/webhook-serving-certificate.yaml   |  19 +
+ .../docs/certificate-maintenance.md           | 244 +++++++++++++
+ .../docs/deploy-handoff-20261012.md           | 158 ++++++++
+ cgu/groupshare/kustomization.yaml             |  33 +-
+ cgu/groupshare/scripts/bootstrap.sh           | 125 +++++++
+ cgu/groupshare/scripts/check.sh               |  50 +++
+ cgu/groupshare/webhook/app.py                 |  21 +-
+ cgu/groupshare/webhook/rules.py               |  14 +-
+ cgu/groupshare/webhook/tls_reload.py          |  71 ++++
+ cgu/namespace_share/controller/app.py         | 197 ++++++++++
+ cgu/namespace_share/controller/parser.py      |  20 ++
+ .../deploy/controller-code-configmap.yaml     | 211 -----------
+ .../deploy/controller-runtime-patch.yaml      |  21 ++
+ cgu/namespace_share/kustomization.yaml        |  14 +-
+ example/kustomization.yaml                    |   4 +
+ 30 files changed, 1670 insertions(+), 846 deletions(-)
+ create mode 100644 cgu/groupshare/controller/app.py
+ create mode 100644 cgu/groupshare/controller/parser.py
+ delete mode 100644 cgu/groupshare/deploy/controller-code-configmap.yaml
+ create mode 100644 cgu/groupshare/deploy/controller-runtime-patch.yaml
+ delete mode 100644 cgu/groupshare/deploy/notebook-template-groupshare.yaml
+ create mode 100644 cgu/groupshare/deploy/webhook-ca-issuer.yaml
+ create mode 100644 cgu/groupshare/deploy/webhook-certificate-monitoring.yaml
+ delete mode 100644 cgu/groupshare/deploy/webhook-certificate.yaml
+ delete mode 100644 cgu/groupshare/deploy/webhook-code-configmap.yaml
+ create mode 100644 cgu/groupshare/deploy/webhook-pdb.yaml
+ create mode 100644 cgu/groupshare/deploy/webhook-serving-certificate.yaml
+ create mode 100644 cgu/groupshare/docs/certificate-maintenance.md
+ create mode 100644 cgu/groupshare/docs/deploy-handoff-20261012.md
+ create mode 100755 cgu/groupshare/scripts/bootstrap.sh
+ create mode 100755 cgu/groupshare/scripts/check.sh
+ create mode 100644 cgu/groupshare/webhook/tls_reload.py
+ create mode 100644 cgu/namespace_share/controller/app.py
+ create mode 100644 cgu/namespace_share/controller/parser.py
+ delete mode 100644 cgu/namespace_share/deploy/controller-code-configmap.yaml
+ create mode 100644 cgu/namespace_share/deploy/controller-runtime-patch.yaml
+
+diff --git a/apply.sh b/apply.sh
+index 11c8f732..ccff985a 100755
+--- a/apply.sh
++++ b/apply.sh
+@@ -80,9 +80,14 @@ sed -i "s|NFS_PATH:.*|NFS_PATH: \"${NAMESPACE_SHARE_NFS_PATH_ESCAPED}\"|" "${NAM
+ # Keep ldap backend groupshare NFS settings synced with env.ini before applying manifests.
+ sed -i "/- name: groupshare-storage/{n;n;s|server:.*|server: ${QNAP_IP_ESCAPED}|;n;s|path:.*|path: ${QNAP_MOUNT_ESCAPED}|;}" "${LDAP_BACKEND_DEPLOY}"
+ 
++# GroupShare prerequisites kustomize cannot express (idempotent; existing objects are kept).
++QNAP_IP="${QNAP_IP}" QNAP_MOUNT="${QNAP_MOUNT}" bash cgu/groupshare/scripts/bootstrap.sh nfs
++bash cgu/groupshare/scripts/bootstrap.sh secrets
++
+ kubectl delete svc -n istio-system istio-ingressgateway
+ while ! kustomize build ./example | kubectl apply -f -; do echo "Retrying to apply resources"; sleep 20; done
+ kubectl patch svc -n istio-system istio-ingressgateway -p "{\"spec\":{\"externalIPs\":[\"${MASTER_IP}\"]}}"
++bash cgu/groupshare/scripts/bootstrap.sh webhook
+ # kubectl patch svc -n istio-system istio-ingressgateway -p '{"spec":{"type":"ClusterIP"}}'
+ kubectl taint nodes $(hostname -s) node-role.kubernetes.io/control-plane:NoSchedule
+ helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
+@@ -103,3 +108,6 @@ QNAP_PASSWORD_64=`echo -n ${QNAP_PASSWORD} | base64`
+ 
+ kubectl patch cm qnap-config -n kubeflow -p "{\"data\":{\"ip\":\"${QNAP_IP_64}\",\"username\":\"${QNAP_USERNAME_64}\",\"password\":\"${QNAP_PASSWORD_64}\"}}"
+ python3 addqnap.py
++
++# Post-deploy GroupShare / NamespaceShare verification (read-only).
++bash cgu/groupshare/scripts/check.sh env.ini
+diff --git a/cgu/groupshare/README.md b/cgu/groupshare/README.md
+index 178bb699..c2303264 100644
+--- a/cgu/groupshare/README.md
++++ b/cgu/groupshare/README.md
+@@ -3,6 +3,8 @@
+ 目標：
+ 讓 Kubeflow Notebook 可以自動看到「自己群組的共享資料夾」，同時避免使用者繞過規則亂掛 NFS。
+ 
++2026-09-09 線上憑證維護入口：[憑證自動續期、熱載入與年度維護文件](docs/certificate-maintenance.md)。目前使用穩定 CA、400 天服務憑證、提前 60 天自動續期及兩個 webhook 副本。
++
+ ## GroupShare 在做什麼
+ 
+ 1. Account Manager 會把群組資訊寫進 Profile annotation
+@@ -14,7 +16,7 @@
+ - 每個 Profile namespace 一個 `PodDefault/groupshare`
+ - `PodDefault/groupshare` 使用空 selector `{}`，Profile namespace 內的 Notebook 會預設被注入掛載
+ - 掛載點是 `/mnt/groups/<group>`
+-- NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/kflow_dev/shared`）
++- NFS 實體路徑是 `NFS_PATH/<group>`（例如 `NFS_PATH=/Public/shared`）
+ 
+ 3. Webhook 擋繞過
+ - 擋掉使用者自己宣告 `/group*` 路徑
+@@ -32,18 +34,26 @@
+ - `webhook/`
+   - `app.py`: Validating Admission Webhook API
+   - `rules.py`: Rule A/B/C 驗證核心
++  - `tls_reload.py`: 每次 TLS 握手載入最新完整憑證，更新失敗時保留有效 context
+   - `Dockerfile`: webhook 映像建置檔
+ 
++- `kustomization.yaml`: 唯一部署入口（`kubectl apply -k`）。程式碼以 `configMapGenerator` 產生帶內容雜湊的不可變更 ConfigMap，程式一改就自動換名並滾動更新，不需重建映像。
+ - `deploy/`
+-  - `controller-rbac.yaml`: controller 權限
+-  - `controller-configmap.yaml`: GroupShare 專用 NFS 設定（例如 `NFS_SERVER`、`NFS_PATH`）
+-  - `controller-deployment.yaml`: controller 部署
+-  - `webhook-rbac.yaml`: webhook 權限
+-  - `webhook-deployment.yaml`: webhook 部署
+-  - `webhook-service.yaml`: webhook service
+-  - `validating-webhook-configuration.yaml`: admission 規則與 `failurePolicy: Fail`
+-  - `webhook-certificate.yaml`: TLS certificate 資源
+-  - `notebook-template-groupshare.yaml`: 舊版標籤式範例模板，現行自動掛載流程不再依賴它
++  - `controller-rbac.yaml`: controller 權限（含標記待重啟 Notebook Pod 所需的 pods/events/notebooks 權限）
++  - `controller-configmap.yaml`: GroupShare 專用 NFS 設定（`NFS_SERVER`、`NFS_PATH`）；controller 以此為準，provisioner Deployment 只是備用來源
++  - `controller-deployment.yaml`: controller 部署（環境值由 cgu-manifests 的 apply.sh 依 env.ini 改寫）
++  - `controller-runtime-patch.yaml`: 讓 controller 從產生的 ConfigMap 執行程式碼
++  - `webhook-rbac.yaml`、`webhook-service.yaml`、`webhook-deployment.yaml`、`webhook-pdb.yaml`: webhook（2 副本、TLS 熱載入、健康檢查）
++  - `validating-webhook-configuration.yaml`: admission 規則與 `failurePolicy: Fail`；`caBundle` 由 cainjector 從 trust Secret 注入，manifest 內不可設定
++  - `webhook-serving-certificate.yaml`、`webhook-ca-issuer.yaml`: 現行 TLS certificate 與 CA Issuer
++  - `webhook-certificate-monitoring.yaml`: 監測與告警；由 `scripts/bootstrap.sh webhook` 在有 Prometheus Operator CRD 時套用
++  - `webhook-certificate.yaml`: 舊 SelfSigned 憑證，僅保留供回復使用，不在 kustomization 內
++  - `notebook-template-groupshare.yaml`: 舊版標籤式範例模板，不在 kustomization 內
++
++- `scripts/`
++  - `bootstrap.sh nfs|webhook`: kustomize 無法表達的前置作業（NFS 根目錄、webhook CA 與 trust Secret）；可重複執行，不覆蓋既有物件
++  - `check.sh`: 部署後唯讀檢查，含「需重啟才會套用新掛載」的 Notebook Pod 清單
++  - `export-to-cgu-manifests.sh`: 把本目錄同步到 cgu-manifests（本 repository 為唯一來源）
+ 
+ - `tests/`
+   - `controller/test_app.py`: PodDefault selector 與既有 selector 更新測試
+@@ -54,18 +64,11 @@
+   - `profile-annotation-spec.md`: annotation 格式與轉換規則
+   - `groupshare-mount-guide.md`: 使用者視角掛載說明
+   - `test-cases.md`: 測試案例與整合驗證步驟
++  - `certificate-maintenance.md`: 憑證故障修復、續期驗證與年度維護流程
+ 
+ ## 現在的驗證狀態
+ 
+-已完成：
+-- Python 單元測試（17 tests）通過
+-- Python 語法編譯檢查通過
+-- `kubectl apply --dry-run=client` 全部通過
+-- `kubectl apply --dry-run=server` 全部通過
+-
+-尚未做（正式上線前）：
+-- 實際 `kubectl apply` 到目標叢集
+-- 確認 cert-manager 可正常注入 webhook `caBundle`
++2026-09-09：31 項測試通過，包含 12 次連續熱載入；已實際部署並以 cmctl 觸發憑證及私鑰續期，兩個副本不重啟即可提供新憑證。完整現場驗收紀錄見憑證維護文件。
+ 
+ ## 快速測試
+ 
+@@ -75,22 +78,24 @@ python -m unittest discover -s tests -p 'test_*.py'
+ python -m py_compile controller/app.py controller/parser.py webhook/app.py webhook/rules.py
+ ```
+ 
+-## 建議上線順序
++## 部署
++
++正式環境由 cgu-manifests 的 `apply.sh` 部署，它會依序執行 `scripts/bootstrap.sh nfs`、整體 kustomize、`scripts/bootstrap.sh webhook` 與 `scripts/check.sh`。只更新 GroupShare 時：
+ 
+-1. 套用資源（本版本採 `python:3.11-slim + ConfigMap`，不需先建私有映像）
+ ```bash
+-kubectl apply -f deploy/controller-rbac.yaml
+-kubectl apply -f deploy/controller-configmap.yaml
+-kubectl apply -f deploy/controller-code-configmap.yaml
+-kubectl apply -f deploy/controller-deployment.yaml
+-kubectl apply -f deploy/webhook-rbac.yaml
+-kubectl apply -f deploy/webhook-code-configmap.yaml
+-kubectl apply -f deploy/webhook-certificate.yaml
+-kubectl apply -f deploy/webhook-deployment.yaml
+-kubectl apply -f deploy/webhook-service.yaml
+-kubectl apply -f deploy/validating-webhook-configuration.yaml
++bash groupshare/scripts/export-to-cgu-manifests.sh /path/to/cgu-manifests   # 先同步程式與 manifest
++cd /path/to/cgu-manifests                                                     # env 值已由 apply.sh 依 env.ini 寫入
++kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share           # 確認差異
++kubectl apply -k cgu/groupshare && kubectl apply -k cgu/namespace_share
++bash cgu/groupshare/scripts/check.sh env.ini
+ ```
+ 
+-2. 可選：若要正式產品化，再改成自建映像
+-- 用 `controller/Dockerfile`、`webhook/Dockerfile` 建置映像
+-- 更新 `deploy/*-deployment.yaml` 的 image
++不要只為 GroupShare 執行整個 `apply.sh`：它會刪除並重建 `istio-ingressgateway`，造成全體使用者短暫斷線。
++
++## 群組變更與既有 Notebook
++
++Kubernetes 無法修改執行中 Pod 的 volume，PodDefault 只在建立 Pod 時注入。controller 每輪比對 Notebook Pod 實際的群組掛載與目前 PodDefault，不一致時在 Pod 加上 `groupshare.kubeflow.org/restart-required` annotation，並對 Notebook 發出 `GroupShareRestartRequired` Event（Kubeflow 的 Notebook 詳細頁可見）。它不會重啟任何 Pod；使用者下次停止再啟動 Notebook 即套用新掛載，`/home/jovyan` 的檔案不受影響。
++
++群組資料由後端定期對帳（`api/groupshare_reconcile.py`，預設每 600 秒，`GROUPSHARE_RECONCILE_INTERVAL_SECONDS=0` 可停用），補正 Profile annotations 並建立缺少的群組與 namespace 目錄。手動執行：`python manage.py reconcile_groupshare --dry-run`。
++
++線上沿用既有依賴映像，以 kustomize 產生的不可變更 ConfigMap 發布程式碼；不要原地修改已發布的 ConfigMap。
+diff --git a/cgu/groupshare/controller/app.py b/cgu/groupshare/controller/app.py
+new file mode 100644
+index 00000000..42297b1d
+--- /dev/null
++++ b/cgu/groupshare/controller/app.py
+@@ -0,0 +1,336 @@
++import datetime
++import hashlib
++import logging
++import os
++import time
++from typing import Dict, List, Optional, Tuple
++
++from kubernetes import client, config
++from kubernetes.client.rest import ApiException
++
++from parser import (
++    build_group_nfs_path,
++    parse_csv_list,
++    parse_manager_groups,
++    intersect_groups,
++    sanitize_group_token,
++    to_volume_name,
++)
++
++
++logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
++logger = logging.getLogger("groupshare-controller")
++
++PROFILE_GROUP = "kubeflow.org"
++PROFILE_VERSION = "v1"
++PROFILE_PLURAL = "profiles"
++PODDEFAULT_GROUP = "kubeflow.org"
++PODDEFAULT_VERSION = "v1alpha1"
++PODDEFAULT_PLURAL = "poddefaults"
++
++NFS_NAMESPACE = os.getenv("NFS_NAMESPACE", "kubeflow")
++NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
++NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "groupshare-nfs-defaults")
++PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
++PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
++POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
++NOTEBOOK_POD_LABEL = "notebook-name"
++RESTART_REQUIRED_ANNOTATION = "groupshare.kubeflow.org/restart-required"
++
++
++class GroupshareController:
++    def __init__(self) -> None:
++        config.load_incluster_config()
++        self.co_api = client.CustomObjectsApi()
++        self.apps_api = client.AppsV1Api()
++        self.core_api = client.CoreV1Api()
++        self.nfs_server, self.nfs_path = "", ""
++        self.desired_mounts: Dict[str, Dict[str, Tuple[str, bool]]] = {}
++
++    def _load_nfs_settings(self) -> Tuple[str, str]:
++        # The ConfigMap written by apply.sh is authoritative. The provisioner Deployment is only a
++        # fallback source, so a cluster whose provisioner has another name or namespace still works.
++        cm_data = {}
++        try:
++            cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
++            cm_data = cm.data or {}
++        except ApiException as exc:
++            if exc.status != 404:
++                raise
++
++        nfs_path = (cm_data.get("NFS_PATH") or "").strip()
++        nfs_server = (cm_data.get("NFS_SERVER") or "").strip()
++        if not nfs_path or not nfs_server:
++            env_map = {}
++            try:
++                dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
++                for container in dep.spec.template.spec.containers:
++                    for env_var in container.env or []:
++                        env_map[env_var.name] = env_var.value
++            except ApiException as exc:
++                if exc.status != 404:
++                    raise
++            nfs_path = nfs_path or (env_map.get("NFS_PATH") or "").strip()
++            nfs_server = nfs_server or (env_map.get("NFS_SERVER") or "").strip()
++
++        if not nfs_path:
++            raise RuntimeError(
++                f"NFS_PATH missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
++            )
++        if not nfs_server:
++            raise RuntimeError(
++                f"NFS_SERVER missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
++            )
++
++        if (nfs_server, nfs_path) != (self.nfs_server, self.nfs_path):
++            logger.info("[INFO] Loaded NFS settings: server=%s path=%s", nfs_server, nfs_path)
++        return nfs_server, nfs_path
++
++    def _build_spec(self, groups: List[str], admin_groups: List[str]) -> dict:
++        admin_set = set(admin_groups)
++
++        volume_mounts = []
++        volumes = []
++        volume_names = []
++        sanitized_admin_volume_names = []
++        allowed_nfs_paths = []
++
++        for group in groups:
++            mount_token = sanitize_group_token(group)
++            if not mount_token:
++                continue
++
++            volume_name = to_volume_name(group)
++            volume_names.append(volume_name)
++            if group in admin_set:
++                sanitized_admin_volume_names.append(volume_name)
++
++            nfs_path = build_group_nfs_path(self.nfs_path, group)
++            allowed_nfs_paths.append(nfs_path)
++
++            volume_mounts.append(
++                {
++                    "name": volume_name,
++                    "mountPath": f"/mnt/groups/{mount_token}",
++                    "readOnly": group not in admin_set,
++                }
++            )
++
++            volumes.append(
++                {
++                    "name": volume_name,
++                    "nfs": {
++                        "server": self.nfs_server,
++                        "path": nfs_path,
++                        "readOnly": group not in admin_set,
++                    },
++                }
++            )
++
++        annotations = {
++            "groupshare.kubeflow.org/nfs-server": self.nfs_server,
++            "groupshare.kubeflow.org/allowed-volumes": ",".join(volume_names),
++            "groupshare.kubeflow.org/admin-groups": ",".join(sanitized_admin_volume_names),
++            "groupshare.kubeflow.org/allowed-paths": ",".join(allowed_nfs_paths),
++        }
++
++        return {
++            "apiVersion": "kubeflow.org/v1alpha1",
++            "kind": "PodDefault",
++            "metadata": {
++                "name": PODDEFAULT_NAME,
++                "annotations": annotations,
++            },
++            "spec": {
++                "desc": "GroupShare auto-generated mounts",
++                "selector": {},
++                "volumeMounts": volume_mounts,
++                "volumes": volumes,
++            },
++        }
++
++    def _hash_annotations(self, groups_raw: str, managers_raw: str) -> str:
++        raw = f"{groups_raw}|{managers_raw}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
++        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
++
++    def sync_profile(self, profile: dict) -> None:
++        metadata = profile.get("metadata", {})
++        annotations = metadata.get("annotations", {}) or {}
++        namespace = metadata.get("name")
++
++        if not namespace:
++            return
++
++        groups_raw = annotations.get("group", "")
++        managers_raw = parse_manager_groups(annotations)
++
++        groups = parse_csv_list(groups_raw)
++        managers = parse_csv_list(managers_raw)
++        admin_groups, warnings = intersect_groups(groups, managers)
++
++        for warning in warnings:
++            logger.warning("[WARN] %s namespace=%s", warning, namespace)
++
++        current_hash = self._hash_annotations(groups_raw, managers_raw)
++        body = self._build_spec(groups, admin_groups)
++        self.desired_mounts[namespace] = {
++            volume["name"]: (volume["nfs"]["path"], volume["nfs"]["readOnly"]) for volume in body["spec"]["volumes"]
++        }
++        body["metadata"]["namespace"] = namespace
++        body["metadata"]["annotations"]["groupshare.kubeflow.org/hash"] = current_hash
++
++        try:
++            existing = self.co_api.get_namespaced_custom_object(
++                group=PODDEFAULT_GROUP,
++                version=PODDEFAULT_VERSION,
++                namespace=namespace,
++                plural=PODDEFAULT_PLURAL,
++                name=PODDEFAULT_NAME,
++            )
++            existing_hash = (
++                existing.get("metadata", {})
++                .get("annotations", {})
++                .get("groupshare.kubeflow.org/hash", "")
++            )
++            existing_selector = existing.get("spec", {}).get("selector", {})
++            desired_selector = body.get("spec", {}).get("selector", {})
++            if existing_hash == current_hash and existing_selector == desired_selector:
++                logger.info("[INFO] Synced Profile namespace=%s no changes", namespace)
++                return
++            body["metadata"]["resourceVersion"] = existing.get("metadata", {}).get("resourceVersion")
++            self.co_api.replace_namespaced_custom_object(
++                group=PODDEFAULT_GROUP,
++                version=PODDEFAULT_VERSION,
++                namespace=namespace,
++                plural=PODDEFAULT_PLURAL,
++                name=PODDEFAULT_NAME,
++                body=body,
++            )
++            action = "Updated"
++        except ApiException as e:
++            if e.status != 404:
++                raise
++            self.co_api.create_namespaced_custom_object(
++                group=PODDEFAULT_GROUP,
++                version=PODDEFAULT_VERSION,
++                namespace=namespace,
++                plural=PODDEFAULT_PLURAL,
++                body=body,
++            )
++            action = "Created"
++
++        logger.info("[INFO] %s PodDefault namespace=%s name=%s", action, namespace, PODDEFAULT_NAME)
++
++    def _actual_mounts(self, pod) -> Dict[str, Tuple[str, bool]]:
++        mounts = {}
++        for volume in pod.spec.volumes or []:
++            nfs = getattr(volume, "nfs", None)
++            if not volume.name.startswith("gs-") or nfs is None or nfs.server != self.nfs_server:
++                continue
++            mounts[volume.name] = (nfs.path, bool(nfs.read_only))
++        return mounts
++
++    @staticmethod
++    def describe_mount_drift(
++        desired: Dict[str, Tuple[str, bool]], actual: Dict[str, Tuple[str, bool]]
++    ) -> Optional[str]:
++        """Describe how a Pod's group mounts differ from its PodDefault, or None when they match."""
++        added = sorted(set(desired) - set(actual))
++        removed = sorted(set(actual) - set(desired))
++        changed = sorted(name for name in set(desired) & set(actual) if desired[name] != actual[name])
++        parts = []
++        if added:
++            parts.append("added=" + ",".join(added))
++        if removed:
++            parts.append("removed=" + ",".join(removed))
++        if changed:
++            parts.append("changed=" + ",".join(changed))
++        return ";".join(parts) or None
++
++    def _emit_restart_event(self, pod, notebook_name: str, drift: str) -> None:
++        namespace = pod.metadata.namespace
++        involved = {"apiVersion": "v1", "kind": "Pod", "name": pod.metadata.name, "namespace": namespace,
++                    "uid": pod.metadata.uid}
++        try:
++            notebook = self.co_api.get_namespaced_custom_object(
++                group="kubeflow.org", version="v1", namespace=namespace, plural="notebooks", name=notebook_name
++            )
++            involved = {"apiVersion": "kubeflow.org/v1", "kind": "Notebook", "name": notebook_name,
++                        "namespace": namespace, "uid": notebook["metadata"]["uid"]}
++        except ApiException as exc:
++            logger.warning("[WARN] Notebook %s/%s not readable for event: %s", namespace, notebook_name, exc.status)
++
++        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++        self.core_api.create_namespaced_event(
++            namespace=namespace,
++            body={
++                "apiVersion": "v1",
++                "kind": "Event",
++                "metadata": {"generateName": f"{pod.metadata.name}.groupshare-", "namespace": namespace},
++                "involvedObject": involved,
++                "type": "Warning",
++                "reason": "GroupShareRestartRequired",
++                "message": (
++                    f"Group share mounts changed ({drift}). Stop and start this notebook to apply them; "
++                    "files in /home/jovyan are kept."
++                ),
++                "source": {"component": "groupshare-controller"},
++                "reportingComponent": "groupshare-controller",
++                "firstTimestamp": now,
++                "lastTimestamp": now,
++                "count": 1,
++            },
++        )
++
++    def check_notebook_pods(self) -> None:
++        """Flag running notebook Pods whose group mounts are older than their PodDefault.
++
++        Kubernetes cannot change the volumes of a running Pod, so the controller only annotates the Pod
++        and emits an Event; the new mounts apply the next time the notebook restarts.
++        """
++        pods = self.core_api.list_pod_for_all_namespaces(label_selector=NOTEBOOK_POD_LABEL)
++        for pod in pods.items:
++            namespace = pod.metadata.namespace
++            desired = self.desired_mounts.get(namespace)
++            if desired is None or pod.status.phase not in ("Pending", "Running"):
++                continue
++
++            drift = self.describe_mount_drift(desired, self._actual_mounts(pod))
++            annotations = pod.metadata.annotations or {}
++            if annotations.get(RESTART_REQUIRED_ANNOTATION) == drift:
++                continue
++
++            try:
++                self.core_api.patch_namespaced_pod(
++                    name=pod.metadata.name,
++                    namespace=namespace,
++                    body={"metadata": {"annotations": {RESTART_REQUIRED_ANNOTATION: drift}}},
++                )
++                if drift is None:
++                    logger.info("[INFO] Pod %s/%s group mounts up to date", namespace, pod.metadata.name)
++                    continue
++                logger.info("[INFO] Pod %s/%s needs restart for group mounts: %s", namespace, pod.metadata.name, drift)
++                self._emit_restart_event(pod, (pod.metadata.labels or {}).get(NOTEBOOK_POD_LABEL, ""), drift)
++            except ApiException as exc:
++                logger.warning("[WARN] Pod %s/%s mount check failed: %s", namespace, pod.metadata.name, exc.status)
++
++    def run(self) -> None:
++        while True:
++            try:
++                self.nfs_server, self.nfs_path = self._load_nfs_settings()
++                profiles = self.co_api.list_cluster_custom_object(
++                    group=PROFILE_GROUP,
++                    version=PROFILE_VERSION,
++                    plural=PROFILE_PLURAL,
++                )
++                for profile in profiles.get("items", []):
++                    self.sync_profile(profile)
++                self.check_notebook_pods()
++            except Exception as exc:
++                logger.exception("controller loop failed: %s", exc)
++            time.sleep(POLL_SECONDS)
++
++
++if __name__ == "__main__":
++    controller = GroupshareController()
++    controller.run()
+diff --git a/cgu/groupshare/controller/parser.py b/cgu/groupshare/controller/parser.py
+new file mode 100644
+index 00000000..c46a8d4a
+--- /dev/null
++++ b/cgu/groupshare/controller/parser.py
+@@ -0,0 +1,67 @@
++import re
++from typing import Dict, List, Tuple
++
++
++ROLE_MARKERS = {"user", "manager"}
++
++
++def parse_csv_list(raw: str) -> List[str]:
++    if not raw:
++        return []
++    parts = [item.strip() for item in raw.split(',')]
++    parts = [item for item in parts if item]
++
++    deduped = []
++    seen = set()
++    for item in parts:
++        if item not in seen:
++            seen.add(item)
++            deduped.append(item)
++    return deduped
++
++
++def parse_manager_groups(annotations: Dict[str, str]) -> str:
++    manager_group_raw = (annotations.get("manager-group", "") or "").strip()
++    if manager_group_raw:
++        return manager_group_raw
++
++    # Backward compatibility: older transition wrote manager groups into manager.
++    manager_raw = (annotations.get("manager", "") or "").strip()
++    if manager_raw and manager_raw.lower() not in ROLE_MARKERS:
++        return manager_raw
++
++    return ""
++
++
++def intersect_groups(groups: List[str], managers: List[str]) -> Tuple[List[str], List[str]]:
++    group_set = set(groups)
++    admin_groups = []
++    warnings = []
++
++    for mgr in managers:
++        if mgr in group_set:
++            admin_groups.append(mgr)
++        else:
++            warnings.append(f"Manager group '{mgr}' not found in group annotation; ignored")
++
++    return admin_groups, warnings
++
++
++def sanitize_group_token(group: str) -> str:
++    token = group.lower()
++    token = re.sub(r'[^a-z0-9-]+', '-', token)
++    token = re.sub(r'-{2,}', '-', token)
++    token = token.strip('-')
++    return token
++
++
++def build_group_nfs_path(base_path: str, group: str) -> str:
++    sanitized = sanitize_group_token(group)
++    if not sanitized:
++        return ""
++    return f"{base_path.rstrip('/')}/{sanitized}"
++
++
++def to_volume_name(group: str) -> str:
++    sanitized = sanitize_group_token(group)
++    return f"gs-{sanitized}" if sanitized else "gs-unknown"
+diff --git a/cgu/groupshare/deploy/controller-code-configmap.yaml b/cgu/groupshare/deploy/controller-code-configmap.yaml
+deleted file mode 100644
+index 10510b1a..00000000
+--- a/cgu/groupshare/deploy/controller-code-configmap.yaml
++++ /dev/null
+@@ -1,296 +0,0 @@
+-apiVersion: v1
+-data:
+-  app.py: |
+-    import hashlib
+-    import logging
+-    import os
+-    import time
+-    from typing import Dict, List, Tuple
+-
+-    from kubernetes import client, config
+-    from kubernetes.client.rest import ApiException
+-
+-    from parser import (
+-        build_group_nfs_path,
+-        parse_csv_list,
+-        parse_manager_groups,
+-        intersect_groups,
+-        sanitize_group_token,
+-        to_volume_name,
+-    )
+-
+-
+-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
+-    logger = logging.getLogger("groupshare-controller")
+-
+-    PROFILE_GROUP = "kubeflow.org"
+-    PROFILE_VERSION = "v1"
+-    PROFILE_PLURAL = "profiles"
+-    PODDEFAULT_GROUP = "kubeflow.org"
+-    PODDEFAULT_VERSION = "v1alpha1"
+-    PODDEFAULT_PLURAL = "poddefaults"
+-
+-    NFS_NAMESPACE = os.getenv("NFS_NAMESPACE", "kubeflow")
+-    NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
+-    NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "groupshare-nfs-defaults")
+-    PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
+-    PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
+-    POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
+-
+-
+-    class GroupshareController:
+-        def __init__(self) -> None:
+-            config.load_incluster_config()
+-            self.co_api = client.CustomObjectsApi()
+-            self.apps_api = client.AppsV1Api()
+-            self.core_api = client.CoreV1Api()
+-            self.nfs_server, self.nfs_path = self._load_nfs_settings()
+-
+-        def _load_nfs_settings(self) -> Tuple[str, str]:
+-            dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
+-            env_map = {}
+-            for container in dep.spec.template.spec.containers:
+-                for env_var in container.env or []:
+-                    env_map[env_var.name] = env_var.value
+-
+-            cm_data = {}
+-            try:
+-                cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
+-                cm_data = cm.data or {}
+-            except ApiException as exc:
+-                if exc.status != 404:
+-                    raise
+-
+-            nfs_path = (cm_data.get("NFS_PATH") or env_map.get("NFS_PATH") or "").strip()
+-            nfs_server = (cm_data.get("NFS_SERVER") or env_map.get("NFS_SERVER") or "").strip()
+-            if not nfs_path:
+-                raise RuntimeError("NFS_PATH missing from groupshare ConfigMap and provisioner deployment env")
+-            if not nfs_server:
+-                raise RuntimeError("NFS_SERVER missing from groupshare ConfigMap and provisioner deployment env")
+-
+-            logger.info("[INFO] Loaded NFS settings: server=%s path=%s", nfs_server, nfs_path)
+-            return nfs_server, nfs_path
+-
+-        def _build_spec(self, groups: List[str], admin_groups: List[str]) -> dict:
+-            admin_set = set(admin_groups)
+-
+-            volume_mounts = []
+-            volumes = []
+-            volume_names = []
+-            sanitized_admin_volume_names = []
+-            allowed_nfs_paths = []
+-
+-            for group in groups:
+-                mount_token = sanitize_group_token(group)
+-                if not mount_token:
+-                    continue
+-
+-                volume_name = to_volume_name(group)
+-                volume_names.append(volume_name)
+-                if group in admin_set:
+-                    sanitized_admin_volume_names.append(volume_name)
+-
+-                nfs_path = build_group_nfs_path(self.nfs_path, group)
+-                allowed_nfs_paths.append(nfs_path)
+-
+-                volume_mounts.append(
+-                    {
+-                        "name": volume_name,
+-                        "mountPath": f"/mnt/groups/{mount_token}",
+-                        "readOnly": group not in admin_set,
+-                    }
+-                )
+-
+-                volumes.append(
+-                    {
+-                        "name": volume_name,
+-                        "nfs": {
+-                            "server": self.nfs_server,
+-                            "path": nfs_path,
+-                            "readOnly": group not in admin_set,
+-                        },
+-                    }
+-                )
+-
+-            annotations = {
+-                "groupshare.kubeflow.org/nfs-server": self.nfs_server,
+-                "groupshare.kubeflow.org/allowed-volumes": ",".join(volume_names),
+-                "groupshare.kubeflow.org/admin-groups": ",".join(sanitized_admin_volume_names),
+-                "groupshare.kubeflow.org/allowed-paths": ",".join(allowed_nfs_paths),
+-            }
+-
+-            return {
+-                "apiVersion": "kubeflow.org/v1alpha1",
+-                "kind": "PodDefault",
+-                "metadata": {
+-                    "name": PODDEFAULT_NAME,
+-                    "annotations": annotations,
+-                },
+-                "spec": {
+-                    "desc": "GroupShare auto-generated mounts",
+-                    "selector": {},
+-                    "volumeMounts": volume_mounts,
+-                    "volumes": volumes,
+-                },
+-            }
+-
+-        def _hash_annotations(self, groups_raw: str, managers_raw: str) -> str:
+-            raw = f"{groups_raw}|{managers_raw}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
+-            return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+-
+-        def sync_profile(self, profile: dict) -> None:
+-            metadata = profile.get("metadata", {})
+-            annotations = metadata.get("annotations", {}) or {}
+-            namespace = metadata.get("name")
+-
+-            if not namespace:
+-                return
+-
+-            groups_raw = annotations.get("group", "")
+-            managers_raw = parse_manager_groups(annotations)
+-
+-            groups = parse_csv_list(groups_raw)
+-            managers = parse_csv_list(managers_raw)
+-            admin_groups, warnings = intersect_groups(groups, managers)
+-
+-            for warning in warnings:
+-                logger.warning("[WARN] %s namespace=%s", warning, namespace)
+-
+-            current_hash = self._hash_annotations(groups_raw, managers_raw)
+-            body = self._build_spec(groups, admin_groups)
+-            body["metadata"]["namespace"] = namespace
+-            body["metadata"]["annotations"]["groupshare.kubeflow.org/hash"] = current_hash
+-
+-            try:
+-                existing = self.co_api.get_namespaced_custom_object(
+-                    group=PODDEFAULT_GROUP,
+-                    version=PODDEFAULT_VERSION,
+-                    namespace=namespace,
+-                    plural=PODDEFAULT_PLURAL,
+-                    name=PODDEFAULT_NAME,
+-                )
+-                existing_hash = (
+-                    existing.get("metadata", {})
+-                    .get("annotations", {})
+-                    .get("groupshare.kubeflow.org/hash", "")
+-                )
+-                existing_selector = existing.get("spec", {}).get("selector", {})
+-                desired_selector = body.get("spec", {}).get("selector", {})
+-                if existing_hash == current_hash and existing_selector == desired_selector:
+-                    logger.info("[INFO] Synced Profile namespace=%s no changes", namespace)
+-                    return
+-                body["metadata"]["resourceVersion"] = existing.get("metadata", {}).get("resourceVersion")
+-                self.co_api.replace_namespaced_custom_object(
+-                    group=PODDEFAULT_GROUP,
+-                    version=PODDEFAULT_VERSION,
+-                    namespace=namespace,
+-                    plural=PODDEFAULT_PLURAL,
+-                    name=PODDEFAULT_NAME,
+-                    body=body,
+-                )
+-                action = "Updated"
+-            except ApiException as e:
+-                if e.status != 404:
+-                    raise
+-                self.co_api.create_namespaced_custom_object(
+-                    group=PODDEFAULT_GROUP,
+-                    version=PODDEFAULT_VERSION,
+-                    namespace=namespace,
+-                    plural=PODDEFAULT_PLURAL,
+-                    body=body,
+-                )
+-                action = "Created"
+-
+-            logger.info("[INFO] %s PodDefault namespace=%s name=%s", action, namespace, PODDEFAULT_NAME)
+-
+-        def run(self) -> None:
+-            while True:
+-                try:
+-                    profiles = self.co_api.list_cluster_custom_object(
+-                        group=PROFILE_GROUP,
+-                        version=PROFILE_VERSION,
+-                        plural=PROFILE_PLURAL,
+-                    )
+-                    for profile in profiles.get("items", []):
+-                        self.sync_profile(profile)
+-                except Exception as exc:
+-                    logger.exception("controller loop failed: %s", exc)
+-                time.sleep(POLL_SECONDS)
+-
+-
+-    if __name__ == "__main__":
+-        controller = GroupshareController()
+-        controller.run()
+-  parser.py: |
+-    import re
+-    from typing import Dict, List, Tuple
+-
+-
+-    ROLE_MARKERS = {"user", "manager"}
+-
+-
+-    def parse_csv_list(raw: str) -> List[str]:
+-        if not raw:
+-            return []
+-        parts = [item.strip() for item in raw.split(',')]
+-        parts = [item for item in parts if item]
+-
+-        deduped = []
+-        seen = set()
+-        for item in parts:
+-            if item not in seen:
+-                seen.add(item)
+-                deduped.append(item)
+-        return deduped
+-
+-
+-    def parse_manager_groups(annotations: Dict[str, str]) -> str:
+-        manager_group_raw = (annotations.get("manager-group", "") or "").strip()
+-        if manager_group_raw:
+-            return manager_group_raw
+-
+-        # Backward compatibility: older transition wrote manager groups into manager.
+-        manager_raw = (annotations.get("manager", "") or "").strip()
+-        if manager_raw and manager_raw.lower() not in ROLE_MARKERS:
+-            return manager_raw
+-
+-        return ""
+-
+-
+-    def intersect_groups(groups: List[str], managers: List[str]) -> Tuple[List[str], List[str]]:
+-        group_set = set(groups)
+-        admin_groups = []
+-        warnings = []
+-
+-        for mgr in managers:
+-            if mgr in group_set:
+-                admin_groups.append(mgr)
+-            else:
+-                warnings.append(f"Manager group '{mgr}' not found in group annotation; ignored")
+-
+-        return admin_groups, warnings
+-
+-
+-    def sanitize_group_token(group: str) -> str:
+-        token = group.lower()
+-        token = re.sub(r'[^a-z0-9-]+', '-', token)
+-        token = re.sub(r'-{2,}', '-', token)
+-        token = token.strip('-')
+-        return token
+-
+-
+-    def build_group_nfs_path(base_path: str, group: str) -> str:
+-        sanitized = sanitize_group_token(group)
+-        if not sanitized:
+-            return ""
+-        return f"{base_path.rstrip('/')}/{sanitized}"
+-
+-
+-    def to_volume_name(group: str) -> str:
+-        sanitized = sanitize_group_token(group)
+-        return f"gs-{sanitized}" if sanitized else "gs-unknown"
+-kind: ConfigMap
+-metadata:
+-  creationTimestamp: null
+-  name: groupshare-controller-code
+-  namespace: kubeflow
+diff --git a/cgu/groupshare/deploy/controller-rbac.yaml b/cgu/groupshare/deploy/controller-rbac.yaml
+index f8a2d18f..47643118 100644
+--- a/cgu/groupshare/deploy/controller-rbac.yaml
++++ b/cgu/groupshare/deploy/controller-rbac.yaml
+@@ -21,6 +21,16 @@ rules:
+   - apiGroups: [""]
+     resources: ["configmaps"]
+     verbs: ["get", "list"]
++  # Flag notebook Pods whose group mounts are older than their PodDefault (no restart).
++  - apiGroups: [""]
++    resources: ["pods"]
++    verbs: ["get", "list", "patch"]
++  - apiGroups: [""]
++    resources: ["events"]
++    verbs: ["create"]
++  - apiGroups: ["kubeflow.org"]
++    resources: ["notebooks"]
++    verbs: ["get"]
+ ---
+ apiVersion: rbac.authorization.k8s.io/v1
+ kind: ClusterRoleBinding
+diff --git a/cgu/groupshare/deploy/controller-runtime-patch.yaml b/cgu/groupshare/deploy/controller-runtime-patch.yaml
+new file mode 100644
+index 00000000..1e24ec52
+--- /dev/null
++++ b/cgu/groupshare/deploy/controller-runtime-patch.yaml
+@@ -0,0 +1,21 @@
++# Runs the controller code from the kustomize-generated ConfigMap, so code changes roll out
++# with `kubectl apply -k` and need no image rebuild. The image only provides dependencies.
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: groupshare-controller
++  namespace: kubeflow
++spec:
++  template:
++    spec:
++      containers:
++        - name: controller
++          command: ["python", "/opt/groupshare-controller/app.py"]
++          volumeMounts:
++            - name: controller-runtime
++              mountPath: /opt/groupshare-controller
++              readOnly: true
++      volumes:
++        - name: controller-runtime
++          configMap:
++            name: groupshare-controller-runtime
+diff --git a/cgu/groupshare/deploy/notebook-template-groupshare.yaml b/cgu/groupshare/deploy/notebook-template-groupshare.yaml
+deleted file mode 100644
+index 621fef4b..00000000
+--- a/cgu/groupshare/deploy/notebook-template-groupshare.yaml
++++ /dev/null
+@@ -1,19 +0,0 @@
+-apiVersion: kubeflow.org/v1
+-kind: Notebook
+-metadata:
+-  name: default-template-groupshare
+-  namespace: kubeflow-user-example-com
+-  labels:
+-    groupshare: "enabled"
+-spec:
+-  template:
+-    spec:
+-      containers:
+-        - name: notebook
+-          image: kubeflownotebookswg/jupyter-scipy:v1.8.0
+-          resources:
+-            requests:
+-              cpu: "500m"
+-              memory: "1Gi"
+-          volumeMounts: []
+-      volumes: []
+diff --git a/cgu/groupshare/deploy/validating-webhook-configuration.yaml b/cgu/groupshare/deploy/validating-webhook-configuration.yaml
+index 1c085ab0..a10f95e0 100644
+--- a/cgu/groupshare/deploy/validating-webhook-configuration.yaml
++++ b/cgu/groupshare/deploy/validating-webhook-configuration.yaml
+@@ -3,7 +3,7 @@ kind: ValidatingWebhookConfiguration
+ metadata:
+   name: groupshare-validating-webhook
+   annotations:
+-    cert-manager.io/inject-ca-from: kubeflow/groupshare-webhook-cert
++    cert-manager.io/inject-ca-from-secret: kubeflow/groupshare-webhook-trust
+ webhooks:
+   - name: notebooks.groupshare.kubeflow.org
+     admissionReviewVersions: ["v1"]
+@@ -16,7 +16,8 @@ webhooks:
+         name: groupshare-webhook
+         path: /validate
+         port: 443
+-      caBundle: ""
++      # caBundle is injected by cert-manager cainjector from the trust Secret; never set it here,
++      # or every apply would blank it and block all Notebook create/update until re-injection.
+     namespaceSelector: {}
+     rules:
+       - apiGroups: ["kubeflow.org"]
+diff --git a/cgu/groupshare/deploy/webhook-ca-issuer.yaml b/cgu/groupshare/deploy/webhook-ca-issuer.yaml
+new file mode 100644
+index 00000000..a09f38da
+--- /dev/null
++++ b/cgu/groupshare/deploy/webhook-ca-issuer.yaml
+@@ -0,0 +1,8 @@
++apiVersion: cert-manager.io/v1
++kind: Issuer
++metadata:
++  name: groupshare-webhook-ca
++  namespace: kubeflow
++spec:
++  ca:
++    secretName: groupshare-webhook-ca-2026
+diff --git a/cgu/groupshare/deploy/webhook-certificate-monitoring.yaml b/cgu/groupshare/deploy/webhook-certificate-monitoring.yaml
+new file mode 100644
+index 00000000..1491b908
+--- /dev/null
++++ b/cgu/groupshare/deploy/webhook-certificate-monitoring.yaml
+@@ -0,0 +1,112 @@
++apiVersion: monitoring.coreos.com/v1
++kind: ServiceMonitor
++metadata:
++  name: cert-manager-certificates
++  namespace: cert-manager
++  labels:
++    release: kube-prom-stack
++spec:
++  selector:
++    matchLabels:
++      app.kubernetes.io/name: cert-manager
++      app.kubernetes.io/component: controller
++  endpoints:
++    - port: tcp-prometheus-servicemonitor
++      interval: 30s
++      honorLabels: true
++---
++apiVersion: monitoring.coreos.com/v1
++kind: PodMonitor
++metadata:
++  name: groupshare-webhook-tls
++  namespace: kubeflow
++  labels:
++    release: kube-prom-stack
++spec:
++  selector:
++    matchLabels:
++      app: groupshare-validating-webhook
++  podMetricsEndpoints:
++    - port: https
++      path: /metrics
++      scheme: https
++      interval: 30s
++      scrapeTimeout: 10s
++      tlsConfig:
++        serverName: groupshare-webhook.kubeflow.svc
++        ca:
++          secret:
++            name: groupshare-webhook-trust
++            key: ca.crt
++---
++apiVersion: monitoring.coreos.com/v1
++kind: PrometheusRule
++metadata:
++  name: groupshare-webhook-certificates
++  namespace: kubeflow
++  labels:
++    release: kube-prom-stack
++spec:
++  groups:
++    - name: groupshare-webhook-certificates
++      rules:
++        # Bound to the versioned CA Secret groupshare-webhook-ca-2026.
++        - alert: GroupShareRootCARotationDue
++          expr: vector(1946615636) - time() < 540 * 86400
++          for: 1h
++          labels:
++            severity: warning
++          annotations:
++            summary: Plan a staged rotation of the GroupShare root CA
++            description: The 2026 root expires on 2031-09-08. Complete trust overlap and leaf migration before fewer than 400 days remain; update this rule with the new CA expiry.
++        - alert: GroupShareTLSReloadFailed
++          expr: groupshare_tls_reload_healthy == 0
++          for: 2m
++          labels:
++            severity: critical
++          annotations:
++            summary: GroupShare could not load its current TLS Secret
++            description: The last valid certificate is retained. Inspect the projected certificate/key pair and webhook logs.
++        - alert: GroupShareTLSHandshakeFailed
++          expr: up{namespace="kubeflow",pod=~"groupshare-validating-webhook-.+"} == 0
++          for: 2m
++          labels:
++            severity: critical
++          annotations:
++            summary: GroupShare HTTPS monitoring failed
++            description: Check certificate trust, expiry, service availability and network connectivity.
++        - alert: GroupShareTLSMonitoringMissing
++          expr: absent(groupshare_tls_reload_healthy)
++          for: 5m
++          labels:
++            severity: critical
++          annotations:
++            summary: GroupShare TLS monitoring has no data
++        - alert: GroupShareCertificateExpiring
++          expr: certmanager_certificate_expiration_timestamp_seconds{namespace="kubeflow",name="groupshare-webhook-serving"} - time() < 45 * 86400
++          for: 5m
++          labels:
++            severity: warning
++          annotations:
++            summary: GroupShare certificate renewal has not completed within its renewal window
++        - alert: GroupShareCertificateRenewalOverdue
++          expr: time() - certmanager_certificate_renewal_timestamp_seconds{namespace="kubeflow",name="groupshare-webhook-serving"} > 3600
++          for: 5m
++          labels:
++            severity: critical
++          annotations:
++            summary: GroupShare certificate renewal is more than one hour overdue
++        - alert: GroupShareCertificateNotReady
++          expr: certmanager_certificate_ready_status{namespace="kubeflow",name="groupshare-webhook-serving",condition="True"} != 1
++          for: 5m
++          labels:
++            severity: critical
++          annotations:
++            summary: GroupShare serving Certificate is not Ready
++        - alert: GroupShareCertificateMetricsMissing
++          expr: absent(certmanager_certificate_expiration_timestamp_seconds{namespace="kubeflow",name="groupshare-webhook-serving"})
++          for: 5m
++          labels:
++            severity: critical
++          annotations:
++            summary: GroupShare certificate inventory has no data
+diff --git a/cgu/groupshare/deploy/webhook-certificate.yaml b/cgu/groupshare/deploy/webhook-certificate.yaml
+deleted file mode 100644
+index dec4653c..00000000
+--- a/cgu/groupshare/deploy/webhook-certificate.yaml
++++ /dev/null
+@@ -1,13 +0,0 @@
+-apiVersion: cert-manager.io/v1
+-kind: Certificate
+-metadata:
+-  name: groupshare-webhook-cert
+-  namespace: kubeflow
+-spec:
+-  secretName: groupshare-webhook-tls
+-  dnsNames:
+-    - groupshare-webhook.kubeflow.svc
+-    - groupshare-webhook.kubeflow.svc.cluster.local
+-  issuerRef:
+-    name: kubeflow-self-signing-issuer
+-    kind: ClusterIssuer
+diff --git a/cgu/groupshare/deploy/webhook-code-configmap.yaml b/cgu/groupshare/deploy/webhook-code-configmap.yaml
+deleted file mode 100644
+index f3e1509a..00000000
+--- a/cgu/groupshare/deploy/webhook-code-configmap.yaml
++++ /dev/null
+@@ -1,250 +0,0 @@
+-apiVersion: v1
+-data:
+-  app.py: |
+-    import logging
+-    import os
+-    from typing import Dict
+-
+-    from flask import Flask, jsonify, request
+-    from kubernetes import client, config
+-    from kubernetes.client.rest import ApiException
+-
+-    from rules import evaluate_rules, parse_csv
+-
+-
+-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
+-    logger = logging.getLogger("groupshare-webhook")
+-
+-    PODDEFAULT_NAME = os.getenv("GROUPSHARE_PODDEFAULT_NAME", "groupshare")
+-    NAMESPACE_SHARE_PODDEFAULT_NAME = os.getenv("NAMESPACE_SHARE_PODDEFAULT_NAME", "namespace-share")
+-    PODDEFAULT_GROUP = "kubeflow.org"
+-    PODDEFAULT_VERSION = "v1alpha1"
+-    PODDEFAULT_PLURAL = "poddefaults"
+-
+-    app = Flask(__name__)
+-    config.load_incluster_config()
+-    co_api = client.CustomObjectsApi()
+-
+-
+-    def admission_response(uid: str, allowed: bool, message: str = "", code: int = 403) -> Dict:
+-        response = {"uid": uid, "allowed": allowed}
+-        if not allowed:
+-            response["status"] = {"code": code, "message": message}
+-        return {"apiVersion": "admission.k8s.io/v1", "kind": "AdmissionReview", "response": response}
+-
+-
+-    def load_poddefault_annotations(namespace: str, poddefault_name: str, required: bool = True) -> Dict:
+-        try:
+-            poddefault = co_api.get_namespaced_custom_object(
+-                group=PODDEFAULT_GROUP,
+-                version=PODDEFAULT_VERSION,
+-                namespace=namespace,
+-                plural=PODDEFAULT_PLURAL,
+-                name=poddefault_name,
+-            )
+-            return poddefault.get("metadata", {}).get("annotations", {}) or {}
+-        except ApiException as exc:
+-            if exc.status == 404 and not required:
+-                return {}
+-            raise
+-
+-
+-    def load_namespace_policy(namespace: str) -> Dict:
+-        groupshare_annotations = load_poddefault_annotations(namespace, PODDEFAULT_NAME, required=True)
+-        namespace_share_annotations = load_poddefault_annotations(
+-            namespace,
+-            NAMESPACE_SHARE_PODDEFAULT_NAME,
+-            required=False,
+-        )
+-        expected_servers = {
+-            server
+-            for server in [
+-                groupshare_annotations.get("groupshare.kubeflow.org/nfs-server", ""),
+-                namespace_share_annotations.get("namespace-share.kubeflow.org/nfs-server", ""),
+-            ]
+-            if server
+-        }
+-        if len(expected_servers) > 1:
+-            raise RuntimeError(f"conflicting managed NFS servers detected: {sorted(expected_servers)}")
+-
+-        expected_nfs_server = next(iter(expected_servers), "")
+-        allowed_volume_names = parse_csv(groupshare_annotations.get("groupshare.kubeflow.org/allowed-volumes", ""))
+-        allowed_volume_names.update(
+-            parse_csv(namespace_share_annotations.get("namespace-share.kubeflow.org/allowed-volumes", ""))
+-        )
+-        allowed_nfs_paths = parse_csv(groupshare_annotations.get("groupshare.kubeflow.org/allowed-paths", ""))
+-        allowed_nfs_paths.update(
+-            parse_csv(namespace_share_annotations.get("namespace-share.kubeflow.org/allowed-paths", ""))
+-        )
+-        admin_volume_names = parse_csv(groupshare_annotations.get("groupshare.kubeflow.org/admin-groups", ""))
+-        writable_volume_names = parse_csv(
+-            namespace_share_annotations.get("namespace-share.kubeflow.org/writable-volumes", "")
+-        )
+-
+-        return {
+-            "expected_nfs_server": expected_nfs_server,
+-            "allowed_volume_names": allowed_volume_names,
+-            "allowed_nfs_paths": allowed_nfs_paths,
+-            "admin_volume_names": admin_volume_names,
+-            "writable_volume_names": writable_volume_names,
+-        }
+-
+-
+-    @app.route("/healthz", methods=["GET"])
+-    def healthz():
+-        return "ok", 200
+-
+-
+-    @app.route("/validate", methods=["POST"])
+-    def validate():
+-        try:
+-            review = request.get_json(force=True)
+-            req = review["request"]
+-            uid = req["uid"]
+-            operation = req.get("operation", "")
+-            namespace = req.get("namespace", "")
+-            user = req.get("userInfo", {}).get("username", "unknown")
+-            user_groups = req.get("userInfo", {}).get("groups", [])
+-            obj = req.get("object", {})
+-
+-            if req.get("kind", {}).get("group") != "kubeflow.org" or req.get("kind", {}).get("kind") != "Notebook":
+-                return jsonify(admission_response(uid, True))
+-
+-            if operation not in {"CREATE", "UPDATE"}:
+-                return jsonify(admission_response(uid, True))
+-
+-            policy = load_namespace_policy(namespace)
+-            allowed, rule, message = evaluate_rules(
+-                notebook_obj=obj,
+-                user_groups=user_groups,
+-                expected_nfs_server=policy["expected_nfs_server"],
+-                allowed_volume_names=policy["allowed_volume_names"],
+-                allowed_nfs_paths=policy["allowed_nfs_paths"],
+-                admin_volume_names=policy["admin_volume_names"],
+-                writable_volume_names=policy["writable_volume_names"],
+-            )
+-
+-            if not allowed:
+-                attempted_paths = []
+-                for volume in (obj.get("spec", {}).get("template", {}).get("spec", {}).get("volumes", []) or []):
+-                    if volume.get("nfs", {}).get("path"):
+-                        attempted_paths.append(volume["nfs"]["path"])
+-                logger.warning(
+-                    "[DENY] Request rejected: rule=%s user=%s namespace=%s paths=%s reason=%s",
+-                    rule,
+-                    user,
+-                    namespace,
+-                    attempted_paths,
+-                    message,
+-                )
+-                return jsonify(admission_response(uid, False, f"Security Violation ({rule}): {message}"))
+-
+-            return jsonify(admission_response(uid, True))
+-        except Exception as exc:
+-            logger.exception("[DENY] Request rejected: webhook internal error fail-closed: %s", exc)
+-            uid = "unknown"
+-            try:
+-                uid = request.get_json(force=True).get("request", {}).get("uid", "unknown")
+-            except Exception:
+-                pass
+-            return jsonify(admission_response(uid, False, "webhook internal error (fail-closed)", 500))
+-
+-
+-    if __name__ == "__main__":
+-        port = int(os.getenv("PORT", "8443"))
+-        cert = os.getenv("TLS_CERT_FILE", "/tls/tls.crt")
+-        key = os.getenv("TLS_KEY_FILE", "/tls/tls.key")
+-        app.run(host="0.0.0.0", port=port, ssl_context=(cert, key))
+-  rules.py: |
+-    from typing import List, Set, Tuple
+-
+-
+-    def parse_csv(raw: str) -> Set[str]:
+-        if not raw:
+-            return set()
+-        return {item.strip() for item in raw.split(',') if item.strip()}
+-
+-
+-    def sanitize_group(group: str) -> str:
+-        import re
+-
+-        token = group.lower()
+-        token = re.sub(r'[^a-z0-9-]+', '-', token)
+-        token = re.sub(r'-{2,}', '-', token)
+-        return token.strip('-')
+-
+-
+-    def user_admin_volume_names(user_groups: List[str]) -> Set[str]:
+-        out = set()
+-        for group in user_groups or []:
+-            token = sanitize_group(group)
+-            if token:
+-                out.add(f"gs-{token}")
+-        return out
+-
+-
+-    def extract_pod_spec(notebook_obj: dict) -> dict:
+-        spec = notebook_obj.get("spec", {})
+-        if "template" in spec and isinstance(spec["template"], dict):
+-            return spec["template"].get("spec", {})
+-        return spec.get("podSpec", {})
+-
+-
+-    def evaluate_rules(
+-        notebook_obj: dict,
+-        user_groups: List[str],
+-        expected_nfs_server: str,
+-        allowed_volume_names: Set[str],
+-        allowed_nfs_paths: Set[str],
+-        admin_volume_names: Set[str],
+-        writable_volume_names: Set[str],
+-    ) -> Tuple[bool, str, str]:
+-        pod_spec = extract_pod_spec(notebook_obj)
+-        volumes = pod_spec.get("volumes", []) or []
+-        if not any(volume.get("nfs") for volume in volumes):
+-            return True, "ALLOW", "no NFS volumes to validate"
+-
+-        containers = pod_spec.get("containers", []) or []
+-        mount_readonly = {}
+-        for container in containers:
+-            for vm in (container.get("volumeMounts", []) or []):
+-                if "name" in vm and "readOnly" in vm:
+-                    mount_readonly[vm["name"]] = bool(vm["readOnly"])
+-        requested_admin_volumes = user_admin_volume_names(user_groups).intersection(admin_volume_names)
+-
+-        for volume in volumes:
+-            nfs = volume.get("nfs")
+-            if not nfs:
+-                continue
+-
+-            volume_name = volume.get("name", "")
+-            path = nfs.get("path", "")
+-            server = nfs.get("server", "")
+-            read_only = bool(nfs.get("readOnly", False))
+-            is_admin_for_volume = volume_name in requested_admin_volumes
+-            is_namespace_writable = volume_name in writable_volume_names
+-
+-            if path.startswith("/group"):
+-                return False, "Rule A", f"forbidden NFS path: {path}"
+-
+-            if server != expected_nfs_server:
+-                return False, "Rule B", f"NFS server mismatch: {server}"
+-
+-            if volume_name not in allowed_volume_names:
+-                return False, "Rule B", f"volume not in allowed whitelist: {volume_name}"
+-
+-            if path not in allowed_nfs_paths:
+-                return False, "Rule B", f"NFS path not in allowed whitelist: {path}"
+-
+-            if not is_admin_for_volume and not is_namespace_writable and not read_only:
+-                return False, "Rule C", f"readOnly=false denied for non-admin on volume {volume_name}"
+-
+-            if not is_admin_for_volume and not is_namespace_writable and mount_readonly.get(volume_name) is False:
+-                return False, "Rule C", f"volumeMount readOnly=false denied for non-admin on volume {volume_name}"
+-
+-        return True, "ALLOW", "request accepted"
+-kind: ConfigMap
+-metadata:
+-  creationTimestamp: null
+-  name: groupshare-webhook-code
+-  namespace: kubeflow
+diff --git a/cgu/groupshare/deploy/webhook-deployment.yaml b/cgu/groupshare/deploy/webhook-deployment.yaml
+index b3f35628..49bbd45d 100644
+--- a/cgu/groupshare/deploy/webhook-deployment.yaml
++++ b/cgu/groupshare/deploy/webhook-deployment.yaml
+@@ -4,7 +4,12 @@ metadata:
+   name: groupshare-validating-webhook
+   namespace: kubeflow
+ spec:
+-  replicas: 1
++  replicas: 2
++  strategy:
++    type: RollingUpdate
++    rollingUpdate:
++      maxUnavailable: 0
++      maxSurge: 1
+   selector:
+     matchLabels:
+       app: groupshare-validating-webhook
+@@ -23,10 +28,27 @@ spec:
+         - key: node-role.kubernetes.io/master
+           operator: Exists
+           effect: NoSchedule
++      affinity:
++        podAntiAffinity:
++          preferredDuringSchedulingIgnoredDuringExecution:
++            - weight: 100
++              podAffinityTerm:
++                topologyKey: kubernetes.io/hostname
++                labelSelector:
++                  matchLabels:
++                    app: groupshare-validating-webhook
+       containers:
+         - name: webhook
+           image: docker.io/cguaicadmin/groupshare-webhook:v20260617-172109d
+           imagePullPolicy: IfNotPresent
++          command: ["python", "/opt/groupshare-webhook/app.py"]
++          args: []
++          resources:
++            requests:
++              cpu: 50m
++              memory: 64Mi
++            limits:
++              memory: 256Mi
+           env:
+             - name: GROUPSHARE_PODDEFAULT_NAME
+               value: groupshare
+@@ -39,11 +61,71 @@ spec:
+           ports:
+             - name: https
+               containerPort: 8443
++          startupProbe:
++            httpGet:
++              path: /healthz
++              port: https
++              scheme: HTTPS
++            periodSeconds: 5
++            timeoutSeconds: 3
++            failureThreshold: 120
++          readinessProbe:
++            httpGet:
++              path: /healthz
++              port: https
++              scheme: HTTPS
++            periodSeconds: 5
++            timeoutSeconds: 3
++            failureThreshold: 2
++          livenessProbe:
++            exec:
++              command:
++                - python
++                - -c
++                - |
++                  import os
++                  from pathlib import Path
++                  import socket
++                  import ssl
++                  import sys
++
++                  # Compare the local server's leaf with the mounted Secret, even if stale.
++                  context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
++                  context.check_hostname = False
++                  context.verify_mode = ssl.CERT_NONE
++                  with socket.create_connection(("127.0.0.1", int(os.environ.get("PORT", "8443"))), timeout=3) as sock:
++                      with context.wrap_socket(sock, server_hostname="groupshare-webhook.kubeflow.svc") as tls:
++                          current = tls.getpeercert(binary_form=True)
++                  try:
++                      cert = Path(os.environ.get("TLS_CERT_FILE", "/tls/tls.crt"))
++                      key = Path(os.environ.get("TLS_KEY_FILE", "/tls/tls.key"))
++                      if cert.parent == key.parent and (cert.parent / "..data").is_symlink():
++                          directory = (cert.parent / "..data").resolve(strict=True)
++                          cert, key = directory / cert.name, directory / key.name
++                      candidate = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
++                      candidate.load_cert_chain(cert, key)
++                      leaf = cert.read_text().split("-----END CERTIFICATE-----", 1)[0] + "-----END CERTIFICATE-----\n"
++                      expected = ssl.PEM_cert_to_DER_cert(leaf)
++                  except (OSError, ValueError):
++                      # Keep a working server alive when the replacement pair is invalid.
++                      # The reload metric and TLS monitoring report this condition.
++                      sys.exit(0)
++                  if current != expected:
++                      sys.exit("TLS certificate changed; restart required to load the mounted Secret")
++            periodSeconds: 30
++            timeoutSeconds: 5
++            failureThreshold: 2
+           volumeMounts:
+             - name: tls
+               mountPath: /tls
+               readOnly: true
++            - name: tls-runtime
++              mountPath: /opt/groupshare-webhook
++              readOnly: true
+       volumes:
+         - name: tls
+           secret:
+-            secretName: groupshare-webhook-tls
++            secretName: groupshare-webhook-serving-tls
++        - name: tls-runtime
++          configMap:
++            name: groupshare-webhook-runtime
+diff --git a/cgu/groupshare/deploy/webhook-pdb.yaml b/cgu/groupshare/deploy/webhook-pdb.yaml
+new file mode 100644
+index 00000000..14b98eb3
+--- /dev/null
++++ b/cgu/groupshare/deploy/webhook-pdb.yaml
+@@ -0,0 +1,10 @@
++apiVersion: policy/v1
++kind: PodDisruptionBudget
++metadata:
++  name: groupshare-validating-webhook
++  namespace: kubeflow
++spec:
++  minAvailable: 1
++  selector:
++    matchLabels:
++      app: groupshare-validating-webhook
+diff --git a/cgu/groupshare/deploy/webhook-serving-certificate.yaml b/cgu/groupshare/deploy/webhook-serving-certificate.yaml
+new file mode 100644
+index 00000000..d29a8a68
+--- /dev/null
++++ b/cgu/groupshare/deploy/webhook-serving-certificate.yaml
+@@ -0,0 +1,19 @@
++apiVersion: cert-manager.io/v1
++kind: Certificate
++metadata:
++  name: groupshare-webhook-serving
++  namespace: kubeflow
++spec:
++  secretName: groupshare-webhook-serving-tls
++  duration: 9600h
++  renewBefore: 1440h
++  privateKey:
++    algorithm: RSA
++    size: 2048
++    rotationPolicy: Always
++  dnsNames:
++    - groupshare-webhook.kubeflow.svc
++    - groupshare-webhook.kubeflow.svc.cluster.local
++  issuerRef:
++    name: groupshare-webhook-ca
++    kind: Issuer
+diff --git a/cgu/groupshare/docs/certificate-maintenance.md b/cgu/groupshare/docs/certificate-maintenance.md
+new file mode 100644
+index 00000000..cf0e9086
+--- /dev/null
++++ b/cgu/groupshare/docs/certificate-maintenance.md
+@@ -0,0 +1,244 @@
++# GroupShare 憑證自動續期與年度維護
++
++更新：2026-09-09，本文時間使用 Asia/Taipei (UTC+8)。
++叢集：`kubernetes-admin@kubernetes`；Kubernetes v1.26.15；cert-manager / cmctl v1.12.2。
++
++## 1. 已完成的修復
++
++GroupShare 現在使用 **400 天服務憑證、提前 60 天自動續期、穩定 CA、TLS 熱載入及兩個副本**。一般續期不需要管理者重啟 webhook。
++
++本次故障原本是 cert-manager 已換證，但 Flask 程序仍提供啟動時載入的舊憑證；API Server 的信任資料已換新，因此 Notebook CREATE/UPDATE 回報 `certificate signed by unknown authority`。舊憑證原定 2026-09-12 到期，事發當時尚未過期。
++
++最初的重啟與 liveness 修復可以自動恢復，但不能避免換證時短暫失敗。本次進一步完成：
++
++1. 以專用穩定 CA 簽發 leaf；API Server 信任 CA，一般 leaf 續期不再更換信任根。
++2. 每次 TLS 握手檢查 Kubernetes Secret 的原子投射版本；載入完整的新憑證與私鑰後，才切換 SSLContext。
++3. 私鑰不匹配或投射暫時不可讀時，保留最後一份有效 context，並輸出監測狀態。
++4. 兩個副本優先分散在不同節點（換證演練時為 `gpunode050`、`gpunode051`），rolling update 設定 `maxUnavailable: 0`，PDB 至少保留一個副本。
++5. 保留憑證一致性 liveness probe 作為熱載入失效時的最後保護。只有新憑證及私鑰有效且持續未載入，才觸發重啟；新 Secret 缺檔或配對錯誤時保留仍正常提供 TLS 的程序。正常續期不會觸發重啟。
++6. Prometheus 每 30 秒對每個副本做具 CA/hostname 驗證的 HTTPS scrape，並監測重新載入、到期、Ready 與資料消失。
++
++此變更處理的是 **GroupShare 憑證到期及續期導致 Notebook admission 失敗**。其他平台元件、儲存、網路、硬體的可用性仍須各自維護；目前控制平面憑證也需要在 2027 年 7 月前處理，見年度時程。
++
++## 2. 現行資源與期限
++
++| 資源 | 目前設定 |
++| --- | --- |
++| CA Secret | `kubeflow/groupshare-webhook-ca-2026`，私鑰僅供 cert-manager 簽發，不掛進 webhook |
++| CA 到期 | **2031-09-08 14:33:56**；版本固定，不自動替換信任根 |
++| Issuer | `kubeflow/groupshare-webhook-ca`，type CA |
++| Certificate | `kubeflow/groupshare-webhook-serving` |
++| Leaf Secret | `kubeflow/groupshare-webhook-serving-tls` |
++| Leaf 設定 | `duration: 9600h` (400 天)、`renewBefore: 1440h` (60 天)、`rotationPolicy: Always` |
++| Leaf 本次到期 | **2027-10-14 14:36:52** |
++| 下次預計自動續期 | **2027-08-15 14:36:52**，後續以 Certificate status 為準 |
++| 信任 Secret | `kubeflow/groupshare-webhook-trust`，`ca.crt` 僅含目前穩定 CA |
++| CA 注入 | VWC annotation `cert-manager.io/inject-ca-from-secret: kubeflow/groupshare-webhook-trust` |
++| 程式碼版本 | immutable ConfigMap `groupshare-webhook-tls-runtime-20260909`，掛於 `/opt/groupshare-webhook` |
++| 依賴映像 | `docker.io/cguaicadmin/groupshare-webhook:v20260617-172109d`，啟動命令指向上述 ConfigMap |
++
++舊 `groupshare-webhook-cert` / `groupshare-webhook-tls` 暫留作歷史與回復參考，已不供線上 webhook 使用。盤點時不要把舊 Certificate 的日期當成線上期限。
++
++信任 Secret 有 `cert-manager.io/allow-direct-injection: "true"`。它只有公開 CA；不得把 CA 私鑰放入此 Secret、ConfigMap、Git 或工單。
++
++## 3. 現場驗證結果
++
++2026-09-09 已完成：
++
++- **31 項測試通過**：包含 12 次連續投射更新、無 SNI 用戶端、同時多個 TLS 握手、私鑰不匹配與投射缺失時保留舊有效憑證，以及 liveness 不因無效替代憑證重啟仍正常的程序。
++- 線上以 `cmctl renew -n kubeflow groupshare-webhook-serving` 觸發真正的重簽，Certificate revision **1 -> 2**。
++- 每個副本實際提供的 leaf 指紋都等於 revision 2 Secret，CA 與 hostname 驗證通過。
++- 換證前後兩個 Pod 的 **UID 與 restartCount 完全一致**；透過 TLS 熱載入完成更新。
++- 從信任遷移前到續期後，持續 4 分鐘執行 **205 次 Notebook server dry-run：103 CREATE、102 UPDATE、0 失敗**。
++- 非法 NFS 路徑仍得到 GroupShare Rule A 拒絕，`failurePolicy: Fail` 持續啟用。
++- `openssl verify -attime` 使用一年後的時間驗證目前 leaf、CA 及 hostname，結果為 OK；此檢查沒有修改任何主機時間。
++- Prometheus 已取得兩個副本的 `groupshare_tls_reload_healthy=1`，可查詢新 Certificate 的到期 metric。
++
++這是實際續期與短期負載驗證，並非已經運行一年。未實際建立測試 Notebook 或修改使用者 Notebook 資料，也未代替使用者進行瀏覽器登入。
++
++本次 leaf serial：`AAC4EE14D49E00B3CE1CB0A2FB3E54BF`。
++本次 leaf SHA-256：`5C:5E:4F:7D:17:0D:AC:F7:BE:4C:A0:2B:21:86:D4:EF:83:13:BF:44:77:6B:85:31:0C:0D:F9:C1:B0:64:E5:EB`。
++CA SHA-256：`46:9B:36:3E:5A:3B:39:55:AE:80:95:5E:E2:94:78:B6:0D:49:E1:4A:60:5F:EE:C9:D0:39:8E:E9:07:7D:8E:04`。
++
++原始證據與備份：`/root/mark/groupshare-certificate-maintenance/backups/20260909-hot-reload/`。
++`migration-soak.json` 記錄逐類成功數與失敗清單；`pods-before-renew.json` / `pods-after-renew.json` 證明沒有重啟；`leaf-revision*.crt`、`served-*.pem` 留存公開憑證。
++目錄另含 CA 私鑰及 Secret 備份，採 root 限制權限，不可整包公開或提交 Git。
++
++## 4. 日常自動流程
++
++```text
++cert-manager 到達 renewalTime
++    -> 以穩定 CA 簽發新 leaf + 新私鑰
++    -> 更新 serving TLS Secret
++    -> kubelet 將新 Secret 原子投射至各 Pod
++    -> 下一次 TLS 握手載入新 context
++    -> Prometheus 驗證 HTTPS、重新載入狀態及到期日
++```
++
++兩個 Pod 可以在不同時間收到 Secret。過渡期間舊、新 leaf 都由相同有效 CA 簽發，因此 API Server 都能接受。
++
++不要為了一般 leaf 續期更換 CA Secret 或手動覆寫 `caBundle`。CA 的輪替需事先發佈新舊信任重疊，見第 8 節。
++
++## 5. 檢查、續期與驗收命令
++
++操作主機需可連到叢集網路，並有 `kubectl`、`cmctl`、`jq`、`openssl`、`curl`、Python 3。cmctl 已從 cert-manager 官方 v1.12.2 release 安裝至 `/usr/local/bin/cmctl`。
++
++```bash
++kubectl config current-context
++kubectl -n kubeflow get certificate groupshare-webhook-serving -o yaml
++kubectl -n kubeflow get issuer groupshare-webhook-ca
++kubectl -n kubeflow get pods -l app=groupshare-validating-webhook -o wide
++kubectl -n kubeflow get endpoints groupshare-webhook
++```
++
++公開 leaf 的有效期與指紋：
++
++```bash
++kubectl -n kubeflow get secret groupshare-webhook-serving-tls \
++  -o jsonpath='{.data.tls\.crt}' | base64 -d \
++  | openssl x509 -noout -dates -serial -fingerprint -sha256
++```
++
++以 API Server 真正使用的信任資料檢查 **每個** endpoint；在獨立 Bash shell 執行：
++
++```bash
++set -euo pipefail
++TLS_CHECK_DIR=$(mktemp -d)
++kubectl get validatingwebhookconfiguration groupshare-validating-webhook \
++  -o jsonpath='{.webhooks[0].clientConfig.caBundle}' | base64 -d > "$TLS_CHECK_DIR/ca.crt"
++kubectl -n kubeflow get secret groupshare-webhook-serving-tls \
++  -o jsonpath='{.data.tls\.crt}' | base64 -d > "$TLS_CHECK_DIR/expected.crt"
++EXPECTED_FP=$(openssl x509 -in "$TLS_CHECK_DIR/expected.crt" -noout -fingerprint -sha256)
++ENDPOINTS=$(kubectl -n kubeflow get endpoints groupshare-webhook -o jsonpath='{.subsets[*].addresses[*].ip}')
++test -n "$ENDPOINTS"
++for endpoint in $ENDPOINTS; do
++  timeout 10 openssl s_client -connect "$endpoint:8443" \
++    -servername groupshare-webhook.kubeflow.svc \
++    -verify_hostname groupshare-webhook.kubeflow.svc \
++    -verify_return_error -CAfile "$TLS_CHECK_DIR/ca.crt" \
++    </dev/null > "$TLS_CHECK_DIR/served-$endpoint.pem"
++  ACTUAL_FP=$(openssl x509 -in "$TLS_CHECK_DIR/served-$endpoint.pem" -noout -fingerprint -sha256)
++  test "$EXPECTED_FP" = "$ACTUAL_FP"
++  printf '%s: current leaf and trust verified\n' "$endpoint"
++done
++printf 'Public verification files: %s\n' "$TLS_CHECK_DIR"
++```
++
++剛續期時要等待 kubelet 投射完成再要求 fingerprint 完全相同；過渡期間舊 leaf 的 CA 驗證仍應成功。`caBundle` 是 CA，**不應**要求它與 leaf 的指紋相同。
++
++主動續期演練：先記錄 revision、serial、Pod UID 與 restartCount，再開啟連續 admission 驗證：
++
++```bash
++cd /home/mark/work/AI_Centre_Admin/AI_LDAP_admin/groupshare
++python3 scripts/admission-soak.py --namespace TEST_NAMESPACE --notebook TEST_NOTEBOOK \
++  --seconds 240 --report /tmp/groupshare-renewal-check.json
++```
++
++請將 `TEST_NAMESPACE` 與 `TEST_NOTEBOOK` 替換為仍存在且符合政策的驗收 Notebook。程式以它作為合法範本，所有 CREATE/UPDATE 都是 server dry-run，不會保存物件。
++
++在另一個終端執行：
++
++```bash
++cmctl renew -n kubeflow groupshare-webhook-serving
++kubectl -n kubeflow get certificate groupshare-webhook-serving -w
++```
++
++等待 revision 增加、serial 改變及 Ready=True，再執行 endpoint 驗證與比較 Pod UID/restartCount。舊 Ready=True 可能在重簽期間仍存在，所以單靠 `kubectl wait --for=condition=Ready` 不足以證明續期成功。
++
++正常續期不執行 rollout restart、不刪 Secret，也不把 failurePolicy 改成 Ignore。
++
++## 6. 部署與回復
++
++### 現行程式碼發布
++
++webhook 程式碼（`webhook/app.py`、`rules.py`、`tls_reload.py`）由 [kustomization.yaml](../kustomization.yaml) 的 `configMapGenerator` 產生不可變更 ConfigMap `groupshare-webhook-runtime-<hash>`；內容一改名稱就跟著變，Deployment 以 RollingUpdate（`maxUnavailable: 0`、PDB `minAvailable: 1`）換版。probes 已直接寫在 [webhook-deployment.yaml](../deploy/webhook-deployment.yaml)。
++
++```bash
++python3 -m unittest discover -s tests -p 'test_*.py'
++kubectl diff -k .            # 在 cgu-manifests 中為 kubectl diff -k cgu/groupshare
++kubectl apply -k .
++kubectl -n kubeflow rollout status deployment/groupshare-validating-webhook --timeout=240s
++```
++
++VWC manifest 不設定 `caBundle`，由 cainjector 依 `inject-ca-from-secret` 從 `groupshare-webhook-trust` 注入；若 manifest 寫入 `caBundle: ""`，每次 apply 都會清空信任並擋下所有 Notebook 建立與修改。
++
++新叢集沒有 CA 與 trust Secret 時，由 `scripts/bootstrap.sh webhook` 建立（只在不存在時建立，不會覆蓋既有 CA），並在有 Prometheus Operator CRD 時套用 [webhook-certificate-monitoring.yaml](../deploy/webhook-certificate-monitoring.yaml)。
++
++### 應用程式回復
++
++若新版熱載入程式出現問題，可先回到原映像內的 webhook 程式，**保留新 CA、400 天 leaf、兩個副本與 liveness 防護**：
++
++```bash
++kubectl -n kubeflow patch deployment groupshare-validating-webhook --type=strategic \
++  -p '{"spec":{"template":{"spec":{"containers":[{"name":"webhook","command":["python","/app/webhook/app.py"],"args":[]}]}}}}'
++kubectl -n kubeflow rollout status deployment/groupshare-validating-webhook --timeout=240s
++```
++
++此回復版本失去熱載入與 `/metrics`，監測會回報失敗；應修正後重新套用 runtime patch。不要直接 rollout undo 到舊 SelfSigned Secret，也不要還原已過期的 leaf。
++
++若只有 Secret 投射後載入卡住且憑證/私鑰已確認有效，可執行 `kubectl -n kubeflow rollout restart deployment/groupshare-validating-webhook` 作為應急處理，之後必須追查熱載入失敗原因。
++
++## 7. 已部署的監測
++
++現有 Prometheus 已載入 [webhook-certificate-monitoring.yaml](../deploy/webhook-certificate-monitoring.yaml)：
++
++| 規則 | 條件 |
++| --- | --- |
++| GroupShareTLSReloadFailed | 新 Secret 無法載入超過 2 分鐘 |
++| GroupShareTLSHandshakeFailed | 任一副本的具信任驗證 HTTPS scrape 失敗超過 2 分鐘 |
++| GroupShareTLSMonitoringMissing | 所有熱載入監測資料消失超過 5 分鐘 |
++| GroupShareCertificateExpiring | 新 leaf 剩餘不到 45 天，代表已進入 60 天續期窗但尚未完成更新 |
++| GroupShareCertificateRenewalOverdue | renewalTime 已過超過 1 小時仍未完成續期 |
++| GroupShareCertificateNotReady | Certificate Ready 異常超過 5 分鐘 |
++| GroupShareCertificateMetricsMissing | 憑證盤點資料消失超過 5 分鐘 |
++| GroupShareRootCARotationDue | 版本化 CA 剩餘不到 540 天，提前安排根憑證遷移 |
++
++HTTPS scrape 的 CA 來自 `groupshare-webhook-trust`，沒有停用 TLS 驗證。leaf 的到期 metric 由 cert-manager 提供，與實際服務握手監測一起使用。
++
++**通知限制：目前 Alertmanager 唯一 receiver 是 `null`，沒有 email/webhook 整合。** 告警可在 Prometheus/Alertmanager 查詢，但不會送達人員。本次已詢問通知管道，尚待提供；沒有設定或發送任何外部通知。
++
++根 CA 告警中的 epoch `1946615636` 對應此版本 CA 的到期日；更換 CA 時必須同步更新規則，不能沿用舊日期。
++
++## 8. 首次遷移與 CA 輪替
++
++本次使用以下順序避免信任切換期間失敗，未來根憑證輪替也採相同原則：
++
++1. 先備份現行 Deployment、VWC、Certificates 及 Secrets 至 root 限制目錄。
++2. 產生新的版本化 CA，先建立新 CA Secret、Issuer 與獨立 leaf Certificate/Secret。**不要覆蓋正在使用的 CA Secret。**
++3. 建立含「舊信任根 + 新 CA」的公開 trust Secret，設定 `allow-direct-injection: "true"`。
++4. 將 VWC 注入來源改成 trust Secret；確認 API Server 的 caBundle 已包含兩份信任，且舊服務仍通過驗證。
++5. Rolling update 切換服務至新 leaf 與熱載入程式；持續執行 admission soak。
++6. 確認所有 Ready endpoints 都使用新 leaf、舊 Pod 已退出，才移除 trust bundle 中的舊信任。
++7. 演練一次 leaf 續期；驗證零 admission 失敗、所有副本載入新 leaf、無 Pod 重啟。
++
++本次 CA 以 OpenSSL 產生，RSA 3072、有效 1825 天、`basicConstraints=critical,CA:TRUE,pathlen:0`、`keyUsage=critical,keyCertSign,cRLSign`。它是專供 GroupShare 的版本化 CA，沒有改動 Kubernetes、其他 webhook 或網站的信任根。
++
++CA 不做無協調的自動覆蓋，因為那會重新引入本次信任不同步問題。最遲在 CA 剩餘 400 天前完成上述遷移，確保新簽發的 400 天 leaf 不超出 CA 有效期；監測提前至 540 天提醒。
++
++備份須包含 CA Secret 私鑰並限制存取。新叢集的災難還原需恢復原 CA 與 trust；若私鑰遺失，使用新 CA 並重新進行信任遷移，不能只恢復公開憑證。
++
++## 9. 年度流程
++
++GroupShare 例行換證交給自動化，年度人工工作集中於盤點、演練與其他元件維護。
++
++| 時間 | 工作 |
++| --- | --- |
++| 持續 | 已部署 cert-manager 自動續期、TLS 熱載入、30 秒監測及告警規則 |
++| 近期 | 補上 Alertmanager 實際通知管道與主要/代理負責人 |
++| 每月第一個工作日 | 複核監測目標健康、無資料告警及憑證期限；確認通知通道可用 |
++| 每年 5 月第一週 | 全平台憑證與 kubeconfig 盤點；確認備份與維護窗口 |
++| 2027-06-05 09:00-11:00（建議窗口） | 控制平面憑證維護及 Notebook 登入、建立、掛載驗收 |
++| 2027-08-15 左右 | GroupShare 預計自動續期，應由監測驗證；不需例行人工重啟 |
++| CA 剩餘 540 天前後 | 啟動版本化 CA 輪替計畫，於剩餘 400 天前完成 |
++
++2026-09-09 其他元件盤點：kubeadm 控制平面多數憑證到 **2027-07-20**，scheduler 到 **2027-07-23**；`kflow2.cgu.edu.tw` 到 **2026-11-19 05:05:01**，certbot.timer 已啟用；其餘 cert-manager leaf 多在 2026 年 11 月到期，仍按原有短效流程續期。
++
++本次沒有更新上述其他元件。單控制平面 `gpunode040` 的換證及 static Pod 重啟需在維護窗口執行，並事前驗證 etcd snapshot、備份 `/etc/kubernetes`、確認 kubeconfig 副本更新方式。年度流程與通知人員尚未建立行事曆指派。
++
++## 10. 參考資料
++
++- [cert-manager v1.12：Certificate 續期與重新載入](https://cert-manager.io/v1.12-docs/usage/certificate/)
++- [cert-manager v1.12：CA Issuer 與根憑證輪替責任](https://cert-manager.io/v1.12-docs/configuration/ca/)
++- [cert-manager v1.12：CA Injector](https://cert-manager.io/v1.12-docs/concepts/ca-injector/)
++- [Python 3.11：SSLContext 與 SNI callback](https://docs.python.org/3.11/library/ssl.html#ssl.SSLContext.sni_callback)
++- [Kubernetes：kubeadm 憑證管理](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/)
+diff --git a/cgu/groupshare/docs/deploy-handoff-20261012.md b/cgu/groupshare/docs/deploy-handoff-20261012.md
+new file mode 100644
+index 00000000..6cf90fb5
+--- /dev/null
++++ b/cgu/groupshare/docs/deploy-handoff-20261012.md
+@@ -0,0 +1,158 @@
++# GroupShare 部署修正交接（2026-10-12）
++
++給：負責 cgu-manifests 部署的人。內容：這次改了什麼、檔案在哪、要執行哪些指令。
++
++## 一句話
++
++GroupShare 已整合在 cgu-manifests 的 `apply.sh`，但原本的設定只在手動修過的 .6 能用，新環境（例如 10.100.1.4）會壞。這次把 9 月在 .6 修好的設定與程式放回 repo，並補上新環境需要的自動前置作業，之後跑 `apply.sh` 就能正確部署。
++
++## 程式與檔案位置
++
++兩個 repository 都推了 branch `groupshare-deploy-fix-20261012`，請檢查後合併：
++
++| Repository | 基底 branch | 內容 |
++|---|---|---|
++| `wycc/cgu-manifests` | `cgu-2.0-2026H3-Lance`（fab6a2b8） | 部署設定，`apply.sh` |
++| `lance-cl-lu/AI_Centre_Admin` | `cgu-2.0-2026H3-23.6-mark` | 程式原始碼（唯一來源）、後端 |
++
++`AI_LDAP_admin/groupshare/scripts/export-to-cgu-manifests.sh` 會把 GroupShare 從 AI_Centre_Admin 同步到 cgu-manifests；以後改程式請先改 AI_Centre_Admin 再同步，不要只改 cgu-manifests。
++
++cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env.ini`、兩個 `controller-configmap.yaml`、兩個 `controller-deployment.yaml`、`ldap-backend/full-stack-deployment.yaml`），`git pull` / merge 不會衝突，`apply.sh` 依 `env.ini` 改寫這些檔案的方式也不變。
++
++## 改了什麼
++
++### cgu-manifests
++
++- `cgu/groupshare/`：換成與 .6 線上相同的 webhook 設定（自建 CA Issuer、`groupshare-webhook-serving` 憑證、2 副本、PDB、TLS 熱載入、健康檢查）。
++- `validating-webhook-configuration.yaml`：拿掉 `caBundle: ""`。舊檔每次 apply 都會清空 API server 對 webhook 的信任，期間所有 Notebook 建立／修改都會被擋。
++- controller 與 webhook 程式改由 kustomize `configMapGenerator` 產生 ConfigMap 掛入，改程式不需重建映像（映像只提供 Python 套件）。
++- 移除：`notebook-template-groupshare.yaml`（部署時會真的建立一個 Notebook，webhook 未就緒時讓 `apply.sh` 卡在重試迴圈）、舊的 `*-code-configmap.yaml`、舊 SelfSigned `webhook-certificate.yaml`。
++- 新增 `cgu/groupshare/scripts/`：
++  - `bootstrap.sh nfs`：NFS 上沒有 `QNAP_MOUNT` 或 `QNAP_MOUNT/_namespaces` 時建立。
++  - `bootstrap.sh secrets`：沒有 webhook CA / trust Secret 時建立；若有舊的 `groupshare-webhook-tls`，trust 會同時信任舊憑證，換版期間不中斷。
++  - `bootstrap.sh webhook`：等憑證、webhook 與 caBundle 就緒；有 Prometheus Operator 時套用監測。
++  - `check.sh`：部署後唯讀檢查。
++- `apply.sh`：kustomize 前執行 `bootstrap.sh nfs`、`bootstrap.sh secrets`，恢復 ingress 後執行 `bootstrap.sh webhook`，最後執行 `check.sh`。三個步驟都可重複執行，已存在的物件不會被覆蓋。
++- `example/kustomization.yaml`：後端映像改為 `docker.io/cguaicadmin/ldap_backend:v2610121415`（**先推映像再 apply**，見下方）。
++
++### Controller（AI_Centre_Admin `groupshare/controller`、`namespace_share/controller`）
++
++- NFS 設定以 `apply.sh` 寫入的 ConfigMap 為準；provisioner Deployment 只是備用來源。原本找不到 `QNAP_NFS_DEPLOYMENT` 時 controller 會直接 crash。
++- 設定每輪重新讀取，不再只在啟動時讀。
++- 新增：比對每個 Notebook Pod 實際的群組掛載與目前 PodDefault，不一致時在 Pod 加 `groupshare.kubeflow.org/restart-required` annotation，並對 Notebook 發 `GroupShareRestartRequired` Event。**不會重啟任何 Pod**；使用者停止再啟動 Notebook 就套用，`/home/jovyan` 不受影響。Kubernetes 無法修改執行中 Pod 的 volume，所以只能提示。
++
++### 後端（AI_Centre_Admin `AI_LDAP_admin/api`）
++
++- `groupshare_reconcile.py`（新）：後端每 600 秒依 Django DB（管理平台看到的群組成員與管理權限）對帳所有 Profile 的 `group` / `manager` / `manager-group` annotation，並建立缺少的群組與 namespace 目錄。DB 找不到使用者的 Profile 不動。`GROUPSHARE_RECONCILE_INTERVAL_SECONDS=0` 可停用。
++- `python manage.py reconcile_groupshare [--dry-run]`（新）：手動執行。
++- `views.py`：群組刪除（含到期清理）、使用者停用、批次匯入既有使用者這三處原本沒有同步 Profile，已補上。
++- `TRASH` 與 `root` 一樣不產生共享資料夾（`groupshare_storage.GROUPSHARE_EXCLUDED_GROUPS`）。
++- `views.py` 第 1099 行：repo 版本把 `else:` 註解掉，會讓群組成員清單只列出 LDAP 找不到的人；已改回與線上一致。
++- `api/migrations/0006_groupdefaultquota_gpu_vendor.py`：線上容器啟動時自動產生、但 repo 沒有的 migration，已補上。
++- `Dockerfile.groupshare-overlay`：以線上 `v0.3.01` 為基底只覆蓋上述 Python 檔，前端與套件完全不變。
++
++測試：GroupShare 39 項、NamespaceShare 6 項、後端 12 項全部通過。
++
++## .6（gpunode040）目前狀態
++
++已完成（2026-10-12 由 Mark 執行）：
++
++- `kubectl apply -k cgu/groupshare`、`kubectl apply -k cgu/namespace_share`。webhook 憑證未重簽、caBundle 未中斷，server dry-run 建立 Notebook 正常。
++- controller 已標記 `d000018238` 的 6 個舊 Notebook 需重啟（缺 `aid002-a3463`、多 `a2615`）。
++
++尚未完成：後端映像推送與換版（這台 root 登入的 Docker Hub 帳號 `wycca1` 沒有 `cguaicadmin` 的推送權限）。
++
++## 要執行的指令
++
++### 1. 推後端映像（一次即可，.6 與其他環境共用）
++
++映像已在 gpunode040 的 docker 建好。用有 `cguaicadmin` 權限的帳號：
++
++```bash
++sudo -i
++docker login -u cguaicadmin
++docker push docker.io/cguaicadmin/ldap_backend:v2610121415
++```
++
++在其他機器重建（結果相同）：
++
++```bash
++git clone -b groupshare-deploy-fix-20261012 https://github.com/lance-cl-lu/AI_Centre_Admin.git
++cd AI_Centre_Admin/AI_LDAP_admin
++docker build -f Dockerfile.groupshare-overlay -t docker.io/cguaicadmin/ldap_backend:v2610121415 .
++docker push docker.io/cguaicadmin/ldap_backend:v2610121415
++```
++
++### 2. .6 後端換版（管理平台約停 1 分鐘，Notebook 不受影響）
++
++後端 SQLite 放在 NFS 上，RollingUpdate 會讓新舊 Pod 同時寫同一個資料庫，所以先縮到 0 再換：
++
++```bash
++sudo -i
++kubectl -n ldap scale deploy/backend-deployment --replicas=0
++kubectl -n ldap wait --for=delete pod -l app=backend --timeout=180s
++kubectl -n ldap set image deploy/backend-deployment backend=docker.io/cguaicadmin/ldap_backend:v2610121415
++kubectl -n ldap scale deploy/backend-deployment --replicas=1
++kubectl -n ldap rollout status deploy/backend-deployment --timeout=300s
++```
++
++驗證（啟動 60 秒後第一次對帳）：
++
++```bash
++kubectl -n ldap exec deploy/backend-deployment -- python manage.py reconcile_groupshare --dry-run
++kubectl -n ldap logs deploy/backend-deployment | grep groupshare-reconcile
++```
++
++預期第一輪修正 17 個 Profile（移除 DB 已不存在的群組 `徐永真_AID003_3464`、`A2615 深度學習應用`、`楊智淵_AIM128-A2612 進階電腦視覺`，補上 `Generative_AI` 等）並建立 `test103` 目錄；`d000018231`、`kjlin`、`kubeflow-user-example-com` 在 DB 沒有使用者，維持不動。之後應為 `changes=0`。
++
++回復：`kubectl -n ldap set image deploy/backend-deployment backend=docker.io/cguaicadmin/ldap_backend:v0.3.01`（同樣先縮到 0）。
++
++### 3. .6 的 cgu-manifests 合併 branch
++
++GroupShare 已套用，合併只是讓 repo 與線上一致：
++
++```bash
++cd /home/lance/work/cgu-manifests
++git fetch origin
++git merge origin/groupshare-deploy-fix-20261012
++kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share    # 應無差異
++```
++
++**不要只為了 GroupShare 在 .6 跑整個 `apply.sh`**：它會刪除重建 `istio-ingressgateway`，全體使用者會短暫斷線。
++
++### 4. 10.100.1.4（新環境）
++
++新安裝或重新部署走原本流程即可：
++
++```bash
++cd <cgu-manifests>
++git fetch origin && git merge origin/groupshare-deploy-fix-20261012
++cp env.ini.4 env.ini
++./apply.sh
++```
++
++若 10.100.1.4 已經部署過、只想更新 GroupShare（不重跑整個 `apply.sh`）：
++
++```bash
++cd <cgu-manifests>                      # 工作目錄內的環境檔已由上次 apply.sh 寫入 .4 的值
++git fetch origin && git merge origin/groupshare-deploy-fix-20261012
++source env.ini
++QNAP_IP="$QNAP_IP" QNAP_MOUNT="$QNAP_MOUNT" bash cgu/groupshare/scripts/bootstrap.sh nfs
++bash cgu/groupshare/scripts/bootstrap.sh secrets
++# 舊部署的 VWC last-applied 含 caBundle: ""，先只更新 last-applied，避免 apply 清空信任
++kubectl kustomize cgu/groupshare | python3 -c 'import sys,yaml; [print("---\n"+yaml.safe_dump(d)) for d in yaml.safe_load_all(sys.stdin) if d and d["kind"]=="ValidatingWebhookConfiguration"]' | kubectl apply set-last-applied -f -
++kubectl diff -k cgu/groupshare; kubectl diff -k cgu/namespace_share    # 確認 NFS 值是 .4 的
++kubectl apply -k cgu/groupshare && kubectl apply -k cgu/namespace_share
++bash cgu/groupshare/scripts/bootstrap.sh webhook
++bash cgu/groupshare/scripts/check.sh env.ini
++```
++
++然後依步驟 2 換後端映像（10.100.1.4 的 deployment 名稱相同）。
++
++`check.sh` 重點：第 1 段 NFS ConfigMap 是 `10.100.100.31` / `/AIC_K8s/shared`；第 3 段 `caBundle` 長度大於 0、`inject-ca-from` 為空；第 5 段沒有 `!!`。
++
++## 注意
++
++- 新環境 NFS export 要允許 master（`bootstrap.sh nfs` 在 master 上掛載），master 需安裝 `nfs-common`。
++- 舊 Notebook 不會自動換掛載，使用者重啟 Notebook 即生效；`check.sh` 第 6 段列出需重啟的 Pod。
++- 程式與部署設定的說明：`cgu/groupshare/README.md`；憑證維護：`cgu/groupshare/docs/certificate-maintenance.md`。
+diff --git a/cgu/groupshare/kustomization.yaml b/cgu/groupshare/kustomization.yaml
+index f2464dd3..22b7dd63 100644
+--- a/cgu/groupshare/kustomization.yaml
++++ b/cgu/groupshare/kustomization.yaml
+@@ -1,14 +1,37 @@
++# Single entry point for GroupShare. Deploy with `kubectl apply -k` (cgu-manifests includes this
++# directory from example/kustomization.yaml). Environment values live only in
++# deploy/controller-configmap.yaml and deploy/controller-deployment.yaml, which apply.sh rewrites
++# from env.ini. Webhook CA/trust Secrets and NFS directories are created by scripts/bootstrap.sh.
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+ resources:
+ - deploy/controller-rbac.yaml
+-- deploy/controller-code-configmap.yaml
+ - deploy/controller-configmap.yaml
+ - deploy/controller-deployment.yaml
+ - deploy/webhook-rbac.yaml
+-- deploy/webhook-code-configmap.yaml
+-- deploy/webhook-deployment.yaml
+ - deploy/webhook-service.yaml
+-- deploy/webhook-certificate.yaml
++- deploy/webhook-ca-issuer.yaml
++- deploy/webhook-serving-certificate.yaml
++- deploy/webhook-deployment.yaml
++- deploy/webhook-pdb.yaml
+ - deploy/validating-webhook-configuration.yaml
+-- deploy/notebook-template-groupshare.yaml
++
++patches:
++- path: deploy/controller-runtime-patch.yaml
++
++# Code ships as content-hashed ConfigMaps: any code change gets a new name and rolls the
++# Deployments; published ConfigMaps are never edited in place.
++generatorOptions:
++  immutable: true
++configMapGenerator:
++- name: groupshare-controller-runtime
++  namespace: kubeflow
++  files:
++  - app.py=controller/app.py
++  - parser.py=controller/parser.py
++- name: groupshare-webhook-runtime
++  namespace: kubeflow
++  files:
++  - app.py=webhook/app.py
++  - rules.py=webhook/rules.py
++  - tls_reload.py=webhook/tls_reload.py
+diff --git a/cgu/groupshare/scripts/bootstrap.sh b/cgu/groupshare/scripts/bootstrap.sh
+new file mode 100755
+index 00000000..f8ca9987
+--- /dev/null
++++ b/cgu/groupshare/scripts/bootstrap.sh
+@@ -0,0 +1,125 @@
++#!/bin/bash
++# Idempotent prerequisites for GroupShare / NamespaceShare that kustomize cannot express.
++# Existing objects are never replaced, so re-running on a working cluster changes nothing.
++#
++#   QNAP_IP=... QNAP_MOUNT=... bash bootstrap.sh nfs    # before `kubectl apply -k`
++#   bash bootstrap.sh secrets                           # before `kubectl apply -k` (no-op without the kubeflow namespace)
++#   bash bootstrap.sh webhook                           # after `kubectl apply -k`
++#
++# nfs:     create QNAP_MOUNT and QNAP_MOUNT/_namespaces on the NFS server when missing (the backend
++#          and every notebook mount them; a missing directory blocks Pod start).
++# secrets: create the webhook CA Secret and the public trust Secret when absent. When an older
++#          deployment's self-signed Secret exists, its CA is kept in the trust bundle so webhook Pods
++#          still serving the old certificate stay trusted during the rollout.
++# webhook: run `secrets`, wait for the serving certificate, the webhook and the injected caBundle,
++#          and apply monitoring when Prometheus Operator CRDs exist.
++set -u
++HERE="$(cd "$(dirname "$0")" && pwd)"
++NS=kubeflow
++CA_SECRET=groupshare-webhook-ca-2026
++TRUST_SECRET=groupshare-webhook-trust
++LEGACY_TLS_SECRET=groupshare-webhook-tls
++
++log() { echo "[groupshare-bootstrap] $*"; }
++
++ensure_dir() {
++  [ -d "$1" ] && return 0
++  mkdir -p "$1" && chmod 777 "$1" && log "created $2"
++}
++
++bootstrap_nfs() {
++  if [ -z "${QNAP_IP:-}" ] || [ -z "${QNAP_MOUNT:-}" ]; then
++    log "QNAP_IP / QNAP_MOUNT not set; skip NFS directories"
++    return 1
++  fi
++  local base="${QNAP_MOUNT%/}" mnt root rc=0
++  mnt="$(mktemp -d)"
++  # Mount the share itself, or its parent when the share directory does not exist yet.
++  if mount -t nfs "${QNAP_IP}:${base}" "$mnt" 2>/dev/null; then
++    root="$mnt"
++  elif mount -t nfs "${QNAP_IP}:$(dirname "$base")" "$mnt" 2>/dev/null; then
++    root="$mnt/$(basename "$base")"
++    ensure_dir "$root" "${base}" || rc=1
++  else
++    log "cannot mount ${QNAP_IP}:${base} or its parent (is nfs-common installed and the export allowed?)"
++    rmdir "$mnt"
++    return 1
++  fi
++  ensure_dir "$root/_namespaces" "${base}/_namespaces" || rc=1
++  umount "$mnt"; rmdir "$mnt"
++  [ $rc -eq 0 ] && log "NFS directories ready: ${QNAP_IP}:${base}{,/_namespaces}" || log "failed to create NFS directories"
++  return $rc
++}
++
++bootstrap_secrets() {
++  if ! kubectl get namespace "$NS" >/dev/null 2>&1; then
++    log "namespace $NS not created yet; secrets are created after the first apply"
++    return 0
++  fi
++  local work
++  work="$(mktemp -d)"
++
++  if ! kubectl -n "$NS" get secret "$CA_SECRET" >/dev/null 2>&1; then
++    log "creating webhook CA Secret $NS/$CA_SECRET"
++    if ! openssl req -x509 -newkey rsa:3072 -nodes -days 1826 \
++        -keyout "$work/ca.key" -out "$work/ca.crt" \
++        -subj "/CN=GroupShare Webhook CA $(date +%Y)/O=CGU" \
++        -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
++        -addext "keyUsage=critical,keyCertSign,cRLSign" 2>/dev/null; then
++      log "openssl failed"; rm -rf "$work"; return 1
++    fi
++    kubectl -n "$NS" create secret tls "$CA_SECRET" --cert="$work/ca.crt" --key="$work/ca.key" || { rm -rf "$work"; return 1; }
++  fi
++
++  if ! kubectl -n "$NS" get secret "$TRUST_SECRET" >/dev/null 2>&1; then
++    kubectl -n "$NS" get secret "$CA_SECRET" -o jsonpath='{.data.tls\.crt}' | base64 -d > "$work/trust.crt"
++    local legacy
++    legacy="$(kubectl -n "$NS" get secret "$LEGACY_TLS_SECRET" -o jsonpath='{.data.ca\.crt}' 2>/dev/null | base64 -d 2>/dev/null)"
++    if [ -n "$legacy" ]; then
++      printf '%s\n' "$legacy" >> "$work/trust.crt"
++      log "trust bundle also keeps the CA of $NS/$LEGACY_TLS_SECRET for the migration"
++    fi
++    log "creating public trust Secret $NS/$TRUST_SECRET"
++    kubectl -n "$NS" create secret generic "$TRUST_SECRET" --from-file=ca.crt="$work/trust.crt" || { rm -rf "$work"; return 1; }
++    kubectl -n "$NS" annotate secret "$TRUST_SECRET" cert-manager.io/allow-direct-injection=true --overwrite
++  fi
++  rm -rf "$work"
++}
++
++bootstrap_webhook() {
++  local rc=0 bundle
++  bootstrap_secrets || return 1
++
++  if ! kubectl -n "$NS" wait certificate/groupshare-webhook-serving --for=condition=Ready --timeout=300s; then
++    log "serving certificate not Ready; check: kubectl -n $NS describe certificate groupshare-webhook-serving"
++    rc=1
++  fi
++  if ! kubectl -n "$NS" rollout status deploy/groupshare-validating-webhook --timeout=300s; then
++    log "webhook not ready; Notebook create/update is blocked until it is (failurePolicy=Fail)"
++    rc=1
++  fi
++  for _ in $(seq 1 30); do
++    bundle="$(kubectl get validatingwebhookconfiguration groupshare-validating-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}')"
++    [ -n "$bundle" ] && break
++    sleep 5
++  done
++  if [ -z "$bundle" ]; then
++    log "caBundle still empty; check cert-manager cainjector logs"
++    rc=1
++  fi
++
++  if kubectl get crd prometheusrules.monitoring.coreos.com podmonitors.monitoring.coreos.com \
++      servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
++    kubectl apply -f "$HERE/../deploy/webhook-certificate-monitoring.yaml" || rc=1
++  else
++    log "Prometheus Operator CRDs not found; skip certificate monitoring"
++  fi
++  return $rc
++}
++
++case "${1:-}" in
++  nfs) bootstrap_nfs ;;
++  secrets) bootstrap_secrets ;;
++  webhook) bootstrap_webhook ;;
++  *) echo "usage: $0 nfs|secrets|webhook" >&2; exit 2 ;;
++esac
+diff --git a/cgu/groupshare/scripts/check.sh b/cgu/groupshare/scripts/check.sh
+new file mode 100755
+index 00000000..1792ce3c
+--- /dev/null
++++ b/cgu/groupshare/scripts/check.sh
+@@ -0,0 +1,50 @@
++#!/bin/bash
++# GroupShare / NamespaceShare 唯讀檢查（不修改任何資源）
++# 用法：在要檢查的 master 上，於 cgu-manifests 目錄執行：sudo bash cgu/groupshare/scripts/check.sh [env.ini 路徑]
++# apply.sh 部署完會自動執行一次。
++ENV_FILE="${1:-env.ini}"
++source "$ENV_FILE" || exit 1
++echo "== env: QNAP_IP=$QNAP_IP QNAP_MOUNT=$QNAP_MOUNT NS=$QNAP_SHARED_NAMESPACE DEPLOY=$QNAP_NFS_DEPLOYMENT"
++
++echo "== 1. controller 讀取的 NFS 設定 ConfigMap（provisioner Deployment 只是備用來源）"
++kubectl -n "$QNAP_SHARED_NAMESPACE" get cm groupshare-nfs-defaults namespace-share-nfs-defaults -o custom-columns=NAME:.metadata.name,SERVER:.data.NFS_SERVER,PATH:.data.NFS_PATH \
++  || echo "!! 找不到 -> controller 無法產生 PodDefault"
++
++echo "== 2. 元件狀態"
++kubectl -n kubeflow get deploy groupshare-controller namespace-share-controller groupshare-validating-webhook
++kubectl -n kubeflow get pods | grep -E "groupshare|namespace-share"
++for d in groupshare-controller namespace-share-controller groupshare-validating-webhook; do
++  echo "-- logs $d"; kubectl -n kubeflow logs deploy/$d --tail=15 2>&1
++done
++
++echo "== 3. webhook 憑證（failurePolicy=Fail，壞了會擋住所有 Notebook 建立/修改）"
++kubectl -n kubeflow get issuer groupshare-webhook-ca
++kubectl -n kubeflow get certificate groupshare-webhook-serving
++kubectl -n kubeflow get secret groupshare-webhook-trust >/dev/null && echo "secret groupshare-webhook-trust OK" || echo "!! 缺 trust Secret，請執行 bootstrap.sh webhook"
++VWC=groupshare-validating-webhook
++echo "inject-ca-from=$(kubectl get validatingwebhookconfiguration $VWC -o jsonpath='{.metadata.annotations.cert-manager\.io/inject-ca-from}')（應為空）"
++echo "inject-ca-from-secret=$(kubectl get validatingwebhookconfiguration $VWC -o jsonpath='{.metadata.annotations.cert-manager\.io/inject-ca-from-secret}')"
++echo "caBundle 長度=$(kubectl get validatingwebhookconfiguration $VWC -o jsonpath='{.webhooks[0].clientConfig.caBundle}' | wc -c)（0 表示 API server 無法信任 webhook）"
++
++echo "== 4. PodDefault 是否已對每個 Profile 產生"
++echo "profiles=$(kubectl get profiles --no-headers | wc -l)  groupshare-poddefaults=$(kubectl get poddefault -A --no-headers | grep -c ' groupshare ')"
++
++echo "== 5. NFS 匯出與目錄"
++showmount -e "$QNAP_IP" 2>&1 | head -n 10
++MNT=$(mktemp -d)
++if mount -t nfs -o ro "$QNAP_IP:$QNAP_MOUNT" "$MNT" 2>/dev/null; then
++  [ -d "$MNT/_namespaces" ] || echo "!! $QNAP_MOUNT/_namespaces 不存在"
++  for ns in $(kubectl get profiles -o jsonpath='{.items[*].metadata.name}'); do
++    [ -d "$MNT/_namespaces/$ns" ] || echo "!! 缺 namespace 目錄: _namespaces/$ns（該 namespace 的 Pod 會卡在 FailedMount）"
++  done
++  umount "$MNT"
++else
++  echo "!! 無法掛載 $QNAP_IP:$QNAP_MOUNT"
++fi
++rmdir "$MNT"
++
++echo "== 6. 需要重啟才會套用新群組掛載的 Notebook Pod（不會自動重啟）"
++kubectl get pods -A -l notebook-name -o jsonpath='{range .items[?(@.metadata.annotations.groupshare\.kubeflow\.org/restart-required)]}{.metadata.namespace}/{.metadata.name} {.metadata.annotations.groupshare\.kubeflow\.org/restart-required}{"\n"}{end}'
++
++echo "== 7. 近期與掛載/webhook 相關的事件"
++kubectl get events -A --sort-by=.lastTimestamp | grep -iE "groupshare|FailedMount|webhook|GroupShareRestartRequired" | tail -n 20
+diff --git a/cgu/groupshare/webhook/app.py b/cgu/groupshare/webhook/app.py
+index e700998b..d9f1e1ed 100644
+--- a/cgu/groupshare/webhook/app.py
++++ b/cgu/groupshare/webhook/app.py
+@@ -7,6 +7,7 @@ from kubernetes import client, config
+ from kubernetes.client.rest import ApiException
+ 
+ from rules import evaluate_rules, parse_csv
++from tls_reload import ReloadingTLSContext
+ 
+ 
+ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
+@@ -92,6 +93,22 @@ def healthz():
+     return "ok", 200
+ 
+ 
++@app.route("/metrics", methods=["GET"])
++def metrics():
++    tls = app.config.get("TLS_CONTEXT")
++    if tls is None:
++        return "TLS context unavailable\n", 503
++    tls.current()
++    return (
++        "# TYPE groupshare_tls_reload_healthy gauge\n"
++        f"groupshare_tls_reload_healthy {int(tls.healthy)}\n"
++        "# TYPE groupshare_tls_loads_total counter\n"
++        f"groupshare_tls_loads_total {tls.reload_count}\n",
++        200,
++        {"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
++    )
++
++
+ @app.route("/validate", methods=["POST"])
+ def validate():
+     try:
+@@ -151,4 +168,6 @@ if __name__ == "__main__":
+     port = int(os.getenv("PORT", "8443"))
+     cert = os.getenv("TLS_CERT_FILE", "/tls/tls.crt")
+     key = os.getenv("TLS_KEY_FILE", "/tls/tls.key")
+-    app.run(host="0.0.0.0", port=port, ssl_context=(cert, key))
++    tls = ReloadingTLSContext(cert, key)
++    app.config["TLS_CONTEXT"] = tls
++    app.run(host="0.0.0.0", port=port, ssl_context=tls.context)
+diff --git a/cgu/groupshare/webhook/rules.py b/cgu/groupshare/webhook/rules.py
+index fe3da905..18b8cff8 100644
+--- a/cgu/groupshare/webhook/rules.py
++++ b/cgu/groupshare/webhook/rules.py
+@@ -41,20 +41,10 @@ def evaluate_rules(
+     admin_volume_names: Set[str],
+     writable_volume_names: Set[str],
+ ) -> Tuple[bool, str, str]:
+-    metadata = notebook_obj.get("metadata", {})
+-    labels = metadata.get("labels", {}) or {}
+     pod_spec = extract_pod_spec(notebook_obj)
+     volumes = pod_spec.get("volumes", []) or []
+-    if labels.get("groupshare") != "enabled":
+-        for volume in volumes:
+-            nfs = volume.get("nfs")
+-            if not nfs:
+-                continue
+-            volume_name = volume.get("name", "")
+-            path = nfs.get("path", "")
+-            if volume_name in allowed_volume_names or path in allowed_nfs_paths or path.startswith("/group"):
+-                return False, "Rule D", "groupshare label is required: groupshare=enabled"
+-        return True, "ALLOW", "groupshare disabled: skip rules"
++    if not any(volume.get("nfs") for volume in volumes):
++        return True, "ALLOW", "no NFS volumes to validate"
+ 
+     containers = pod_spec.get("containers", []) or []
+     mount_readonly = {}
+diff --git a/cgu/groupshare/webhook/tls_reload.py b/cgu/groupshare/webhook/tls_reload.py
+new file mode 100644
+index 00000000..258f46d7
+--- /dev/null
++++ b/cgu/groupshare/webhook/tls_reload.py
+@@ -0,0 +1,71 @@
++"""Reload complete TLS contexts when Kubernetes projects a new Secret version."""
++
++import logging
++from pathlib import Path
++import ssl
++import threading
++
++
++logger = logging.getLogger("groupshare-webhook.tls")
++
++
++class ReloadingTLSContext:
++    def __init__(self, cert_file, key_file):
++        self.cert_file = Path(cert_file)
++        self.key_file = Path(key_file)
++        self._lock = threading.Lock()
++        self._version = None
++        self._current = None
++        self._last_error = None
++        self.reload_count = 0
++        self.healthy = False
++        self.context = self.current()
++        if self.context is None:
++            raise RuntimeError("No valid TLS certificate and key available at startup")
++        self.context.sni_callback = self._select_context
++
++    def _snapshot(self):
++        # Resolve ..data once so certificate and key come from one atomic projection.
++        if self.cert_file.parent == self.key_file.parent:
++            data = self.cert_file.parent / "..data"
++            if data.is_symlink():
++                directory = data.resolve(strict=True)
++                cert = directory / self.cert_file.name
++                key = directory / self.key_file.name
++            else:
++                cert, key = self.cert_file, self.key_file
++        else:
++            cert, key = self.cert_file, self.key_file
++        version = tuple(
++            (str(path), stat.st_ino, stat.st_size, stat.st_mtime_ns)
++            for path in (cert, key)
++            for stat in (path.stat(),)
++        )
++        return cert, key, version
++
++    def current(self):
++        with self._lock:
++            try:
++                cert, key, version = self._snapshot()
++                if version != self._version:
++                    candidate = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
++                    candidate.minimum_version = ssl.TLSVersion.TLSv1_2
++                    candidate.load_cert_chain(cert, key)
++                    # Never replace a working context with a partial or invalid key pair.
++                    self._current = candidate
++                    self._version = version
++                    self.reload_count += 1
++                    logger.info("TLS certificate loaded successfully (generation %d)", self.reload_count)
++                self.healthy = True
++                self._last_error = None
++            except (OSError, ssl.SSLError) as exc:
++                self.healthy = False
++                error = str(exc)
++                if error != self._last_error:
++                    logger.error("TLS reload failed; retaining the last valid context: %s", error)
++                    self._last_error = error
++            return self._current
++
++    def _select_context(self, socket, server_name, initial_context):
++        socket.context = self.current()
++
+diff --git a/cgu/namespace_share/controller/app.py b/cgu/namespace_share/controller/app.py
+new file mode 100644
+index 00000000..bb3e6633
+--- /dev/null
++++ b/cgu/namespace_share/controller/app.py
+@@ -0,0 +1,197 @@
++import hashlib
++import logging
++import os
++import time
++from typing import Tuple
++
++from kubernetes import client, config
++from kubernetes.client.rest import ApiException
++
++from parser import build_namespace_nfs_path, sanitize_namespace_token, to_volume_name
++
++
++logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
++logger = logging.getLogger("namespace-share-controller")
++
++PROFILE_GROUP = "kubeflow.org"
++PROFILE_VERSION = "v1"
++PROFILE_PLURAL = "profiles"
++PODDEFAULT_GROUP = "kubeflow.org"
++PODDEFAULT_VERSION = "v1alpha1"
++PODDEFAULT_PLURAL = "poddefaults"
++
++NFS_NAMESPACE = os.getenv("NFS_NAMESPACE", "kubeflow")
++NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
++NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "namespace-share-nfs-defaults")
++PODDEFAULT_NAME = os.getenv("NAMESPACE_SHARE_PODDEFAULT_NAME", "namespace-share")
++PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
++POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
++
++
++class NamespaceShareController:
++    def __init__(self) -> None:
++        config.load_incluster_config()
++        self.co_api = client.CustomObjectsApi()
++        self.apps_api = client.AppsV1Api()
++        self.core_api = client.CoreV1Api()
++        self.nfs_server, self.nfs_path = "", ""
++
++    def _load_nfs_settings(self) -> Tuple[str, str]:
++        # The ConfigMap written by apply.sh is authoritative. The provisioner Deployment is only a
++        # fallback source, so a cluster whose provisioner has another name or namespace still works.
++        cm_data = {}
++        try:
++            cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
++            cm_data = cm.data or {}
++        except ApiException as exc:
++            if exc.status != 404:
++                raise
++
++        nfs_path = (cm_data.get("NFS_PATH") or "").strip()
++        nfs_server = (cm_data.get("NFS_SERVER") or "").strip()
++        if not nfs_path or not nfs_server:
++            env_map = {}
++            try:
++                dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
++                for container in dep.spec.template.spec.containers:
++                    for env_var in container.env or []:
++                        env_map[env_var.name] = env_var.value
++            except ApiException as exc:
++                if exc.status != 404:
++                    raise
++            nfs_path = nfs_path or (env_map.get("NFS_PATH") or "").strip()
++            nfs_server = nfs_server or (env_map.get("NFS_SERVER") or "").strip()
++
++        if not nfs_path:
++            raise RuntimeError(
++                f"NFS_PATH missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
++            )
++        if not nfs_server:
++            raise RuntimeError(
++                f"NFS_SERVER missing from ConfigMap {NFS_NAMESPACE}/{NFS_CONFIGMAP} and provisioner deployment env"
++            )
++
++        if (nfs_server, nfs_path) != (self.nfs_server, self.nfs_path):
++            logger.info("[INFO] Loaded namespace-share NFS settings: server=%s path=%s", nfs_server, nfs_path)
++        return nfs_server, nfs_path
++
++    def _build_spec(self, namespace: str) -> dict:
++        mount_token = sanitize_namespace_token(namespace)
++        if not mount_token:
++            raise RuntimeError(f"namespace '{namespace}' cannot be sanitized")
++
++        volume_name = to_volume_name(namespace)
++        nfs_path = build_namespace_nfs_path(self.nfs_path, namespace)
++
++        annotations = {
++            "namespace-share.kubeflow.org/nfs-server": self.nfs_server,
++            "namespace-share.kubeflow.org/allowed-volumes": volume_name,
++            "namespace-share.kubeflow.org/allowed-paths": nfs_path,
++            "namespace-share.kubeflow.org/writable-volumes": volume_name,
++        }
++
++        return {
++            "apiVersion": "kubeflow.org/v1alpha1",
++            "kind": "PodDefault",
++            "metadata": {
++                "name": PODDEFAULT_NAME,
++                "annotations": annotations,
++            },
++            "spec": {
++                "desc": "NamespaceShare auto-generated mount",
++                "selector": {},
++                "volumeMounts": [
++                    {
++                        "name": volume_name,
++                        "mountPath": f"/mnt/namespaces/{mount_token}",
++                        "readOnly": False,
++                    }
++                ],
++                "volumes": [
++                    {
++                        "name": volume_name,
++                        "nfs": {
++                            "server": self.nfs_server,
++                            "path": nfs_path,
++                            "readOnly": False,
++                        },
++                    }
++                ],
++            },
++        }
++
++    def _hash_namespace(self, namespace: str) -> str:
++        raw = f"{namespace}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
++        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
++
++    def sync_profile(self, profile: dict) -> None:
++        namespace = (profile.get("metadata", {}) or {}).get("name", "")
++        if not namespace:
++            return
++
++        current_hash = self._hash_namespace(namespace)
++        body = self._build_spec(namespace)
++        body["metadata"]["namespace"] = namespace
++        body["metadata"]["annotations"]["namespace-share.kubeflow.org/hash"] = current_hash
++
++        try:
++            existing = self.co_api.get_namespaced_custom_object(
++                group=PODDEFAULT_GROUP,
++                version=PODDEFAULT_VERSION,
++                namespace=namespace,
++                plural=PODDEFAULT_PLURAL,
++                name=PODDEFAULT_NAME,
++            )
++            existing_hash = (
++                existing.get("metadata", {})
++                .get("annotations", {})
++                .get("namespace-share.kubeflow.org/hash", "")
++            )
++            existing_selector = existing.get("spec", {}).get("selector", {})
++            desired_selector = body.get("spec", {}).get("selector", {})
++            if existing_hash == current_hash and existing_selector == desired_selector:
++                logger.info("[INFO] Synced Profile namespace=%s no changes", namespace)
++                return
++            body["metadata"]["resourceVersion"] = existing.get("metadata", {}).get("resourceVersion")
++            self.co_api.replace_namespaced_custom_object(
++                group=PODDEFAULT_GROUP,
++                version=PODDEFAULT_VERSION,
++                namespace=namespace,
++                plural=PODDEFAULT_PLURAL,
++                name=PODDEFAULT_NAME,
++                body=body,
++            )
++            action = "Updated"
++        except ApiException as exc:
++            if exc.status != 404:
++                raise
++            self.co_api.create_namespaced_custom_object(
++                group=PODDEFAULT_GROUP,
++                version=PODDEFAULT_VERSION,
++                namespace=namespace,
++                plural=PODDEFAULT_PLURAL,
++                body=body,
++            )
++            action = "Created"
++
++        logger.info("[INFO] %s PodDefault namespace=%s name=%s", action, namespace, PODDEFAULT_NAME)
++
++    def run(self) -> None:
++        while True:
++            try:
++                self.nfs_server, self.nfs_path = self._load_nfs_settings()
++                profiles = self.co_api.list_cluster_custom_object(
++                    group=PROFILE_GROUP,
++                    version=PROFILE_VERSION,
++                    plural=PROFILE_PLURAL,
++                )
++                for profile in profiles.get("items", []):
++                    self.sync_profile(profile)
++            except Exception as exc:
++                logger.exception("controller loop failed: %s", exc)
++            time.sleep(POLL_SECONDS)
++
++
++if __name__ == "__main__":
++    controller = NamespaceShareController()
++    controller.run()
+diff --git a/cgu/namespace_share/controller/parser.py b/cgu/namespace_share/controller/parser.py
+new file mode 100644
+index 00000000..459a658a
+--- /dev/null
++++ b/cgu/namespace_share/controller/parser.py
+@@ -0,0 +1,20 @@
++import re
++
++
++def sanitize_namespace_token(namespace: str) -> str:
++    token = (namespace or "").strip().lower()
++    token = re.sub(r"[^a-z0-9-]+", "-", token)
++    token = re.sub(r"-{2,}", "-", token)
++    return token.strip("-")
++
++
++def build_namespace_nfs_path(base_path: str, namespace: str) -> str:
++    sanitized = sanitize_namespace_token(namespace)
++    if not sanitized:
++        return ""
++    return f"{base_path.rstrip('/')}/{sanitized}"
++
++
++def to_volume_name(namespace: str) -> str:
++    sanitized = sanitize_namespace_token(namespace)
++    return f"ns-{sanitized}" if sanitized else "ns-unknown"
+diff --git a/cgu/namespace_share/deploy/controller-code-configmap.yaml b/cgu/namespace_share/deploy/controller-code-configmap.yaml
+deleted file mode 100644
+index 9e1c7e4d..00000000
+--- a/cgu/namespace_share/deploy/controller-code-configmap.yaml
++++ /dev/null
+@@ -1,211 +0,0 @@
+-apiVersion: v1
+-data:
+-  app.py: |
+-    import hashlib
+-    import logging
+-    import os
+-    import time
+-    from typing import Tuple
+-
+-    from kubernetes import client, config
+-    from kubernetes.client.rest import ApiException
+-
+-    from parser import build_namespace_nfs_path, sanitize_namespace_token, to_volume_name
+-
+-
+-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
+-    logger = logging.getLogger("namespace-share-controller")
+-
+-    PROFILE_GROUP = "kubeflow.org"
+-    PROFILE_VERSION = "v1"
+-    PROFILE_PLURAL = "profiles"
+-    PODDEFAULT_GROUP = "kubeflow.org"
+-    PODDEFAULT_VERSION = "v1alpha1"
+-    PODDEFAULT_PLURAL = "poddefaults"
+-
+-    NFS_NAMESPACE = os.getenv("NFS_NAMESPACE", "kubeflow")
+-    NFS_DEPLOYMENT = os.getenv("NFS_DEPLOYMENT", "nfs-client-provisioner")
+-    NFS_CONFIGMAP = os.getenv("NFS_CONFIGMAP", "namespace-share-nfs-defaults")
+-    PODDEFAULT_NAME = os.getenv("NAMESPACE_SHARE_PODDEFAULT_NAME", "namespace-share")
+-    PODDEFAULT_SELECTOR_VERSION = "all-notebooks-v1"
+-    POLL_SECONDS = int(os.getenv("POLL_SECONDS", "20"))
+-
+-
+-    class NamespaceShareController:
+-        def __init__(self) -> None:
+-            config.load_incluster_config()
+-            self.co_api = client.CustomObjectsApi()
+-            self.apps_api = client.AppsV1Api()
+-            self.core_api = client.CoreV1Api()
+-            self.nfs_server, self.nfs_path = self._load_nfs_settings()
+-
+-        def _load_nfs_settings(self) -> Tuple[str, str]:
+-            dep = self.apps_api.read_namespaced_deployment(name=NFS_DEPLOYMENT, namespace=NFS_NAMESPACE)
+-            env_map = {}
+-            for container in dep.spec.template.spec.containers:
+-                for env_var in container.env or []:
+-                    env_map[env_var.name] = env_var.value
+-
+-            cm_data = {}
+-            try:
+-                cm = self.core_api.read_namespaced_config_map(name=NFS_CONFIGMAP, namespace=NFS_NAMESPACE)
+-                cm_data = cm.data or {}
+-            except ApiException as exc:
+-                if exc.status != 404:
+-                    raise
+-
+-            nfs_path = (cm_data.get("NFS_PATH") or env_map.get("NFS_PATH") or "").strip()
+-            nfs_server = (cm_data.get("NFS_SERVER") or env_map.get("NFS_SERVER") or "").strip()
+-            if not nfs_path:
+-                raise RuntimeError("NFS_PATH missing from namespace-share ConfigMap and provisioner deployment env")
+-            if not nfs_server:
+-                raise RuntimeError("NFS_SERVER missing from namespace-share ConfigMap and provisioner deployment env")
+-
+-            logger.info("[INFO] Loaded namespace-share NFS settings: server=%s path=%s", nfs_server, nfs_path)
+-            return nfs_server, nfs_path
+-
+-        def _build_spec(self, namespace: str) -> dict:
+-            mount_token = sanitize_namespace_token(namespace)
+-            if not mount_token:
+-                raise RuntimeError(f"namespace '{namespace}' cannot be sanitized")
+-
+-            volume_name = to_volume_name(namespace)
+-            nfs_path = build_namespace_nfs_path(self.nfs_path, namespace)
+-
+-            annotations = {
+-                "namespace-share.kubeflow.org/nfs-server": self.nfs_server,
+-                "namespace-share.kubeflow.org/allowed-volumes": volume_name,
+-                "namespace-share.kubeflow.org/allowed-paths": nfs_path,
+-                "namespace-share.kubeflow.org/writable-volumes": volume_name,
+-            }
+-
+-            return {
+-                "apiVersion": "kubeflow.org/v1alpha1",
+-                "kind": "PodDefault",
+-                "metadata": {
+-                    "name": PODDEFAULT_NAME,
+-                    "annotations": annotations,
+-                },
+-                "spec": {
+-                    "desc": "NamespaceShare auto-generated mount",
+-                    "selector": {},
+-                    "volumeMounts": [
+-                        {
+-                            "name": volume_name,
+-                            "mountPath": f"/mnt/namespaces/{mount_token}",
+-                            "readOnly": False,
+-                        }
+-                    ],
+-                    "volumes": [
+-                        {
+-                            "name": volume_name,
+-                            "nfs": {
+-                                "server": self.nfs_server,
+-                                "path": nfs_path,
+-                                "readOnly": False,
+-                            },
+-                        }
+-                    ],
+-                },
+-            }
+-
+-        def _hash_namespace(self, namespace: str) -> str:
+-            raw = f"{namespace}|{self.nfs_server}|{self.nfs_path}|{PODDEFAULT_SELECTOR_VERSION}"
+-            return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+-
+-        def sync_profile(self, profile: dict) -> None:
+-            namespace = (profile.get("metadata", {}) or {}).get("name", "")
+-            if not namespace:
+-                return
+-
+-            current_hash = self._hash_namespace(namespace)
+-            body = self._build_spec(namespace)
+-            body["metadata"]["namespace"] = namespace
+-            body["metadata"]["annotations"]["namespace-share.kubeflow.org/hash"] = current_hash
+-
+-            try:
+-                existing = self.co_api.get_namespaced_custom_object(
+-                    group=PODDEFAULT_GROUP,
+-                    version=PODDEFAULT_VERSION,
+-                    namespace=namespace,
+-                    plural=PODDEFAULT_PLURAL,
+-                    name=PODDEFAULT_NAME,
+-                )
+-                existing_hash = (
+-                    existing.get("metadata", {})
+-                    .get("annotations", {})
+-                    .get("namespace-share.kubeflow.org/hash", "")
+-                )
+-                existing_selector = existing.get("spec", {}).get("selector", {})
+-                desired_selector = body.get("spec", {}).get("selector", {})
+-                if existing_hash == current_hash and existing_selector == desired_selector:
+-                    logger.info("[INFO] Synced Profile namespace=%s no changes", namespace)
+-                    return
+-                body["metadata"]["resourceVersion"] = existing.get("metadata", {}).get("resourceVersion")
+-                self.co_api.replace_namespaced_custom_object(
+-                    group=PODDEFAULT_GROUP,
+-                    version=PODDEFAULT_VERSION,
+-                    namespace=namespace,
+-                    plural=PODDEFAULT_PLURAL,
+-                    name=PODDEFAULT_NAME,
+-                    body=body,
+-                )
+-                action = "Updated"
+-            except ApiException as exc:
+-                if exc.status != 404:
+-                    raise
+-                self.co_api.create_namespaced_custom_object(
+-                    group=PODDEFAULT_GROUP,
+-                    version=PODDEFAULT_VERSION,
+-                    namespace=namespace,
+-                    plural=PODDEFAULT_PLURAL,
+-                    body=body,
+-                )
+-                action = "Created"
+-
+-            logger.info("[INFO] %s PodDefault namespace=%s name=%s", action, namespace, PODDEFAULT_NAME)
+-
+-        def run(self) -> None:
+-            while True:
+-                try:
+-                    profiles = self.co_api.list_cluster_custom_object(
+-                        group=PROFILE_GROUP,
+-                        version=PROFILE_VERSION,
+-                        plural=PROFILE_PLURAL,
+-                    )
+-                    for profile in profiles.get("items", []):
+-                        self.sync_profile(profile)
+-                except Exception as exc:
+-                    logger.exception("controller loop failed: %s", exc)
+-                time.sleep(POLL_SECONDS)
+-
+-
+-    if __name__ == "__main__":
+-        controller = NamespaceShareController()
+-        controller.run()
+-  parser.py: |
+-    import re
+-
+-
+-    def sanitize_namespace_token(namespace: str) -> str:
+-        token = (namespace or "").strip().lower()
+-        token = re.sub(r"[^a-z0-9-]+", "-", token)
+-        token = re.sub(r"-{2,}", "-", token)
+-        return token.strip("-")
+-
+-
+-    def build_namespace_nfs_path(base_path: str, namespace: str) -> str:
+-        sanitized = sanitize_namespace_token(namespace)
+-        if not sanitized:
+-            return ""
+-        return f"{base_path.rstrip('/')}/{sanitized}"
+-
+-
+-    def to_volume_name(namespace: str) -> str:
+-        sanitized = sanitize_namespace_token(namespace)
+-        return f"ns-{sanitized}" if sanitized else "ns-unknown"
+-kind: ConfigMap
+-metadata:
+-  creationTimestamp: null
+-  name: namespace-share-controller-code
+-  namespace: kubeflow
+diff --git a/cgu/namespace_share/deploy/controller-runtime-patch.yaml b/cgu/namespace_share/deploy/controller-runtime-patch.yaml
+new file mode 100644
+index 00000000..f215ea5d
+--- /dev/null
++++ b/cgu/namespace_share/deploy/controller-runtime-patch.yaml
+@@ -0,0 +1,21 @@
++# Runs the controller code from the kustomize-generated ConfigMap, so code changes roll out
++# with `kubectl apply -k` and need no image rebuild. The image only provides dependencies.
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: namespace-share-controller
++  namespace: kubeflow
++spec:
++  template:
++    spec:
++      containers:
++        - name: controller
++          command: ["python", "/opt/namespace-share-controller/app.py"]
++          volumeMounts:
++            - name: controller-runtime
++              mountPath: /opt/namespace-share-controller
++              readOnly: true
++      volumes:
++        - name: controller-runtime
++          configMap:
++            name: namespace-share-controller-runtime
+diff --git a/cgu/namespace_share/kustomization.yaml b/cgu/namespace_share/kustomization.yaml
+index e4c9d5f4..0a753d17 100644
+--- a/cgu/namespace_share/kustomization.yaml
++++ b/cgu/namespace_share/kustomization.yaml
+@@ -1,7 +1,19 @@
++# Single entry point for NamespaceShare; see ../groupshare/kustomization.yaml.
+ apiVersion: kustomize.config.k8s.io/v1beta1
+ kind: Kustomization
+ resources:
+ - deploy/controller-rbac.yaml
+-- deploy/controller-code-configmap.yaml
+ - deploy/controller-configmap.yaml
+ - deploy/controller-deployment.yaml
++
++patches:
++- path: deploy/controller-runtime-patch.yaml
++
++generatorOptions:
++  immutable: true
++configMapGenerator:
++- name: namespace-share-controller-runtime
++  namespace: kubeflow
++  files:
++  - app.py=controller/app.py
++  - parser.py=controller/parser.py
+diff --git a/example/kustomization.yaml b/example/kustomization.yaml
+index 12886dca..9db6c25f 100644
+--- a/example/kustomization.yaml
++++ b/example/kustomization.yaml
+@@ -116,3 +116,7 @@ patches:
+ images:
+ - name: gcr.io/kubebuilder/kube-rbac-proxy
+   newName: quay.io/brancz/kube-rbac-proxy
++# Backend with GroupShare reconciliation (Dockerfile.groupshare-overlay in AI_Centre_Admin).
++# Push this tag to Docker Hub before applying.
++- name: docker.io/cguaicadmin/ldap_backend
++  newTag: v2610121415
+-- 
+2.43.0
+

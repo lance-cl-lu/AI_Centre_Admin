@@ -1,0 +1,39 @@
+From 1d6b1afc92f8b88201fa3f8340ab04280663dc0e Mon Sep 17 00:00:00 2001
+From: MarkJiang-maji <chiang142536@gmail.com>
+Date: Fri, 20 Nov 2026 01:23:18 +0800
+Subject: [PATCH 17/19] Backend may set a namespace's owner annotation
+
+Same change as AI_Centre_Admin AI_LDAP_admin/cluster-role.yaml: an email change now also moves the namespace's owner annotation, which the profile controller requires to equal spec.owner.name.
+---
+ .../dex/overlays/ldap-backend/cluster-role.yaml   | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/common/dex/overlays/ldap-backend/cluster-role.yaml b/common/dex/overlays/ldap-backend/cluster-role.yaml
+index 76b26635..645943b2 100644
+--- a/common/dex/overlays/ldap-backend/cluster-role.yaml
++++ b/common/dex/overlays/ldap-backend/cluster-role.yaml
+@@ -20,9 +20,18 @@ rules:
+   - delete
+   - patch
+   - update
+-# Changing a user's email moves the namespace's namespaceAdmin RoleBinding to the new
+-# address (api/views.py update_profile_owner_email). Updating a binding is checked for
+-# privilege escalation, so the backend also needs bind on the role it references.
++# Changing a user's email (api/views.py update_profile_owner_email) also moves the
++# namespace's `owner` annotation, which the profile controller requires to equal
++# spec.owner.name, and its namespaceAdmin RoleBinding to the new address. Updating a
++# binding is checked for privilege escalation, so the backend also needs bind on the
++# role it references. Namespace names vary per user, so that rule cannot use resourceNames.
++- apiGroups:
++  - ""
++  resources:
++  - namespaces
++  verbs:
++  - get
++  - patch
+ - apiGroups:
+   - rbac.authorization.k8s.io
+   resources:
+-- 
+2.43.0
+

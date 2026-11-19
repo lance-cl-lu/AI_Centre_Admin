@@ -1,0 +1,251 @@
+From b2ac315326477d47e6615acb4e87d375ba494f22 Mon Sep 17 00:00:00 2001
+From: MarkJiang-maji <chiang142536@gmail.com>
+Date: Mon, 12 Oct 2026 21:43:31 +0800
+Subject: [PATCH 09/19] Make apply.sh safe to re-run on a running cluster
+
+Re-running apply.sh on .6 would have cut users off and lost live data:
+the 10.100.1.4 authservice-pvc patch cannot apply to an existing PVC, so
+the apply loop retried forever and the ingress externalIPs were never set
+again; the announcements and qnap-config ConfigMaps were overwritten;
+injected caBundles were cleared; and the removed pullimage was reinstalled.
+
+- preserve_live_state.py sits between kustomize and kubectl apply. New
+  objects pass through unchanged (a new cluster gets exactly the same 585
+  resources). Existing PVCs and the announcements / qnap-config ConfigMaps
+  are only created once; webhook and CRD caBundles, aggregated ClusterRole
+  rules, knative webhook rules and the istio-validator failurePolicy keep
+  their live values.
+- env.ini may list APPLY_SKIP_NAMESPACES; env.ini.6 skips pullimage.
+- The ingress Service is deleted only when its type differs from the
+  manifest, instead of on every run.
+- The apply loop gives up after 15 attempts so the ingress, NVIDIA and QNAP
+  steps always run; apply.sh then exits 1.
+- PyYAML is checked before anything touches the cluster.
+
+Verified on .6 with env.ini.6 (without running apply.sh): kubectl diff of
+the whole example shows no change and a server dry-run reports no error.
+---
+ apply.sh                                      |  34 +++++-
+ .../docs/deploy-handoff-20261012.md           |  10 +-
+ env.ini.6                                     |   2 +
+ preserve_live_state.py                        | 108 ++++++++++++++++++
+ 4 files changed, 145 insertions(+), 9 deletions(-)
+ create mode 100644 preserve_live_state.py
+
+diff --git a/apply.sh b/apply.sh
+index 8f3c9df6..0e6c5c2a 100755
+--- a/apply.sh
++++ b/apply.sh
+@@ -5,7 +5,10 @@ QNAP_USERNAME=
+ QNAP_PASSWORD=
+ QNAP_SHARED_NAMESPACE=
+ QNAP_NFS_DEPLOYMENT=
++APPLY_SKIP_NAMESPACES=
+ source env.ini
++# Optional: comma-separated namespaces this cluster does not run (see preserve_live_state.py).
++export APPLY_SKIP_NAMESPACES
+ if [ -z "$MASTER_IP" ]; then
+ 	echo "Please setup the environment variable MASTER_IP to be the IP address of your master in env.ini"
+ 	exit;
+@@ -80,6 +83,12 @@ sed -i "s|NFS_PATH:.*|NFS_PATH: \"${NAMESPACE_SHARE_NFS_PATH_ESCAPED}\"|" "${NAM
+ # Keep ldap backend groupshare NFS settings synced with env.ini before applying manifests.
+ sed -i "/- name: groupshare-storage/{n;n;s|server:.*|server: ${QNAP_IP_ESCAPED}|;n;s|path:.*|path: ${QNAP_MOUNT_ESCAPED}|;}" "${LDAP_BACKEND_DEPLOY}"
+ 
++# preserve_live_state.py (used below) needs PyYAML; check before touching the cluster.
++if ! python3 -c 'import yaml' 2>/dev/null; then
++  echo "python3 PyYAML is required (Ubuntu: apt install python3-yaml); nothing was changed."
++  exit 1
++fi
++
+ # GroupShare prerequisites kustomize cannot express (idempotent; existing objects are kept).
+ # Stop before touching the cluster when one fails: a deployment without NFS directories or webhook
+ # trust leaves Notebooks unable to start.
+@@ -92,8 +101,25 @@ bash cgu/groupshare/scripts/bootstrap.sh secrets || groupshare_prerequisite_fail
+ bash cgu/groupshare/scripts/bootstrap.sh vwc || groupshare_prerequisite_failed vwc
+ GROUPSHARE_RC=0
+ 
+-kubectl delete svc -n istio-system istio-ingressgateway
+-while ! kustomize build ./example | kubectl apply -f -; do echo "Retrying to apply resources"; sleep 20; done
++# The manifest's ingress Service is ClusterIP (externalIPs are patched in below). Replace an existing
++# Service only when its type differs; deleting it on every run cut all users off for the whole apply.
++INGRESS_TYPE=$(kubectl -n istio-system get svc istio-ingressgateway -o jsonpath='{.spec.type}' 2>/dev/null)
++if [ -n "$INGRESS_TYPE" ] && [ "$INGRESS_TYPE" != "ClusterIP" ]; then
++  kubectl delete svc -n istio-system istio-ingressgateway
++fi
++# preserve_live_state.py keeps state the running cluster owns (existing PVCs, live ConfigMaps,
++# injected caBundles, aggregated rules); on a new cluster everything is applied unchanged.
++# Custom resources need a few rounds until their CRDs are ready, but never retry forever:
++# the ingress, NVIDIA and QNAP steps below must still run.
++APPLY_RC=1
++for attempt in $(seq 1 15); do
++  if kustomize build ./example | python3 preserve_live_state.py | kubectl apply -f -; then
++    APPLY_RC=0
++    break
++  fi
++  echo "Retrying to apply resources ($attempt/15)"
++  sleep 20
++done
+ kubectl patch svc -n istio-system istio-ingressgateway -p "{\"spec\":{\"externalIPs\":[\"${MASTER_IP}\"]}}"
+ bash cgu/groupshare/scripts/bootstrap.sh webhook || GROUPSHARE_RC=1
+ # kubectl patch svc -n istio-system istio-ingressgateway -p '{"spec":{"type":"ClusterIP"}}'
+@@ -119,6 +145,10 @@ python3 addqnap.py
+ 
+ # Post-deploy GroupShare / NamespaceShare verification (read-only).
+ bash cgu/groupshare/scripts/check.sh env.ini
++if [ "$APPLY_RC" -ne 0 ]; then
++  echo "Some resources could not be applied after 15 attempts; see the kubectl errors above."
++  exit 1
++fi
+ if [ "$GROUPSHARE_RC" -ne 0 ]; then
+   echo "GroupShare webhook is not ready (see bootstrap output above); Notebook create/update is blocked until it is."
+   exit 1
+diff --git a/cgu/groupshare/docs/deploy-handoff-20261012.md b/cgu/groupshare/docs/deploy-handoff-20261012.md
+index 5c4aa7a4..fff69c1e 100644
+--- a/cgu/groupshare/docs/deploy-handoff-20261012.md
++++ b/cgu/groupshare/docs/deploy-handoff-20261012.md
+@@ -71,15 +71,11 @@ cgu-manifests 的 branch 沒有動到你本機有改過的 6 個環境檔（`env
+ 
+ `/home/lance/work/cgu-manifests` 已於同日 fast-forward 到本 branch（以 lance 身分操作，本機 6 個環境檔保留 `.6` 的值）；`kubectl diff -k cgu/groupshare`、`cgu/namespace_share` 與線上一致，`example` 的後端 tag 也與線上相同。
+ 
+-**`.6` 目前仍不要執行整個 `apply.sh`**。2026-10-12 對整個 `example` 做 `kubectl diff` 的結果，以下問題都與本次修改無關，屬於 `.6` 線上與 repo 原本的差異：
++**`apply.sh` 已改成可在運作中的叢集重跑**（cgu-manifests `preserve_live_state.py`）。原本在 `.6` 重跑會出事的原因都與 GroupShare 無關，是 `.6` 線上與 repo 的差異：10.100.1.4 的 `authservice-pvc` ReadWriteMany patch 套不上（PVC 建立後不可改），`apply.sh` 無限重試、網頁入口接不回來；`kubeflow-announcements` 公告與 `qnap-config` 被覆蓋；kserve／katib／admission-webhook 等 caBundle 被清空；會重裝已移除的 `pullimage`。
+ 
+-- `example/kustomization.yaml` 為 10.100.1.4 加的 `authservice-pvc` patch（ReadWriteMany）在 `.6` 無法套用（PVC 建立後不可改 accessModes）。`apply.sh` 的 `while ! kustomize build | kubectl apply` 會無限重試，之後的 `istio-ingressgateway` externalIPs patch 永遠不會執行，`.6` 網頁會連不上。
+-- `qnap-config` 的 `ip` 會被改回 `120.126.23.7`（`.25` 的值）；原本靠 `apply.sh` 尾段改回，但會因上一點卡住而不會執行。
+-- `kubeflow-announcements` ConfigMap 會被 repo 版本覆蓋，線上公告會遺失。
+-- 10 個 kserve／katib／admission-webhook 等 webhook 與 CRD 的 caBundle 會被清空，cert-manager 重新注入前相關請求會失敗。
+-- 會新增 `.6` 沒有的 `pullimage` namespace 與 Deployment（`cgu/daemonset_watcher`）。
++改法：已存在的 PVC 與 `kubeflow-announcements`、`qnap-config` 只在第一次建立；webhook／CRD 的 caBundle、聚合 ClusterRole 規則、knative webhook 規則與 istio-validator failurePolicy 沿用線上值；`env.ini` 可設 `APPLY_SKIP_NAMESPACES`（`env.ini.6` 設為 `pullimage`）；網頁入口只在類型不符時才刪除；apply 最多重試 15 次，之後的網頁入口、NVIDIA、QNAP 步驟一定會執行，失敗時 `apply.sh` 回傳 1。新叢集上過濾後的 585 個資源與原本完全相同。
+ 
+-要讓 `.6` 能重新使用 `apply.sh`，需先處理 PVC patch 只套用到 `.4`、公告 ConfigMap 不覆蓋線上資料等環境差異。
++2026-10-12 在 `.6` 以 `env.ini.6` 驗證（未實際執行 `apply.sh`）：整個 `example` 的 `kubectl diff` 無差異、server dry-run 無錯誤且不會新建任何資源；監測設定、網頁入口、nvdp helm 值、`addqnap.py` 對 138 個 namespace 的 Secret／LimitRange 也都無差異。舊版 `apply.sh` 備份在 `/home/lance/work/cgu-manifests/apply.sh.orig-20261012`（lance 原本使用的版本）與 `apply.sh.bak-20261012`（本次修改前）。
+ 
+ 10.100.1.4 從 gpunode040 連不到，尚未部署，照步驟 4。
+ 
+diff --git a/env.ini.6 b/env.ini.6
+index f769881f..a496f18a 100644
+--- a/env.ini.6
++++ b/env.ini.6
+@@ -5,3 +5,5 @@ QNAP_PASSWORD=P@ssw0rd
+ QNAP_MOUNT=/Public/shared
+ QNAP_SHARED_NAMESPACE=k8s-nfs-storage
+ QNAP_NFS_DEPLOYMENT=nfs-client-provisioner
++# pullimage was removed from .6 after its 2025-09-28 install; do not bring it back implicitly.
++APPLY_SKIP_NAMESPACES=pullimage
+diff --git a/preserve_live_state.py b/preserve_live_state.py
+new file mode 100644
+index 00000000..a042a7ae
+--- /dev/null
++++ b/preserve_live_state.py
+@@ -0,0 +1,108 @@
++#!/usr/bin/env python3
++"""Make re-running apply.sh on a running cluster safe.
++
++Reads the kustomize output on stdin and writes the manifests to apply on stdout. Objects that
++do not exist yet pass through unchanged, so a new cluster is installed exactly as before. For
++objects that already exist, state that is owned by the cluster rather than by this repository
++is kept:
++
++- PersistentVolumeClaims and the ConfigMaps in CREATE_ONLY are created once and never
++  re-applied: a PVC spec cannot change after creation (the apply fails and apply.sh used to
++  retry forever), and those ConfigMaps hold data edited on the live cluster.
++- caBundle of webhooks and CRD conversion webhooks is injected by cert-manager; the
++  manifests carry an empty one, and applying it would reject every request to that webhook
++  until it is injected again.
++- rules of aggregated ClusterRoles are filled in by the aggregation controller; knative
++  rewrites the rules of its webhooks (the manifests hold placeholders) and istiod sets the
++  failurePolicy of istio-validator once it is ready.
++
++Namespaces listed in APPLY_SKIP_NAMESPACES (comma separated, from env.ini) are left out
++entirely, for components a cluster deliberately does not run.
++"""
++import json
++import os
++import subprocess
++import sys
++
++import yaml
++
++CREATE_ONLY = {
++    ("ConfigMap", "kubeflow", "kubeflow-announcements"),
++    ("ConfigMap", "kubeflow", "qnap-config"),
++}
++WEBHOOK_KINDS = {"MutatingWebhookConfiguration", "ValidatingWebhookConfiguration"}
++RULES_OWNED_BY_CONTROLLER = (".knative.dev",)  # webhook configuration name suffixes
++FAILURE_POLICY_OWNED_BY_CONTROLLER = ("istio-validator",)  # webhook configuration name prefixes
++SKIP_NAMESPACES = {n.strip() for n in os.environ.get("APPLY_SKIP_NAMESPACES", "").split(",") if n.strip()}
++
++
++def log(message):
++    print(f"[preserve-live-state] {message}", file=sys.stderr)
++
++
++def get_live(kind, namespace, name):
++    command = ["kubectl", "get", kind, name, "-o", "json"]
++    if namespace:
++        command += ["-n", namespace]
++    result = subprocess.run(command, capture_output=True, text=True)
++    return json.loads(result.stdout) if result.returncode == 0 else None
++
++
++def keep_webhook_state(doc, live):
++    name = (doc.get("metadata") or {}).get("name", "")
++    rules_live = name.endswith(RULES_OWNED_BY_CONTROLLER)
++    policy_live = name.startswith(FAILURE_POLICY_OWNED_BY_CONTROLLER)
++    live_hooks = {hook.get("name"): hook for hook in live.get("webhooks") or []}
++    for hook in doc.get("webhooks") or []:
++        current = live_hooks.get(hook.get("name"))
++        if not current:
++            continue
++        client = hook.get("clientConfig") or {}
++        if "caBundle" in client and "caBundle" in (current.get("clientConfig") or {}):
++            client["caBundle"] = current["clientConfig"]["caBundle"]
++        if "rules" in current and (rules_live or "rules" not in hook):
++            hook["rules"] = current["rules"]
++        if policy_live and "failurePolicy" in current:
++            hook["failurePolicy"] = current["failurePolicy"]
++
++
++def keep_crd_ca_bundle(doc, live):
++    client = (((doc.get("spec") or {}).get("conversion") or {}).get("webhook") or {}).get("clientConfig")
++    live_client = (((live.get("spec") or {}).get("conversion") or {}).get("webhook") or {}).get("clientConfig") or {}
++    if client is not None and "caBundle" in client and "caBundle" in live_client:
++        client["caBundle"] = live_client["caBundle"]
++
++
++def main():
++    out = []
++    for doc in yaml.safe_load_all(sys.stdin):
++        if not doc:
++            continue
++        kind = doc.get("kind", "")
++        metadata = doc.get("metadata") or {}
++        namespace, name = metadata.get("namespace"), metadata.get("name")
++        if namespace in SKIP_NAMESPACES or (kind == "Namespace" and name in SKIP_NAMESPACES):
++            log(f"skip {kind} {namespace or ''}/{name} (APPLY_SKIP_NAMESPACES)")
++            continue
++
++        create_only = kind == "PersistentVolumeClaim" or (kind, namespace, name) in CREATE_ONLY
++        needs_live = create_only or kind in WEBHOOK_KINDS or kind == "CustomResourceDefinition" or (
++            kind == "ClusterRole" and doc.get("aggregationRule"))
++        live = get_live(kind, namespace, name) if needs_live else None
++
++        if live is not None:
++            if create_only:
++                log(f"keep existing {kind} {namespace}/{name}")
++                continue
++            if kind in WEBHOOK_KINDS:
++                keep_webhook_state(doc, live)
++            elif kind == "CustomResourceDefinition":
++                keep_crd_ca_bundle(doc, live)
++            elif kind == "ClusterRole" and "rules" in live:
++                doc["rules"] = live["rules"]
++        out.append(doc)
++    yaml.safe_dump_all(out, sys.stdout, sort_keys=False)
++
++
++if __name__ == "__main__":
++    main()
+-- 
+2.43.0
+
