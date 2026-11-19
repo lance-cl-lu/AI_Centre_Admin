@@ -668,6 +668,7 @@ def update_profile_owner_email(profile_name, old_email, new_email):
     previous_emails = {(old_email or '').strip().lower(), profile_owner_email}
     new_email_normalized = new_email.lower()
 
+    final_owner_name = owner.get('name') or ''
     if profile_owner_email != new_email_normalized:
         updated_profile = profile_api.patch_cluster_custom_object(
             group=group,
@@ -676,11 +677,21 @@ def update_profile_owner_email(profile_name, old_email, new_email):
             name=profile_name,
             body={"spec": {"owner": {"name": new_email_normalized}}},
         )
-        updated_owner_email = (
-            updated_profile.get('spec', {}).get('owner', {}).get('name', '').lower()
-        )
-        if updated_owner_email != new_email_normalized:
+        final_owner_name = updated_profile.get('spec', {}).get('owner', {}).get('name', '')
+        if final_owner_name.lower() != new_email_normalized:
             raise RuntimeError(f"Profile {profile_name} owner email was not updated")
+
+    # The Kubeflow profile controller reconciles a Profile only while its namespace's
+    # `owner` annotation equals spec.owner.name exactly. On a mismatch it stops: quota
+    # changes are ignored and deleting the Profile hangs on its finalizer.
+    core_api = client.CoreV1Api(api_client=profile_api.api_client)
+    namespace = core_api.read_namespace(name=profile_name)
+    namespace_annotations = namespace.metadata.annotations or {}
+    if namespace_annotations.get('owner') != final_owner_name:
+        core_api.patch_namespace(
+            name=profile_name,
+            body={"metadata": {"annotations": {"owner": final_owner_name}}},
+        )
 
     rbac_api = client.RbacAuthorizationV1Api(api_client=profile_api.api_client)
     role_binding = rbac_api.read_namespaced_role_binding(
@@ -690,7 +701,9 @@ def update_profile_owner_email(profile_name, old_email, new_email):
     subjects = role_binding.subjects or []
     old_subjects = [
         subject for subject in subjects
-        if subject.kind == 'User' and subject.name.lower() in previous_emails
+        if subject.kind == 'User'
+        and subject.name.lower() in previous_emails
+        and subject.name.lower() != new_email_normalized
     ]
     has_new_subject = any(
         subject.kind == 'User' and subject.name.lower() == new_email_normalized

@@ -374,12 +374,14 @@ class ProfileOwnerEmailTests(unittest.TestCase):
     def setUp(self):
         self.views = importlib.import_module("api.views")
 
+    @patch("api.views.client.CoreV1Api")
     @patch("api.views.client.RbacAuthorizationV1Api")
     @patch("api.views._make_k8s_custom_objects_api_views")
     def test_update_profile_owner_email_updates_profile_and_namespace_rolebinding(
         self,
         make_profile_api,
         rbac_api_class,
+        core_api_class,
     ):
         profile = {
             "metadata": {"name": "alice"},
@@ -402,6 +404,10 @@ class ProfileOwnerEmailTests(unittest.TestCase):
         )
         rbac_api = rbac_api_class.return_value
         rbac_api.read_namespaced_role_binding.return_value = role_binding
+        core_api = core_api_class.return_value
+        core_api.read_namespace.return_value = SimpleNamespace(
+            metadata=SimpleNamespace(annotations={"owner": "old@example.edu"})
+        )
 
         # The Django user may already have the new email after a previous partial attempt.
         self.views.update_profile_owner_email("alice", "new@example.edu", "new@example.edu")
@@ -421,13 +427,20 @@ class ProfileOwnerEmailTests(unittest.TestCase):
             name="alice",
             body={"spec": {"owner": {"name": "new@example.edu"}}},
         )
+        # Without this the profile controller stops reconciling the Profile.
+        core_api.patch_namespace.assert_called_once_with(
+            name="alice",
+            body={"metadata": {"annotations": {"owner": "new@example.edu"}}},
+        )
 
+    @patch("api.views.client.CoreV1Api")
     @patch("api.views.client.RbacAuthorizationV1Api")
     @patch("api.views._make_k8s_custom_objects_api_views")
     def test_update_rolebinding_annotation_when_subject_is_already_updated(
         self,
         make_profile_api,
         rbac_api_class,
+        core_api_class,
     ):
         profile = {
             "metadata": {"name": "alice"},
@@ -444,12 +457,54 @@ class ProfileOwnerEmailTests(unittest.TestCase):
         )
         rbac_api = rbac_api_class.return_value
         rbac_api.read_namespaced_role_binding.return_value = role_binding
+        core_api = core_api_class.return_value
+        core_api.read_namespace.return_value = SimpleNamespace(
+            metadata=SimpleNamespace(annotations={"owner": "new@example.edu"})
+        )
 
         self.views.update_profile_owner_email("alice", "old@example.edu", "new@example.edu")
 
+        core_api.patch_namespace.assert_not_called()
         self.assertEqual(role_binding.metadata.annotations["user"], "new@example.edu")
         rbac_api.replace_namespaced_role_binding.assert_called_once_with(
             name="namespaceAdmin",
             namespace="alice",
             body=role_binding,
         )
+
+    @patch("api.views.client.CoreV1Api")
+    @patch("api.views.client.RbacAuthorizationV1Api")
+    @patch("api.views._make_k8s_custom_objects_api_views")
+    def test_retry_fixes_namespace_owner_left_behind_by_a_partial_attempt(
+        self,
+        make_profile_api,
+        rbac_api_class,
+        core_api_class,
+    ):
+        # A previous attempt patched the Profile but stopped before the namespace.
+        profile = {
+            "metadata": {"name": "alice"},
+            "spec": {"owner": {"kind": "User", "name": "new@example.edu"}},
+        }
+        profile_api = SimpleNamespace(api_client=object())
+        profile_api.get_cluster_custom_object = Mock(return_value=profile)
+        profile_api.patch_cluster_custom_object = Mock()
+        make_profile_api.return_value = (profile_api, "kubeconfig")
+        rbac_api = rbac_api_class.return_value
+        rbac_api.read_namespaced_role_binding.return_value = SimpleNamespace(
+            subjects=[SimpleNamespace(kind="User", name="new@example.edu")],
+            metadata=SimpleNamespace(annotations={"user": "new@example.edu"}),
+        )
+        core_api = core_api_class.return_value
+        core_api.read_namespace.return_value = SimpleNamespace(
+            metadata=SimpleNamespace(annotations={"owner": "old@example.edu"})
+        )
+
+        self.views.update_profile_owner_email("alice", "old@example.edu", "new@example.edu")
+
+        profile_api.patch_cluster_custom_object.assert_not_called()
+        core_api.patch_namespace.assert_called_once_with(
+            name="alice",
+            body={"metadata": {"annotations": {"owner": "new@example.edu"}}},
+        )
+        rbac_api.replace_namespaced_role_binding.assert_not_called()
