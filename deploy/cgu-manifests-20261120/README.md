@@ -18,17 +18,15 @@
    git push origin cgu-2.0-2026H3-Lance
    ```
 
-2. **cgu-manifests**（部署設定）：修改以 patch 檔放在 AI_Centre_Admin 的 `deploy/cgu-manifests-20261120/`（我們沒有 `wycc/cgu-manifests` 的推送權限）。在你的 cgu-manifests checkout 套用：
+2. **cgu-manifests**（部署設定）：我們沒有 `wycc/cgu-manifests` 的推送權限，所以修改放在 fork `MarkJiang-maji/cgu-manifests` 的 branch `integration-20261120`，並開了 PR 到 `wycc/cgu-manifests` 的 `cgu-2.0-2026H3-Lance`：https://github.com/wycc/cgu-manifests/pull/4 。在 GitHub 上 merge 這個 PR（用「Create a merge commit」，文件裡引用的 commit 編號才對得上），然後更新你的 checkout：
 
    ```bash
    cd <cgu-manifests>                       # 例如 .6 的 /home/lance/work/cgu-manifests
    git checkout cgu-2.0-2026H3-Lance
-   git status                               # 本機改過的 6 個環境檔不受影響，patch 沒碰它們
-   git am <AI_Centre_Admin>/deploy/cgu-manifests-20261120/*.patch
-   git push origin cgu-2.0-2026H3-Lance
+   git pull origin cgu-2.0-2026H3-Lance
    ```
 
-   19 個 patch 依序是：10/12 的 GroupShare 修正（原本在 `groupshare-deploy-fix-20261012`，從未合併）、v71 monitor 部署、這次的修改。全部以 `cgu-2.0-2026H3-Lance`（`fab6a2b8`）為基底。
+   PR 的 commit 依序是：10/12 的 GroupShare 修正（原本在 `groupshare-deploy-fix-20261012`，從未合併）、v71 monitor 部署、這次的修改。以 `cgu-2.0-2026H3-Lance`（`fab6a2b8`）為基底，沒有衝突。本機改過的環境檔若讓 `git pull` 停下來，先 commit 或 stash 它們。
 
 3. **在這兩件事完成前，不要在 .4 / .6 用舊的 checkout 跑 `apply.sh`**：它會把後端 image 換回 `v2610121415`、重新裝回 v53、拿掉後端新加的權限（改 email 會失敗）。
 
@@ -43,8 +41,9 @@
 | 項目 | 位置 |
 |---|---|
 | 後端原始碼 | `lance-cl-lu/AI_Centre_Admin` branch `integration-20261120` |
-| 部署設定的修改 | 同一個 branch 的 `deploy/cgu-manifests-20261120/*.patch`（套用後即為 cgu-manifests 的內容） |
+| 部署設定的修改 | `MarkJiang-maji/cgu-manifests` branch `integration-20261120`，PR 到 `wycc/cgu-manifests` `cgu-2.0-2026H3-Lance` |
 | 後端 image | `docker.io/cguaicadmin/ldap_backend:v2611200123`（AI_Centre_Admin `00db3d7`，完整 Dockerfile，含前端） |
+| 計費 monitor image | `docker.io/cguaicadmin/cgu-monitor-v71:v2611201515`（cgu-manifests `cgu/monitor/v71/Dockerfile`，只有套件；程式仍在 ConfigMap） |
 
 **不要用 `v2611200046`**：那版缺 namespace owner 修正，改 email 後 profile controller 會停止處理該使用者。11/11–11/12 的 `v26111x` 三個 tag 也不要用：它們是從 `cgu-2.0-2026H3-Lance` 加未提交修改建置的，沒有 GroupShare 修正。
 
@@ -60,15 +59,15 @@ AI_Centre_Admin：
 | `frontend/src/components/Home.js` | 費率可輸入 5 位以上小數 |
 | `frontend/src/api/prometheus.js` | 首頁拿掉「舊版」資料來源 |
 | `AI_LDAP_admin/groupshare/`、`AI_LDAP_admin/namespace_share/` | GroupShare / NamespaceShare controller 與 webhook 原始碼 |
-| `deploy/cgu-manifests-20261120/` | cgu-manifests 的 patch 與本文件 |
+| `deploy/cgu-manifests-20261120/README.md` | 指向 cgu-manifests 的 PR 與本文件 |
 
-cgu-manifests（套用 patch 後）：
+cgu-manifests（PR 的內容）：
 
 | 檔案 | 內容 |
 |---|---|
 | `example/kustomization.yaml` | 後端 image `v2611200123` |
 | `common/dex/overlays/ldap-backend/cluster-role.yaml` | 後端權限，與 AI_Centre_Admin 那份相同 |
-| `cgu/monitor/kustomization.yaml`、`cgu/monitor/v71/` | 只留 v71；說明在 `cgu/monitor/v71/README.md` |
+| `cgu/monitor/kustomization.yaml`、`cgu/monitor/v71/` | 只留 v71；monitor 專用 image 的 `Dockerfile`；說明在 `cgu/monitor/v71/README.md` |
 | `cgu/groupshare/`、`cgu/namespace_share/`、`apply.sh`、`preserve_live_state.py` | 10/12 的 GroupShare 修正 |
 | `docs/handoff-20261120.md` | 本文件 |
 
@@ -89,6 +88,7 @@ cgu-manifests（套用 patch 後）：
 - **v71 自己的 ServiceMonitor**（原本靠 v53 的被抓取）。
 - **累積費用從 Prometheus 接續**：`namespace_*_cost*` 只在記憶體裡，重啟時改讀本叢集 Prometheus 裡 v71 自己過去 30 天的最高值。
 - 費率不變：兩個費率 ConfigMap 由 `preserve_live_state.py` 保留線上值（兩台都是 CPU 0.03 / GPU 0.7）。.6 的 v71 程式內建備用費率原本是 2.0 / 10.0，這次一併改為 0.03 / 0.7。
+- **monitor 改用專用 image** `cguaicadmin/cgu-monitor-v71`：原本每次啟動都從 PyPI `pip install`，PyPI 連不上就起不來，.4、.6 的 base image 也不一樣。新 image 固定 base digest 與兩個套件版本；`prom_v2.py` 仍放在 ConfigMap，改程式不用重建 image。
 - Grafana 的 notebook 用量圖原本把 v53 與 v71 重複相加，現在數字才正確（約為原本的一半）。
 
 ### 測試
@@ -111,6 +111,9 @@ cgu-manifests（套用 patch 後）：
 | GroupShare 對帳 | 62 Profile，changes=0 | 159 Profile，changes=0 |
 | v71 接續累積費用 | 89 namespace | 178 namespace，套用前後數值相同 |
 | v53 刪除 | 01:32 | 01:45 |
+| monitor 換專用 image | 15:17 | 15:18 |
+
+monitor 換 image 時只 apply Deployment（不碰費率 ConfigMap），兩台都在 4 秒內接回累積費用、沒有 namespace 遺失。.6 有 28 個 namespace 少了最後一次抓取後約 1 分鐘的累積（總額差 0.0008%）：Prometheus 每 60 秒抓一次，monitor 任何一次重啟都會這樣，不是換 image 造成的。
 
 ## 部署後檢查結果（兩台都通過）
 
@@ -139,9 +142,11 @@ kubectl -n <ns> get rolebinding namespaceAdmin -o jsonpath='{.subjects[*].name} 
 | `backend-cluster-role.yaml` | 後端 ClusterRole |
 | `v53-objects.yaml` | v53 的所有物件，含兩台各自的手動補丁 |
 | `cgu-namespace-all.yaml`、`monitor-cluster*.yaml` | cgu namespace 與 monitor 權限的完整備份 |
+| `monitor-v71-deploy-before-image.yaml` | 換專用 image 前的 v71 Deployment（`python:3.11-slim` + `pip install`） |
 
 - 後端：縮到 0 → image 換回 `docker.io/cguaicadmin/ldap_backend:v2610121415` → 回到 1。ClusterRole 多的規則留著無害。
 - v53：`kubectl create -f v53-objects.yaml`（若有衝突，先移除檔內的 `resourceVersion` / `uid`）。v71 回到上一版：`git show f0d59581:cgu/monitor/v71/prom_v2.py` 等，或 `kubectl -n cgu delete servicemonitor node-resource-monitor-v71` 後由 v53 的 ServiceMonitor 抓取。
+- monitor image：`kubectl apply -f monitor-v71-deploy-before-image.yaml`（先移除 `resourceVersion` / `uid`），會回到啟動時 `pip install`。
 - 兩台 Prometheus 都沒有 PVC：以上步驟都不會重建 Prometheus；若 Prometheus pod 被重建，計費歷史會消失。
 
 ## 這次沒有包含
