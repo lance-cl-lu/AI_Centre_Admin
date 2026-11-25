@@ -35,14 +35,24 @@ metadata:
 - 非 `a-z0-9-` 字元轉為 `-`
 - 連續 `-` 合併
 - 去除頭尾 `-`
-- volume 名稱固定加前綴 `gs-`
+- 名稱含中文等非 ASCII 字元、轉換後為空，或超過 60 字元時，後面加上完整名稱 UTF-8 的 SHA-256 前 8 碼（`<token>-<hash>`；轉換後為空則為 `g-<hash>`），避免不同群組對應到同一個資料夾
+- volume 名稱固定加前綴 `gs-`（總長不超過 63）
 
-範例：`Lab_Vision! 2023` -> `gs-lab-vision-2023`
+範例：
+
+| 群組名稱 | token | volume |
+|---|---|---|
+| `Lab_Vision! 2023` | `lab-vision-2023` | `gs-lab-vision-2023` |
+| `馬誠佑_lab` | `lab-7a249574` | `gs-lab-7a249574` |
+| `楊智淵_lab` | `lab-4bd4114e` | `gs-lab-4bd4114e` |
+| `王佑中教授實驗室` | `g-c4be5913` | `gs-g-c4be5913` |
+
+後端（`api/groupshare_storage.groupshare_group_token`）、controller（`parser.group_token`）與 webhook（`rules.group_token`）必須使用同一規則，三邊測試共用同一組範例。
 
 ## Controller 產物
 
 每個 Profile namespace 會維護一個 `PodDefault/groupshare`：
 
 - `spec.selector={}`，代表套用到該 Profile namespace 內所有 Notebook
-- `volumes[].nfs.path` 由 `NFS_PATH/<sanitized_group>` 產生（例如 `NFS_PATH=/Public/shared`）
-- `mountPath=/mnt/groups/<sanitized_group>`
+- `volumes[].nfs.path` 由 `NFS_PATH/<token>` 產生（例如 `NFS_PATH=/Public/shared`）
+- `mountPath=/mnt/groups/<token>`

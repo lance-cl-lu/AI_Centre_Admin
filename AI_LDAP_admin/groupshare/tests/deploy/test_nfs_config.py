@@ -27,8 +27,11 @@ class NfsConfigTests(unittest.TestCase):
         self.assertEqual(groupshare_cm["metadata"]["name"], "groupshare-nfs-defaults")
         self.assertEqual(namespace_share_cm["metadata"]["name"], "namespace-share-nfs-defaults")
         self.assertEqual(groupshare_cm["data"]["NFS_SERVER"], namespace_share_cm["data"]["NFS_SERVER"])
-        self.assertEqual(groupshare_cm["data"]["NFS_PATH"], "/kflow_dev/shared")
-        self.assertEqual(namespace_share_cm["data"]["NFS_PATH"], "/kflow_dev/shared/_namespaces")
+        # apply.sh rewrites NFS_PATH per cluster from env.ini, so pin the layout, not one site's value.
+        self.assertEqual(
+            namespace_share_cm["data"]["NFS_PATH"],
+            groupshare_cm["data"]["NFS_PATH"].rstrip("/") + "/_namespaces",
+        )
         self.assertNotEqual(groupshare_cm["data"]["NFS_PATH"], namespace_share_cm["data"]["NFS_PATH"])
 
     def test_backend_groupshare_mount_matches_groupshare_root(self):

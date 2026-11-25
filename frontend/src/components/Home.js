@@ -2003,7 +2003,7 @@ function Home() {
                 </Card.Body>
               </Card>
             </Col>
-          </Row> */}
+          </Row>
 
         <Card className="mt-4">
           <Card.Header>Node Resource Monitor 費率設定</Card.Header>
@@ -2035,7 +2035,7 @@ function Home() {
                       name="cpuCostPerMinute"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="any"
                       className="form-control"
                       value={costForm.cpuCostPerMinute}
                       onChange={handleCostInputChange}
@@ -2055,7 +2055,7 @@ function Home() {
                       name="gpuCostPerMinute"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="any"
                       className="form-control"
                       value={costForm.gpuCostPerMinute}
                       onChange={handleCostInputChange}

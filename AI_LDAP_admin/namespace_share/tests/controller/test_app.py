@@ -3,6 +3,7 @@ import os
 import sys
 import types
 import unittest
+from types import SimpleNamespace
 
 
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -109,6 +110,24 @@ class TestNamespaceShareControllerApp(unittest.TestCase):
         self.assertIsNone(fake_api.created_body)
         self.assertEqual(fake_api.replaced_body["spec"]["selector"], {})
         self.assertEqual(fake_api.replaced_body["metadata"]["resourceVersion"], "123")
+
+
+class TestNfsSettings(unittest.TestCase):
+    def test_configmap_is_enough_without_provisioner_deployment(self):
+        app = load_controller_app()
+        controller = object.__new__(app.NamespaceShareController)
+        controller.nfs_server, controller.nfs_path = "", ""
+        controller.core_api = SimpleNamespace(
+            read_namespaced_config_map=lambda **_: SimpleNamespace(
+                data={"NFS_SERVER": "10.100.100.31", "NFS_PATH": "/AIC_K8s/shared/_namespaces"}
+            )
+        )
+
+        def missing_deployment(**_kwargs):
+            raise ApiException(status=404)
+
+        controller.apps_api = SimpleNamespace(read_namespaced_deployment=missing_deployment)
+        self.assertEqual(controller._load_nfs_settings(), ("10.100.100.31", "/AIC_K8s/shared/_namespaces"))
 
 
 if __name__ == "__main__":

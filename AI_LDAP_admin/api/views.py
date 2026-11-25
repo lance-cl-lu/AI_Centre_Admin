@@ -3,6 +3,7 @@ from ldap3 import *
 import json, random 
 from django.contrib.auth.models import User, Group
 import datetime, openpyxl
+import time
 from django.db import transaction
 from django.core.files.storage import default_storage
 import os
@@ -15,7 +16,7 @@ from rest_framework.decorators import api_view
 from .serializers import UserSerializer, GroupSerializer
 
 from .models import UserDetail, GroupDefaultQuota, UserGPUQuotaType
-from .groupshare_storage import ensure_groupshare_group_directory
+from .groupshare_storage import GROUPSHARE_EXCLUDED_GROUPS, ensure_groupshare_group_directory, groupshare_group_token
 from .namespace_share_storage import ensure_namespace_share_directory
 from . import urls
 
@@ -654,6 +655,81 @@ def get_profile_by_email(email):
         if p['spec']['owner']['name'].lower() == email.lower():
             return p['metadata']['name']
     return None
+
+
+def update_profile_owner_email(profile_name, old_email, new_email):
+    profile_api, _ = _make_k8s_custom_objects_api_views()
+    profile = profile_api.get_cluster_custom_object(group, version, plural, profile_name)
+    owner = profile.get('spec', {}).get('owner', {})
+    profile_owner_email = (owner.get('name') or '').strip().lower()
+    if not profile_owner_email:
+        raise ValueError(f"Profile {profile_name} has no owner email")
+
+    previous_emails = {(old_email or '').strip().lower(), profile_owner_email}
+    new_email_normalized = new_email.lower()
+
+    final_owner_name = owner.get('name') or ''
+    if profile_owner_email != new_email_normalized:
+        updated_profile = profile_api.patch_cluster_custom_object(
+            group=group,
+            version=version,
+            plural=plural,
+            name=profile_name,
+            body={"spec": {"owner": {"name": new_email_normalized}}},
+        )
+        final_owner_name = updated_profile.get('spec', {}).get('owner', {}).get('name', '')
+        if final_owner_name.lower() != new_email_normalized:
+            raise RuntimeError(f"Profile {profile_name} owner email was not updated")
+
+    # The Kubeflow profile controller reconciles a Profile only while its namespace's
+    # `owner` annotation equals spec.owner.name exactly. On a mismatch it stops: quota
+    # changes are ignored and deleting the Profile hangs on its finalizer.
+    core_api = client.CoreV1Api(api_client=profile_api.api_client)
+    namespace = core_api.read_namespace(name=profile_name)
+    namespace_annotations = namespace.metadata.annotations or {}
+    if namespace_annotations.get('owner') != final_owner_name:
+        core_api.patch_namespace(
+            name=profile_name,
+            body={"metadata": {"annotations": {"owner": final_owner_name}}},
+        )
+
+    rbac_api = client.RbacAuthorizationV1Api(api_client=profile_api.api_client)
+    role_binding = rbac_api.read_namespaced_role_binding(
+        name='namespaceAdmin',
+        namespace=profile_name,
+    )
+    subjects = role_binding.subjects or []
+    old_subjects = [
+        subject for subject in subjects
+        if subject.kind == 'User'
+        and subject.name.lower() in previous_emails
+        and subject.name.lower() != new_email_normalized
+    ]
+    has_new_subject = any(
+        subject.kind == 'User' and subject.name.lower() == new_email_normalized
+        for subject in subjects
+    )
+    if not old_subjects and not has_new_subject:
+        user_subjects = [subject for subject in subjects if subject.kind == 'User']
+        if len(user_subjects) == 1:
+            old_subjects = user_subjects
+    if not old_subjects and not has_new_subject:
+        raise ValueError(f"RoleBinding namespaceAdmin in {profile_name} has no subject for {old_email}")
+    for subject in old_subjects:
+        subject.name = new_email_normalized
+
+    annotations = role_binding.metadata.annotations or {}
+    annotations_changed = annotations.get('user') != new_email_normalized
+    if annotations_changed:
+        annotations['user'] = new_email_normalized
+        role_binding.metadata.annotations = annotations
+
+    if old_subjects or annotations_changed:
+        rbac_api.replace_namespaced_role_binding(
+            name='namespaceAdmin',
+            namespace=profile_name,
+            body=role_binding,
+        )
     
 def check_email(email):
     profiles = get_all_profiles()['items']
@@ -693,7 +769,7 @@ def build_groupshare_annotations(profile_name=None, owner_email=None):
     if user_obj is None:
         return "", ""
 
-    groups = sorted({g.name for g in user_obj.groups.all() if g.name and g.name != 'root'})
+    groups = sorted({g.name for g in user_obj.groups.all() if g.name and g.name not in GROUPSHARE_EXCLUDED_GROUPS})
     manager_candidates = {
         detail.labname.name
         for detail in UserDetail.objects.filter(uid=user_obj, permission=1).select_related('labname')
@@ -1254,6 +1330,15 @@ def get_lab_info(request):
     }
     return Response(data, status=200)
 
+def find_groupshare_folder_conflict(labname):
+    """Return an existing lab whose shared folder name equals the one labname would get, else None."""
+    token = groupshare_group_token(labname)
+    for existing in Group.objects.exclude(name=labname).values_list("name", flat=True):
+        if existing not in GROUPSHARE_EXCLUDED_GROUPS and groupshare_group_token(existing) == token:
+            return existing
+    return None
+
+
 def create_group(labname):
     try:
         Group.objects.get(name=labname)
@@ -1287,6 +1372,11 @@ def addlab(request):
         return Response(status=500, data="lab is exist")
     except:
         pass
+
+    # 不同名稱但會對應到同一個共享資料夾（例如 Lab_A 與 lab-a），不允許建立
+    conflict = find_groupshare_folder_conflict(labname)
+    if conflict:
+        return Response(status=500, data="lab {} would share the folder of existing lab {}".format(labname, conflict))
 
     
     # check the cpuQuota, memQuota, gpuQuota is valid or not
@@ -1658,6 +1748,7 @@ def delete_group_core(labname):
                 deleteUserModel(user)
             else:
                 print("group is not empty -", len(group_list))
+                sync_profile_groupshare_annotations(user)
             print(user.username)
         # delete the group from database
         Group.objects.get(name=labname).delete()
@@ -1764,9 +1855,121 @@ def get_user_info(request):
     }
     return Response(data, status=200)
 
+# 永久刪除的保護（取自測試版 v2607080741，並補上重送、並行還原與 Profile 刪除失敗的處理）
+PENDING_DELETE_ANNOTATION = "ldap-admin/pending-delete"
+TRASH_PERMANENT_DELETE_GRACE_SECONDS = int(os.environ.get("TRASH_PERMANENT_DELETE_GRACE_SECONDS", "600"))
+TRASH_RETENTION_DAYS = 30
+_trashed_at = {}  # username -> time the user was moved to TRASH by this process
+
+
+def is_only_in_trash(username):
+    names = set(Group.objects.filter(user__username=username).values_list("name", flat=True))
+    return names == {"TRASH"}
+
+
+def trashed_recently(user_obj):
+    """True when the user entered TRASH within the grace period.
+
+    Protects against a repeated or resubmitted delete request turning "move to TRASH" into a
+    permanent delete. Uses this process's record, else the Profile delete_date set on trashing.
+    """
+    moved_at = _trashed_at.get(user_obj.username)
+    if moved_at is None:
+        profile = get_profile_content(get_profile_by_email(user_obj.email) or user_obj.username.lower())
+        delete_date = ((profile or {}).get("metadata", {}).get("annotations", {}) or {}).get("delete_date")
+        try:
+            moved = datetime.datetime.fromisoformat(delete_date) - datetime.timedelta(days=TRASH_RETENTION_DAYS)
+            moved_at = moved.timestamp()
+        except (TypeError, ValueError):
+            return False
+    return time.time() - moved_at < TRASH_PERMANENT_DELETE_GRACE_SECONDS
+
+
+def _set_pending_delete(profile_name, username):
+    """Mark (username) or unmark (None) a Profile for deletion; True when done or the Profile is gone."""
+    api, _ = _make_k8s_custom_objects_api_views()
+    try:
+        api.patch_cluster_custom_object(
+            group=group, version=version, plural=plural, name=profile_name,
+            body={"metadata": {"annotations": {PENDING_DELETE_ANNOTATION: username}}},
+        )
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            return True
+        print(f"[delete] cannot mark profile {profile_name}: {e}")
+        return False
+
+
+def _delete_profile_if_present(profile_name, email, fullname):
+    try:
+        delete_profile(profile_name, email, fullname)
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            return True
+        print(f"[delete] profile {profile_name} not deleted yet, will retry: {e}")
+        return False
+
+
+def retry_pending_profile_deletions(dry_run=False):
+    """Delete Profiles marked for deletion whose user is already gone from the DB.
+
+    A Profile without the marker is never touched, so Profiles that simply have no DB user
+    (kubeflow-user-example-com, for example) are safe.
+    """
+    api, _ = _make_k8s_custom_objects_api_views()
+    done = []
+    for profile in api.list_cluster_custom_object(group, version, plural).get("items", []):
+        metadata = profile.get("metadata", {})
+        username = (metadata.get("annotations", {}) or {}).get(PENDING_DELETE_ANNOTATION)
+        if not username or User.objects.filter(username=username).exists():
+            continue
+        name = metadata.get("name")
+        owner = ((profile.get("spec", {}) or {}).get("owner", {}) or {}).get("name", "")
+        print(f"[delete] {'would retry' if dry_run else 'retry'} deleting profile {name} of removed user {username}")
+        if dry_run or _delete_profile_if_present(name, owner, username):
+            done.append(name)
+    return done
+
+
 def deleteUserModelPermanent(username):
-    user_obj = User.objects.get(username=username)
+    # 只永久刪除只在 TRASH 的使用者；仍屬於其他 lab 的人保留帳號、namespace 與 Notebook 資料。
+    # 到期自動刪除（user_delete_check）、單筆與批次刪除都經過這裡。
+    user_obj = User.objects.filter(username=username).first()
+    if user_obj is None or not is_only_in_trash(username):
+        print(f"[delete] skip permanent delete of {username}: not only in TRASH")
+        return False
     profileName = get_profile_by_email(user_obj.email)
+
+    # 1. 先標記 Profile：之後若刪除 Profile 失敗，對帳會依此標記重試。
+    if profileName and not _set_pending_delete(profileName, username):
+        return False
+
+    # 2. 在同一個交易內重新確認並刪除帳號。若另一個請求剛把人加回群組，這裡會看到並中止；
+    #    SQLite 一次只允許一個寫入交易，兩者不會同時成功。
+    try:
+        with transaction.atomic():
+            user_obj = User.objects.select_for_update().filter(username=username).first()
+            if user_obj is None or set(user_obj.groups.values_list("name", flat=True)) != {"TRASH"}:
+                print(f"[delete] abort permanent delete of {username}: membership changed")
+                user_obj = None
+            else:
+                k8s_name = user_obj.first_name + ' ' + user_obj.last_name
+                k8s_email = user_obj.email
+                user_obj.delete()
+    except Exception:
+        # 例如 SQLite「database is locked」：帳號沒刪，標記也要拿掉，避免之後被誤當成待刪除
+        if profileName:
+            _set_pending_delete(profileName, None)
+        raise
+    if user_obj is None:
+        if profileName:
+            _set_pending_delete(profileName, None)
+        return False
+    _trashed_at.pop(username, None)
+
+    # 3. LDAP（與原本相同，失敗不影響後續）
     conn = connectLDAP()
     try:
         conn.delete('cn={},ou=users,dc=example,dc=org'.format(username))
@@ -1779,11 +1982,12 @@ def deleteUserModelPermanent(username):
             conn.modify(entry.entry_dn, {'memberUid': [(MODIFY_DELETE, [username])]})
         except:
             pass
-    k8s_name = user_obj.first_name + ' ' + user_obj.last_name
-    k8s_email = user_obj.email    
-    User.objects.get(username=username).delete()
-    delete_profile(profileName, k8s_email, k8s_name)
     conn.unbind()
+
+    # 4. Profile（namespace 與 Notebook 資料）；失敗時保留標記，由 retry_pending_profile_deletions 重試
+    if profileName:
+        _delete_profile_if_present(profileName, k8s_email, k8s_name)
+    return True
 
 def deleteUserModel(username):
     user_obj = User.objects.get(username=username)
@@ -1801,6 +2005,9 @@ def deleteUserModel(username):
     trash_group, _ = Group.objects.get_or_create(name="TRASH")
     UserDetail.objects.create(uid=user_obj, permission=2, labname=trash_group)
     user_obj.groups.add(trash_group)
+    # 記錄移入 TRASH 的時間要在任何可能失敗的步驟（LDAP、Kubernetes）之前，
+    # 否則失敗後重送的刪除請求會把這個人當成「早就在 TRASH」而永久刪除
+    _trashed_at[user_obj.username] = time.time()
 
     conn = connectLDAP()
     ## delete the user memberUID from the group
@@ -1813,9 +2020,10 @@ def deleteUserModel(username):
             pass
     conn.unbind()
 
-    k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=30))
+    k8s_date = str(datetime.datetime.now() + datetime.timedelta(days=TRASH_RETENTION_DAYS))
     replace_profile_user_delete_date(username, k8s_date)
-    
+    sync_profile_groupshare_annotations(user_obj)
+
     
 @api_view(['POST'])
 def user_delete_check(request):
@@ -1863,9 +2071,8 @@ def user_delete_check(request):
                 # 額外檢查：若 delete_date 已超過今天，印出警告
                 try:
                     delete_dt = datetime.datetime.fromisoformat(delete_date_str)
-                    if datetime.datetime.now() > delete_dt:
+                    if datetime.datetime.now() > delete_dt and deleteUserModelPermanent(u.username):
                         user_need_to_delete += 1
-                        deleteUserModelPermanent(u.username)
                         print(f"[delete_date] profile {profileName} exceeded delete_date: {delete_date_str}")
                 except ValueError:
                     print(f"[delete_date] invalid delete_date format for profile {profileName}: {delete_date_str}")
@@ -1941,6 +2148,9 @@ def user_delete(request):
     
     # 檢查用戶是否只在 TRASH 群組中
     if len(group_list) == 1 and group_list[0]['groupname'] == 'TRASH':
+        if trashed_recently(User.objects.get(username=username)):
+            # 重送的刪除請求不應把「移到 TRASH」變成永久刪除
+            return Response(status=200, data={"message": f"User {username} was just moved to TRASH; delete again later to remove permanently"})
         print(f"User {username} is only in TRASH group, deleting permanently")
         deleteUserModelPermanent(username)
         return Response(status=200, data={"message": f"User {username} permanently deleted"})
@@ -2060,6 +2270,17 @@ def change_user_info(request):
     gpu_quota = data['gpu_quota']
 
     try:
+        user = User.objects.get(username=username)
+        old_email = user.email
+        profileName = get_profile_by_email(old_email)
+        if not profileName and get_profile_content(username.lower()):
+            profileName = username.lower()
+        if (old_email or '').lower() != email.lower() and not profileName:
+            raise ValueError(f"No Profile found for {old_email}")
+
+        if profileName:
+            update_profile_owner_email(profileName, old_email, email)
+
         conn = connectLDAP()
         conn.search('cn={},ou=users,dc=example,dc=org'.format(username), '(objectclass=posixAccount)', attributes=['*'])
         for entry in conn.entries:
@@ -2068,7 +2289,6 @@ def change_user_info(request):
             conn.modify(entry.entry_dn, {'mail': [(MODIFY_REPLACE, [email])]})
         conn.unbind()
             
-        user = User.objects.get(username=username)
         user.first_name = firstname
         user.last_name = lastname
         user.email = email
@@ -2076,7 +2296,6 @@ def change_user_info(request):
 
         user_obj = User.objects.get(username=data['username'])
         detail_obj = UserDetail.objects.filter(uid=user_obj.id)
-        profileName = get_profile_by_email(user_obj.email)
 
         replace_profile(profileName,cpu_quota,gpu_quota,mem_quota)
         # manager = 'user'
@@ -2117,10 +2336,10 @@ def change_user_info(request):
             elif permission_obj['permission'] == 'user':
                 manager = 'user'
             print("manager = ", manager)
-            profileName = get_profile_by_email(user_obj.email)
             replace_profile_user(profileName, manager, str(cpu_quota), str(gpu_quota), str(mem_quota))
         return Response(status=200)
-    except:
+    except Exception:
+        logger.exception("Failed to update user information for %s", username)
         return Response(status=500)
 
 
@@ -2158,9 +2377,14 @@ def excel(request):
                 continue
             if row[0] is None:
                 continue
-            row[0].value = row[0].value.lower()
-            row[3].value = row[3].value.lower()
+            # Excel 儲存格常帶前後空白，會建出 " b1128014" 這種帳號，與 LDAP、Profile 對不上
+            row[0].value = row[0].value.strip().lower()
+            row[3].value = row[3].value.strip().lower()
             if Group.objects.filter(name=row[1].value).exists() is False:
+                conflict = find_groupshare_folder_conflict(row[1].value)
+                if conflict:
+                    failed_user.append({row[0].value: "group {} would share the folder of existing group {}".format(row[1].value, conflict)})
+                    continue
                 try:
                     group = Group.objects.create(name=row[1].value)
                     ensure_groupshare_group_directory(row[1].value)
@@ -2545,9 +2769,9 @@ def import_lab_user(request):
                 row[8].value = group_default_mem_quota
                 
             user = {
-                "username": row[0].value.lower(),
+                "username": row[0].value.strip().lower(),  # 去掉儲存格前後空白
                 "password": row[1].value,
-                "email": row[2].value.lower(),
+                "email": row[2].value.strip().lower(),
                 "firstname": row[3].value,
                 "lastname": row[4].value,
                 "permission": row[5].value,
@@ -2587,6 +2811,7 @@ def import_lab_user(request):
                             UserDetail.objects.create(uid=user_obj, permission=1, labname=Group.objects.get(name=group))
                         elif user['permission'] == 'user':
                             UserDetail.objects.create(uid=user_obj, permission=2, labname=Group.objects.get(name=group))
+                        sync_profile_groupshare_annotations(user_obj)
                     else:
                         print("user already in group:", user['username'], group)
                 else:
@@ -2783,8 +3008,20 @@ def synchronize_db_ldap():
 def multiple_user_delete(request):
     data = json.loads(request.body.decode('utf-8'))
     users = data['users']
-    for user in users:
-        deleteUserModelPermanent(User.objects.get(username=user).username)
+    for username in dict.fromkeys(users):  # 名單內重複的使用者只處理一次
+        user_obj = User.objects.filter(username=username).first()
+        if user_obj is None:
+            continue  # 已被刪除（例如重送的請求）
+        # 與單筆刪除相同：只在 TRASH 的使用者永久刪除，其餘移至 TRASH。
+        # 剛移入 TRASH 的人（含本次請求、或重送前一次請求）不會被永久刪除。
+        if is_only_in_trash(username):
+            if trashed_recently(user_obj):
+                print(f"User {username} was just moved to TRASH, not deleting permanently")
+                continue
+            print(f"User {username} is only in TRASH group, deleting permanently")
+            deleteUserModelPermanent(username)
+        else:
+            deleteUserModel(username)
     return Response(status=200)
 
 @api_view(['POST'])

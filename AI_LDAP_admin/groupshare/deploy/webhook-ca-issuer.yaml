@@ -1,0 +1,8 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: groupshare-webhook-ca
+  namespace: kubeflow
+spec:
+  ca:
+    secretName: groupshare-webhook-ca-2026

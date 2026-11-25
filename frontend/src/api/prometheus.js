@@ -25,11 +25,9 @@ export const PROMETHEUS_NAMESPACE_METRIC_SERVICE_OPTIONS = [
     label: '新版 v71',
     description: '使用新 exporter 與新驗證過的 Prometheus 資料來源。',
   },
-  {
-    value: 'prom-app',
-    label: '舊版',
-    description: '使用目前正式環境的舊 exporter 資料來源。',
-  },
+  // The old v53 exporter (service prom-app) is retired: its cumulative cost
+  // lived only in memory and used hardcoded rates (2/10) instead of the
+  // configured ones. A browser that still stores 'prom-app' falls back to v71.
 ];
 
 const VALID_NAMESPACE_METRIC_SERVICES = new Set(
